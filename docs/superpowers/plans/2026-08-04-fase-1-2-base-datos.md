@@ -1626,10 +1626,17 @@ git commit -m "feat(db): genera tipos TypeScript del esquema de Supabase"
 
 ## Task 19: Middleware de auth con protección por rol
 
+> **Nota de ejecución:** el scaffold real usó Next.js 16, que renombró
+> `middleware.ts`/`middleware()` a `proxy.ts`/`proxy()`, y el archivo debe
+> vivir al mismo nivel que `app/` (dentro de `src/`, no en la raíz). El código
+> implementado usa `src/proxy.ts` exportando `proxy()` en vez de
+> `middleware.ts`/`middleware()`. La lógica y el comportamiento son
+> equivalentes a lo descrito abajo.
+
 **Files:**
 - Create: `src/lib/auth/route-protection.ts`
 - Create: `src/lib/auth/__tests__/route-protection.test.ts`
-- Create: `middleware.ts`
+- Create: `src/proxy.ts` (Next.js 16: reemplaza a `middleware.ts`)
 
 **Interfaces:**
 - Consumes: tipo `Database["public"]["Enums"]["user_role"]` (Task 18);
