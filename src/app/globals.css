@@ -10,6 +10,14 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  --color-brand-rosa: #e96a9e;
+  --color-brand-oro: #d9a441;
+  --color-brand-rosa-secundario: #f29db8;
+  --color-brand-rosa-medio: #f5b7c8;
+  --color-brand-rosa-claro: #f8d4dd;
+  --color-brand-crema: #fff8f4;
+  --color-brand-ciruela: #6e2a44;
 }
 
 @media (prefers-color-scheme: dark) {
