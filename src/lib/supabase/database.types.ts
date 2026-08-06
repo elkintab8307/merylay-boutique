@@ -368,28 +368,34 @@ export type Database = {
       }
       product_variants: {
         Row: {
+          color: string | null
           id: string
           name: string
           price_override: number | null
           product_id: string
           sku: string
           stock: number
+          talla: string | null
         }
         Insert: {
+          color?: string | null
           id?: string
           name: string
           price_override?: number | null
           product_id: string
           sku: string
           stock?: number
+          talla?: string | null
         }
         Update: {
+          color?: string | null
           id?: string
           name?: string
           price_override?: number | null
           product_id?: string
           sku?: string
           stock?: number
+          talla?: string | null
         }
         Relationships: [
           {
