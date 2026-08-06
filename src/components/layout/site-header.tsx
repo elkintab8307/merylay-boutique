@@ -33,6 +33,14 @@ export async function SiteHeader() {
           </Link>
           <div className="flex items-center gap-4 font-body text-sm text-brand-ciruela">
             <span className="hidden sm:inline">Inspiración Femenina</span>
+            <Link href="/carrito" className="hover:text-brand-rosa">
+              Carrito
+            </Link>
+            {currentUser && (
+              <Link href="/cuenta/pedidos" className="hover:text-brand-rosa">
+                Mis pedidos
+              </Link>
+            )}
             {currentUser ? (
               <div className="flex items-center gap-3">
                 <span>{currentUser.profile.username}</span>
