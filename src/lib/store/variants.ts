@@ -1,4 +1,5 @@
 export type VariantOption = {
+  id: string;
   talla: string | null;
   color: string | null;
   sku: string;
