@@ -513,6 +513,27 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_order: {
+        Args: { p_payment_method: string; p_shipping_address: Json }
+        Returns: {
+          created_at: string
+          id: string
+          order_number: string
+          payment_method: string | null
+          shipping: number
+          shipping_address: Json | null
+          status: Database["public"]["Enums"]["order_status"]
+          subtotal: number
+          total: number
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       is_admin: { Args: never; Returns: boolean }
       is_staff_or_above: { Args: never; Returns: boolean }
       is_superadmin: { Args: never; Returns: boolean }
