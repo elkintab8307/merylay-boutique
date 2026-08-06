@@ -1,0 +1,79 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
+import { getOrCreateCart } from "@/lib/cart/get-or-create-cart";
+
+export async function addToCart(
+  productId: string,
+  variantId: string | null,
+  qty: number,
+  unitPrice: number,
+): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Debes iniciar sesión." };
+  }
+
+  const cartId = await getOrCreateCart(user.id);
+
+  let existingQuery = supabase
+    .from("cart_items")
+    .select("id, qty")
+    .eq("cart_id", cartId)
+    .eq("product_id", productId);
+  existingQuery = variantId
+    ? existingQuery.eq("variant_id", variantId)
+    : existingQuery.is("variant_id", null);
+  const { data: existing } = await existingQuery.maybeSingle();
+
+  if (existing) {
+    const { error } = await supabase
+      .from("cart_items")
+      .update({ qty: existing.qty + qty })
+      .eq("id", existing.id);
+    if (error) return { error: "No se pudo actualizar el carrito." };
+  } else {
+    const { error } = await supabase.from("cart_items").insert({
+      cart_id: cartId,
+      product_id: productId,
+      variant_id: variantId,
+      qty,
+      unit_price: unitPrice,
+    });
+    if (error) return { error: "No se pudo agregar al carrito." };
+  }
+
+  revalidatePath("/carrito");
+  return {};
+}
+
+export async function updateCartItemQty(
+  cartItemId: string,
+  qty: number,
+): Promise<{ error?: string }> {
+  const supabase = await createClient();
+
+  if (qty <= 0) {
+    const { error } = await supabase.from("cart_items").delete().eq("id", cartItemId);
+    if (error) return { error: "No se pudo actualizar el carrito." };
+  } else {
+    const { error } = await supabase.from("cart_items").update({ qty }).eq("id", cartItemId);
+    if (error) return { error: "No se pudo actualizar el carrito." };
+  }
+
+  revalidatePath("/carrito");
+  return {};
+}
+
+export async function removeCartItem(cartItemId: string): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("cart_items").delete().eq("id", cartItemId);
+  if (error) return { error: "No se pudo eliminar el producto del carrito." };
+  revalidatePath("/carrito");
+  return {};
+}
