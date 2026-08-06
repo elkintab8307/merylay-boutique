@@ -1,12 +1,11 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { registroSchema, type RegistroInput } from "@/lib/validation/auth";
 
 export async function registro(
   input: RegistroInput,
-): Promise<{ error?: string; message?: string }> {
+): Promise<{ error?: string; message?: string; success?: boolean }> {
   const parsed = registroSchema.safeParse(input);
   if (!parsed.success) {
     return { error: "Revisa los datos ingresados." };
@@ -29,7 +28,7 @@ export async function registro(
   }
 
   if (data.session) {
-    redirect("/");
+    return { success: true };
   }
 
   return {

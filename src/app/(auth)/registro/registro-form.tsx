@@ -3,12 +3,16 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useRouter } from "next/navigation";
 import { registroSchema, type RegistroInput } from "@/lib/validation/auth";
 import { registro } from "./actions";
+import { getLocalCart, clearLocalCart } from "@/lib/cart/local-cart";
+import { mergeGuestCart } from "@/lib/cart/merge-guest-cart-action";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 export function RegistroForm() {
+  const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -24,7 +28,19 @@ export function RegistroForm() {
     const result = await registro(data);
     if (result?.error) {
       setServerError(result.error);
-    } else if (result?.message) {
+      return;
+    }
+    if (result?.success) {
+      const guestCart = getLocalCart();
+      if (guestCart.length > 0) {
+        await mergeGuestCart(guestCart);
+        clearLocalCart();
+      }
+      router.push("/");
+      router.refresh();
+      return;
+    }
+    if (result?.message) {
       setSuccessMessage(result.message);
     }
   };
