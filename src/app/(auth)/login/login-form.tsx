@@ -3,13 +3,16 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { loginSchema, type LoginInput } from "@/lib/validation/auth";
 import { login } from "./actions";
+import { getLocalCart, clearLocalCart } from "@/lib/cart/local-cart";
+import { mergeGuestCart } from "@/lib/cart/merge-guest-cart-action";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 export function LoginForm() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirectTo") ?? "/";
   const [serverError, setServerError] = useState<string | null>(null);
@@ -22,10 +25,20 @@ export function LoginForm() {
 
   const onSubmit = async (data: LoginInput) => {
     setServerError(null);
-    const result = await login(data, redirectTo);
-    if (result?.error) {
+    const result = await login(data);
+    if ("error" in result) {
       setServerError(result.error);
+      return;
     }
+
+    const guestCart = getLocalCart();
+    if (guestCart.length > 0) {
+      await mergeGuestCart(guestCart);
+      clearLocalCart();
+    }
+
+    router.push(redirectTo);
+    router.refresh();
   };
 
   return (
