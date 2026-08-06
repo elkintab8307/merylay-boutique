@@ -1,24 +1,39 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import {
   getVariantOptions,
   findMatchingVariant,
   type VariantOption,
 } from "@/lib/store/variants";
+import { getLocalCart, saveLocalCart, mergeCartItem, type LocalCartItem } from "@/lib/cart/local-cart";
+import { addToCart } from "@/app/(store)/carrito/actions";
 
 export function ProductVariantSelector({
+  productId,
+  productSlug,
+  productName,
+  imageUrl,
+  basePrice,
   variants,
   baseStock,
+  currentUserId,
 }: {
+  productId: string;
+  productSlug: string;
+  productName: string;
+  imageUrl: string | null;
+  basePrice: number;
   variants: VariantOption[];
   baseStock: number;
+  currentUserId: string | null;
 }) {
   const { tallas, colores } = useMemo(() => getVariantOptions(variants), [variants]);
   const [talla, setTalla] = useState<string | null>(variants[0]?.talla ?? null);
   const [color, setColor] = useState<string | null>(variants[0]?.color ?? null);
   const [message, setMessage] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
   const hasVariants = variants.length > 0;
   const variantSeleccionada = hasVariants
@@ -26,6 +41,34 @@ export function ProductVariantSelector({
     : null;
   const stockDisponible = hasVariants ? (variantSeleccionada?.stock ?? 0) : baseStock;
   const agotado = stockDisponible <= 0;
+  const unitPrice = variantSeleccionada?.priceOverride ?? basePrice;
+  const variantLabel = [talla, color].filter(Boolean).join(" / ");
+  const displayName = hasVariants && variantLabel ? `${productName} (${variantLabel})` : productName;
+
+  const handleAddToCart = () => {
+    setMessage(null);
+    const item: LocalCartItem = {
+      productId,
+      variantId: hasVariants ? (variantSeleccionada?.id ?? null) : null,
+      slug: productSlug,
+      name: displayName,
+      unitPrice,
+      qty: 1,
+      imageUrl,
+      stock: stockDisponible,
+    };
+
+    if (currentUserId) {
+      startTransition(async () => {
+        const result = await addToCart(item.productId, item.variantId, 1, item.unitPrice);
+        setMessage(result?.error ?? "Agregado al carrito.");
+      });
+    } else {
+      const current = getLocalCart();
+      saveLocalCart(mergeCartItem(current, item));
+      setMessage("Agregado al carrito.");
+    }
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -68,13 +111,11 @@ export function ProductVariantSelector({
 
       <Button
         type="button"
-        disabled={agotado}
-        onClick={() =>
-          setMessage("Disponible pronto: el carrito se habilita en la próxima fase.")
-        }
+        disabled={agotado || isPending}
+        onClick={handleAddToCart}
         className="bg-brand-rosa text-brand-crema hover:bg-brand-rosa/90 disabled:opacity-50"
       >
-        Agregar al carrito
+        {isPending ? "Agregando..." : "Agregar al carrito"}
       </Button>
       {message && <p className="text-sm text-brand-oro">{message}</p>}
     </div>

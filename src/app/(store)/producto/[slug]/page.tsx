@@ -21,7 +21,7 @@ export default async function ProductoPage({
     notFound();
   }
 
-  const [{ data: imagenes }, { data: variantes }] = await Promise.all([
+  const [{ data: imagenes }, { data: variantes }, { data: { user } }] = await Promise.all([
     supabase
       .from("product_images")
       .select("url, alt")
@@ -29,17 +29,21 @@ export default async function ProductoPage({
       .order("sort_order"),
     supabase
       .from("product_variants")
-      .select("talla, color, sku, stock, price_override")
+      .select("id, talla, color, sku, stock, price_override")
       .eq("product_id", producto.id),
+    supabase.auth.getUser(),
   ]);
 
   const variantesMapeadas = (variantes ?? []).map((v) => ({
+    id: v.id,
     talla: v.talla,
     color: v.color,
     sku: v.sku,
     stock: v.stock,
     priceOverride: v.price_override,
   }));
+
+  const imagenPrincipal = imagenes && imagenes.length > 0 ? imagenes[0].url : null;
 
   return (
     <main className="mx-auto grid max-w-5xl gap-10 px-6 py-12 md:grid-cols-2">
@@ -60,7 +64,16 @@ export default async function ProductoPage({
         {producto.description && (
           <p className="text-brand-ciruela/80">{producto.description}</p>
         )}
-        <ProductVariantSelector variants={variantesMapeadas} baseStock={producto.stock} />
+        <ProductVariantSelector
+          productId={producto.id}
+          productSlug={producto.slug}
+          productName={producto.name}
+          imageUrl={imagenPrincipal}
+          basePrice={producto.price}
+          variants={variantesMapeadas}
+          baseStock={producto.stock}
+          currentUserId={user?.id ?? null}
+        />
       </div>
     </main>
   );

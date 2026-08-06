@@ -72,6 +72,7 @@ export default async function CategoriaPage({
 
   const { tallas, colores } = getVariantOptions(
     (variantesCategoria ?? []).map((v) => ({
+      id: "",
       talla: v.talla,
       color: v.color,
       sku: "",
