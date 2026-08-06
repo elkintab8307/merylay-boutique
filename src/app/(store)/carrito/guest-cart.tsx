@@ -18,6 +18,10 @@ export function GuestCart() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
+    // localStorage solo existe en el navegador; se lee tras el montaje para
+    // evitar un mismatch de hidratacion entre el render de servidor (vacio)
+    // y el contenido real del carrito de invitado.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setItems(getLocalCart());
     setLoaded(true);
   }, []);
