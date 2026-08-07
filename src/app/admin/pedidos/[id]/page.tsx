@@ -17,17 +17,25 @@ export default async function AdminPedidoDetallePage({
   const { id } = await params;
   const supabase = await createClient();
 
-  const { data: pedido } = await supabase
+  const { data: pedido, error: pedidoError } = await supabase
     .from("orders")
     .select("*")
     .eq("id", id)
     .single();
 
+  if (pedidoError && pedidoError.code !== "PGRST116") {
+    return (
+      <div className="flex flex-col gap-6">
+        <p className="text-sm text-red-600">No se pudo cargar el pedido.</p>
+      </div>
+    );
+  }
+
   if (!pedido) {
     notFound();
   }
 
-  const { data: items } = await supabase
+  const { data: items, error: itemsError } = await supabase
     .from("order_items")
     .select("name_snapshot, qty, unit_price, line_total")
     .eq("order_id", pedido.id);
@@ -49,21 +57,29 @@ export default async function AdminPedidoDetallePage({
       <EstadoPedidoSelect orderId={pedido.id} estadoActual={pedido.status} />
 
       <div className="flex flex-col divide-y divide-brand-rosa-claro rounded-lg border border-brand-rosa-claro bg-white p-4">
-        {(items ?? []).map((item, index) => (
-          <div
-            key={index}
-            className="flex justify-between py-2 text-sm text-brand-ciruela"
-          >
-            <span>
-              {item.name_snapshot} × {item.qty}
-            </span>
-            <span>{formatPrice(item.line_total)}</span>
-          </div>
-        ))}
-        <div className="flex justify-between pt-2 font-heading text-brand-rosa">
-          <span>Total</span>
-          <span>{formatPrice(pedido.total)}</span>
-        </div>
+        {itemsError ? (
+          <p className="text-sm text-red-600">
+            No se pudieron cargar los detalles del pedido.
+          </p>
+        ) : (
+          <>
+            {(items ?? []).map((item, index) => (
+              <div
+                key={index}
+                className="flex justify-between py-2 text-sm text-brand-ciruela"
+              >
+                <span>
+                  {item.name_snapshot} × {item.qty}
+                </span>
+                <span>{formatPrice(item.line_total)}</span>
+              </div>
+            ))}
+            <div className="flex justify-between pt-2 font-heading text-brand-rosa">
+              <span>Total</span>
+              <span>{formatPrice(pedido.total)}</span>
+            </div>
+          </>
+        )}
       </div>
 
       {direccion && (
