@@ -53,4 +53,12 @@ describe("storeSettingsSchema", () => {
     const result = storeSettingsSchema.safeParse({ ...base, nombreTienda: "M" });
     expect(result.success).toBe(false);
   });
+
+  it("rechaza un costo de envio NaN con mensaje en español", () => {
+    const result = storeSettingsSchema.safeParse({
+      ...base,
+      envioCostoDefecto: NaN,
+    });
+    expect(result.success).toBe(false);
+  });
 });

@@ -11,7 +11,7 @@ export const storeSettingsSchema = z.object({
   contactoTelefono: z.string().trim().min(7, "Ingresa un teléfono válido"),
   envioCostoDefecto: z
     .number()
-    .int()
+    .int("El costo de envío debe ser un número entero")
     .min(0, "El costo de envío no puede ser negativo"),
   redesInstagram: optionalUrl,
   redesFacebook: optionalUrl,
