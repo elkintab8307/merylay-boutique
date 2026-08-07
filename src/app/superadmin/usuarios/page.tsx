@@ -1,4 +1,4 @@
-import { getCurrentProfile } from "@/lib/auth/get-current-user";
+import { requireSuperadmin } from "@/lib/admin/require-superadmin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { UserRowActions } from "./user-row-actions";
@@ -52,7 +52,9 @@ async function fetchAllAuthUsers(admin: ReturnType<typeof createAdminClient>) {
 }
 
 export default async function UsuariosPage() {
-  const currentUser = await getCurrentProfile();
+  // Segunda linea de defensa: no dependemos solo del middleware de src/proxy.ts,
+  // porque esta pagina usa el service role y omite RLS.
+  const currentUser = await requireSuperadmin();
   const supabase = await createClient();
   const admin = createAdminClient();
 
@@ -133,7 +135,7 @@ export default async function UsuariosPage() {
                   userId={profile.id}
                   role={profile.role}
                   isBlocked={bannedById.get(profile.id) ?? false}
-                  isSelf={profile.id === currentUser?.id}
+                  isSelf={profile.id === currentUser.id}
                 />
               </td>
             </tr>
