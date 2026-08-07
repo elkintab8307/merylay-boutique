@@ -299,6 +299,18 @@ resuélvelo a `SUPERADMIN_EMAIL` (o busca el email por `username` en `profiles`)
 10. **Deploy en Vercel** + verificación de roles y dominio.
 11. **Extras**: dashboard de métricas, integración de pago (Wompi/Mercado Pago),
     correos transaccionales.
+12. **Informes**: todos los informes importantes del sistema — ventas (tienda +
+    POS) por periodo, productos más vendidos, stock bajo, ingresos por
+    método de pago, etc. — con el fin de dar visibilidad completa del
+    negocio. El cálculo de ganancia es aproximado hasta la Fase 14 (Compras),
+    ya que todavía no existe costo de producto registrado.
+13. **Gastos**: módulo para registrar gastos generales del negocio (renta,
+    servicios, nómina, insumos, etc.), categorizados y con fecha, para
+    poder restar gastos de los ingresos en los informes de la Fase 12.
+14. **Compras**: módulo de compras a proveedores (proveedor, fecha, cantidad,
+    costo unitario) que registra el costo real de cada producto y actualiza
+    el stock. Con esto, los informes de la Fase 12 pueden calcular la
+    ganancia real: Ventas − Costo de productos vendidos − Gastos.
 
 ---
 
