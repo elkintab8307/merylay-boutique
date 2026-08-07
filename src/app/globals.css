@@ -141,3 +141,19 @@ body {
     @apply font-sans;
   }
 }
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #receipt-imprimible,
+  #receipt-imprimible * {
+    visibility: visible;
+  }
+  #receipt-imprimible {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+}
