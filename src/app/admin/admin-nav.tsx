@@ -3,6 +3,12 @@ import Link from "next/link";
 export function AdminNav() {
   return (
     <nav className="flex gap-4 border-b border-brand-rosa-claro bg-white px-6 py-3 font-body text-sm text-brand-ciruela">
+      <Link href="/admin" className="hover:text-brand-rosa">
+        Panel
+      </Link>
+      <Link href="/admin/pedidos" className="hover:text-brand-rosa">
+        Pedidos
+      </Link>
       <Link href="/admin/categorias" className="hover:text-brand-rosa">
         Categorías
       </Link>
