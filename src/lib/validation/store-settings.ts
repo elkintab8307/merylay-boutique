@@ -10,7 +10,9 @@ export const storeSettingsSchema = z.object({
   contactoEmail: z.string().trim().email("Ingresa un correo válido"),
   contactoTelefono: z.string().trim().min(7, "Ingresa un teléfono válido"),
   envioCostoDefecto: z
-    .number()
+    // El `error` del tipo cubre invalid_type, incluido NaN (que es lo que
+    // produce `valueAsNumber: true` cuando el campo se deja en blanco).
+    .number({ error: "Ingresa un costo de envío válido" })
     .int("El costo de envío debe ser un número entero")
     .min(0, "El costo de envío no puede ser negativo"),
   redesInstagram: optionalUrl,

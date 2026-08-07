@@ -60,5 +60,10 @@ describe("storeSettingsSchema", () => {
       envioCostoDefecto: NaN,
     });
     expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].message).toBe(
+        "Ingresa un costo de envío válido",
+      );
+    }
   });
 });
