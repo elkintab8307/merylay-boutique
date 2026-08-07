@@ -1,17 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 import { requireAdmin } from "@/lib/admin/require-admin";
 import { createClient } from "@/lib/supabase/server";
-
-const estadoSchema = z.enum([
-  "pendiente",
-  "pagado",
-  "enviado",
-  "entregado",
-  "cancelado",
-]);
+import { estadoPedidoSchema } from "@/lib/validation/pedido";
 
 export async function cambiarEstadoPedido(
   orderId: string,
@@ -19,7 +11,7 @@ export async function cambiarEstadoPedido(
 ): Promise<{ error?: string }> {
   await requireAdmin();
 
-  const parsed = estadoSchema.safeParse(nuevoEstado);
+  const parsed = estadoPedidoSchema.safeParse(nuevoEstado);
   if (!parsed.success) {
     return { error: "Estado inválido." };
   }

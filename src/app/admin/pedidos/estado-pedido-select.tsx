@@ -2,15 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { ESTADOS_PEDIDO } from "@/lib/validation/pedido";
 import { cambiarEstadoPedido } from "./actions";
-
-const ESTADOS = [
-  { value: "pendiente", label: "Pendiente" },
-  { value: "pagado", label: "Pagado" },
-  { value: "enviado", label: "Enviado" },
-  { value: "entregado", label: "Entregado" },
-  { value: "cancelado", label: "Cancelado" },
-] as const;
 
 export function EstadoPedidoSelect({
   orderId,
@@ -47,7 +40,7 @@ export function EstadoPedidoSelect({
         onChange={(e) => handleChange(e.target.value)}
         className="w-fit rounded border border-brand-rosa-claro bg-white px-2 py-1 text-sm text-brand-ciruela disabled:opacity-50"
       >
-        {ESTADOS.map((estado) => (
+        {ESTADOS_PEDIDO.map((estado) => (
           <option key={estado.value} value={estado.value}>
             {estado.label}
           </option>

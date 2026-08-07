@@ -1,15 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatPrice } from "@/lib/format";
-import type { Database } from "@/lib/supabase/database.types";
-
-const ESTADO_LABELS: Record<string, string> = {
-  pendiente: "Pendiente",
-  pagado: "Pagado",
-  enviado: "Enviado",
-  entregado: "Entregado",
-  cancelado: "Cancelado",
-};
+import { ESTADO_PEDIDO_LABELS, estadoPedidoSchema } from "@/lib/validation/pedido";
 
 type ShippingAddress = { fullName?: string };
 
@@ -24,11 +16,11 @@ export default async function AdminPedidosPage({
     .select("id, order_number, status, total, created_at, shipping_address")
     .order("created_at", { ascending: false });
 
-  if (typeof status === "string" && status) {
-    query = query.eq(
-      "status",
-      status as Database["public"]["Enums"]["order_status"]
-    );
+  // El filtro viene de la URL: si no es un estado válido simplemente no filtramos,
+  // en vez de mandar un literal inválido a Postgres y romper la página.
+  const parsedStatus = estadoPedidoSchema.safeParse(status);
+  if (parsedStatus.success) {
+    query = query.eq("status", parsedStatus.data);
   }
 
   const { data: pedidos, error } = await query;
@@ -68,7 +60,7 @@ export default async function AdminPedidosPage({
                     {direccion?.fullName ?? "-"}
                   </td>
                   <td className="py-2">
-                    {ESTADO_LABELS[pedido.status] ?? pedido.status}
+                    {ESTADO_PEDIDO_LABELS[pedido.status] ?? pedido.status}
                   </td>
                   <td className="py-2">{formatPrice(pedido.total)}</td>
                   <td className="py-2 text-brand-ciruela/70">
