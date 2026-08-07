@@ -25,7 +25,7 @@ export default async function AdminDashboardPage() {
       .from("orders")
       .select("id", { count: "exact", head: true })
       .eq("status", "pendiente"),
-    supabase.from("products").select("id, name, stock"),
+    supabase.from("products").select("id, name, stock").eq("is_active", true),
     supabase
       .from("product_variants")
       .select("id, product_id, talla, color, stock"),
@@ -49,9 +49,17 @@ export default async function AdminDashboardPage() {
   const ventasPos = (ventasPosHoy ?? []).reduce((sum, v) => sum + v.total, 0);
   const ventasTotal = ventasTienda + ventasPos;
 
+  // Solo los productos activos entran en la métrica: un producto descontinuado
+  // suele quedar en stock 0 y ensuciaría el listado de stock bajo para siempre.
+  const productosActivos = productos ?? [];
+  const idsActivos = new Set(productosActivos.map((p) => p.id));
+  const variantesActivas = (variantes ?? []).filter((v) =>
+    idsActivos.has(v.product_id),
+  );
+
   const stockBajoCompleto = buildLowStockItems(
-    productos ?? [],
-    variantes ?? [],
+    productosActivos,
+    variantesActivas,
     LOW_STOCK_THRESHOLD,
   );
   const stockBajo = stockBajoCompleto.slice(0, 10);
