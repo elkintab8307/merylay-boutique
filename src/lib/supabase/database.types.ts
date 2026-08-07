@@ -534,6 +534,29 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_pos_sale: {
+        Args: {
+          p_discount?: number
+          p_items: Json
+          p_payment_method: Database["public"]["Enums"]["payment_method"]
+        }
+        Returns: {
+          created_at: string
+          discount: number
+          id: string
+          payment_method: Database["public"]["Enums"]["payment_method"]
+          sale_number: string
+          staff_id: string
+          subtotal: number
+          total: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "pos_sales"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       is_admin: { Args: never; Returns: boolean }
       is_staff_or_above: { Args: never; Returns: boolean }
       is_superadmin: { Args: never; Returns: boolean }
