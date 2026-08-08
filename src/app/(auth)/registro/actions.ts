@@ -2,6 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { registroSchema, type RegistroInput } from "@/lib/validation/auth";
+import { enviarCorreo } from "@/lib/email/resend";
+import { BienvenidaEmail } from "@/lib/email/templates/bienvenida-email";
 
 export async function registro(
   input: RegistroInput,
@@ -26,6 +28,12 @@ export async function registro(
     }
     return { error: "No pudimos crear tu cuenta. Intenta de nuevo." };
   }
+
+  await enviarCorreo({
+    to: parsed.data.email,
+    subject: "Bienvenida a MeryLay Boutique",
+    react: BienvenidaEmail({ nombre: parsed.data.fullName }),
+  });
 
   if (data.session) {
     return { success: true };
