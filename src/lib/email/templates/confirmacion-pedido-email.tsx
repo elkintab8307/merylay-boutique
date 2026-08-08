@@ -23,6 +23,29 @@ export type DireccionEnvioEmail = {
   city?: string;
 };
 
+// "pagado": el pedido ya esta pagado de verdad (hoy solo el webhook de Wompi,
+// que dispara el correo unicamente cuando la transaccion quedo APPROVED).
+// "recibido": el pedido apenas se creo y sigue en 'pendiente' — es el caso de
+// los metodos de pago manuales (efectivo/transferencia), donde todavia no se
+// ha pagado nada. Afirmar "tu pedido fue confirmado" ahi seria falso, asi que
+// la variante cambia el encabezado, la intro y agrega las instrucciones de
+// pago que correspondan al metodo elegido.
+export type VarianteConfirmacionPedido = "recibido" | "pagado";
+
+// Se refleja el texto que el cliente ya vio en el selector de metodo de pago
+// del checkout ("Efectivo contra entrega" / "Transferencia bancaria") para no
+// inventar instrucciones nuevas ni prometer datos bancarios que la tienda aun
+// no publica en ningun lado.
+function instruccionesDePago(metodoPago: string): string | null {
+  if (metodoPago === "efectivo") {
+    return "Elegiste efectivo contra entrega: pagarás al mensajero cuando recibas tu pedido.";
+  }
+  if (metodoPago === "transferencia") {
+    return "Elegiste transferencia bancaria: nos comunicaremos contigo para darte los datos de la cuenta y coordinar el pago.";
+  }
+  return null;
+}
+
 export function ConfirmacionPedidoEmail({
   orderNumber,
   orderId,
@@ -30,6 +53,7 @@ export function ConfirmacionPedidoEmail({
   total,
   direccion,
   metodoPago,
+  variante,
 }: {
   orderNumber: string;
   orderId: string;
@@ -37,19 +61,39 @@ export function ConfirmacionPedidoEmail({
   total: number;
   direccion: DireccionEnvioEmail | null;
   metodoPago: string;
+  variante: VarianteConfirmacionPedido;
 }) {
+  const estaPagado = variante === "pagado";
+  const instrucciones = estaPagado ? null : instruccionesDePago(metodoPago);
+
   return (
     <Html>
       <Head />
-      <Preview>Confirmación de tu pedido {orderNumber}</Preview>
+      <Preview>
+        {estaPagado
+          ? `Confirmación de tu pedido ${orderNumber}`
+          : `Recibimos tu pedido ${orderNumber}`}
+      </Preview>
       <Body style={{ backgroundColor: "#FFF8F4", fontFamily: "Georgia, serif" }}>
         <Container style={{ padding: "32px", maxWidth: "480px" }}>
           <Heading style={{ color: "#E96A9E", fontSize: "22px" }}>
-            ¡Gracias por tu compra!
+            {estaPagado ? "¡Gracias por tu compra!" : "¡Recibimos tu pedido!"}
           </Heading>
           <Text style={{ color: "#6E2A44", fontSize: "16px" }}>
-            Tu pedido <strong>{orderNumber}</strong> fue confirmado.
+            {estaPagado ? (
+              <>
+                Tu pedido <strong>{orderNumber}</strong> fue confirmado.
+              </>
+            ) : (
+              <>
+                Tu pedido <strong>{orderNumber}</strong> quedó registrado y está
+                pendiente de pago.
+              </>
+            )}
           </Text>
+          {instrucciones && (
+            <Text style={{ color: "#6E2A44", fontSize: "14px" }}>{instrucciones}</Text>
+          )}
           <Hr style={{ borderColor: "#F8D4DD" }} />
           {items.map((item, index) => (
             <Text key={index} style={{ color: "#6E2A44", fontSize: "14px" }}>

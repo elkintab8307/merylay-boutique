@@ -61,7 +61,10 @@ export async function confirmarPedido(input: CheckoutInput): Promise<{ error?: s
 
       await enviarCorreo({
         to: user.email,
-        subject: `Confirmación de tu pedido ${data.order_number}`,
+        // Este pedido se crea con status 'pendiente' y con un metodo de pago
+        // manual (efectivo/transferencia): todavia no se pago nada, asi que ni
+        // el asunto ni el cuerpo pueden afirmar que quedo "confirmado".
+        subject: `Recibimos tu pedido ${data.order_number}`,
         react: createElement(ConfirmacionPedidoEmail, {
           orderNumber: data.order_number,
           orderId: data.id,
@@ -73,6 +76,7 @@ export async function confirmarPedido(input: CheckoutInput): Promise<{ error?: s
           total: data.total,
           direccion: parsed.data,
           metodoPago: parsed.data.paymentMethod,
+          variante: "recibido",
         }),
       });
     }

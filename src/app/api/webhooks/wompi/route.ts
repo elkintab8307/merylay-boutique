@@ -248,6 +248,9 @@ export async function POST(request: NextRequest) {
                 total: pedidoCompleto.total,
                 direccion,
                 metodoPago: pedidoCompleto.payment_method ?? "wompi",
+                // Este correo solo se dispara tras un APPROVED que en verdad
+                // transiciono el pedido a pagado, asi que "confirmado" es cierto.
+                variante: "pagado",
               }),
             });
           }
