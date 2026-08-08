@@ -234,7 +234,17 @@ SUPABASE_SERVICE_ROLE_KEY=...        # solo en servidor; nunca en el cliente
 SUPERADMIN_EMAIL=adminsu@merylayboutique.com
 SUPERADMIN_USERNAME=adminsu
 SUPERADMIN_PASSWORD=...              # pon aquí la contraseña; cámbiala tras el 1er login
+
+# Wompi (Fase 11.2) — todas obligatorias para que el pago en línea funcione
+WOMPI_PUBLIC_KEY=...                 # llave pública del comercio (va al widget)
+WOMPI_PRIVATE_KEY=...                # llave privada; solo servidor
+WOMPI_EVENTS_SECRET=...              # secreto de eventos: valida la firma del webhook
+WOMPI_INTEGRITY_SECRET=...           # secreto de integridad: firma la referencia del pago
 ```
+
+Si falta `WOMPI_INTEGRITY_SECRET`, `WOMPI_PUBLIC_KEY` o `WOMPI_EVENTS_SECRET`, el
+código **falla cerrado** (rechaza el pago o el webhook y lo registra en consola);
+nunca calcula firmas con un secreto vacío.
 
 En Vercel, carga estas mismas variables con el MCP de Vercel (Production + Preview),
 excepto que el `SERVICE_ROLE_KEY` solo debe existir en el entorno de servidor.
