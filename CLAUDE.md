@@ -240,11 +240,22 @@ WOMPI_PUBLIC_KEY=...                 # llave pública del comercio (va al widget
 WOMPI_PRIVATE_KEY=...                # llave privada; solo servidor
 WOMPI_EVENTS_SECRET=...              # secreto de eventos: valida la firma del webhook
 WOMPI_INTEGRITY_SECRET=...           # secreto de integridad: firma la referencia del pago
+
+# Resend (Fase 11.3) — obligatoria para que salgan los correos transaccionales
+RESEND_API_KEY=...                   # API key de Resend; SOLO servidor, nunca en el cliente
 ```
 
 Si falta `WOMPI_INTEGRITY_SECRET`, `WOMPI_PUBLIC_KEY` o `WOMPI_EVENTS_SECRET`, el
 código **falla cerrado** (rechaza el pago o el webhook y lo registra en consola);
 nunca calcula firmas con un secreto vacío.
+
+`RESEND_API_KEY` es **solo de servidor** y debe existir en Vercel tanto en
+**Production como en Preview**. A diferencia de los secretos de Wompi, aquí el
+diseño es deliberadamente *fail-open*: los correos son un efecto secundario que
+nunca debe romper un flujo de negocio, así que si la variable falta,
+`enviarCorreo` solo registra un `console.error` y sigue. Consecuencia práctica:
+**si se olvida cargarla, la funcionalidad de correos no falla — simplemente no
+envía nada, en silencio.** Verifícala en cada entorno tras el despliegue.
 
 En Vercel, carga estas mismas variables con el MCP de Vercel (Production + Preview),
 excepto que el `SERVICE_ROLE_KEY` solo debe existir en el entorno de servidor.
