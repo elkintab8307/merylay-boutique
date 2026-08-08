@@ -69,6 +69,7 @@ type QueryBuilder = {
   update: (...args: unknown[]) => QueryBuilder;
   eq: (...args: unknown[]) => QueryBuilder;
   maybeSingle: () => Promise<{ data?: unknown; error?: unknown }>;
+  single: () => Promise<{ data?: unknown; error?: unknown }>;
   then: (
     resolve: (value: unknown) => unknown,
     reject?: (reason: unknown) => unknown,
@@ -76,14 +77,16 @@ type QueryBuilder = {
 };
 
 // Builder encadenable y "thenable" que imita lo suficiente del query
-// builder de supabase-js para los dos caminos que usa el webhook:
-// select().eq().eq().maybeSingle() y update().eq().eq().eq() (awaited
-// directamente, sin metodo terminal explicito).
+// builder de supabase-js para los caminos que usa el webhook:
+// select().eq().eq().maybeSingle(), select().eq().single(),
+// select().eq() (awaited directamente, sin metodo terminal, para
+// order_items) y update().eq().eq().eq() (tambien awaited directamente).
 function crearQueryBuilder(resultado: { data?: unknown; error?: unknown }) {
   const eq = vi.fn();
   const select = vi.fn();
   const update = vi.fn();
   const maybeSingle = vi.fn(() => Promise.resolve(resultado));
+  const single = vi.fn(() => Promise.resolve(resultado));
 
   const builder = {} as QueryBuilder;
   builder.select = vi.fn((...args: unknown[]) => {
@@ -99,33 +102,65 @@ function crearQueryBuilder(resultado: { data?: unknown; error?: unknown }) {
     return builder;
   });
   builder.maybeSingle = maybeSingle;
+  builder.single = single;
   builder.then = (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) =>
     Promise.resolve(resultado).then(resolve, reject);
 
-  return { builder, eq, select, update, maybeSingle };
+  return { builder, eq, select, update, maybeSingle, single };
 }
 
 function crearAdminMock(opts: {
   selectResultado?: { data: unknown; error: unknown };
   updateResultado?: { data?: unknown; error: unknown };
   rpcResultado?: { data: unknown; error: unknown };
+  // Resultado del segundo select a "orders" (Task 5: busqueda del pedido
+  // completo tras confirmar el pago, via .single()). Por defecto ausente
+  // (`data: null`) para que las pruebas existentes -- que no conocen este
+  // camino nuevo -- no disparen el envio de correo ni necesiten mockear
+  // `auth.admin.getUserById`/`order_items`.
+  pedidoCompletoResultado?: { data: unknown; error?: unknown };
+  usuarioResultado?: { data: { user: { email?: string } | null }; error?: unknown };
+  itemsResultado?: { data: unknown; error?: unknown };
 } = {}) {
   const selectQuery = crearQueryBuilder(opts.selectResultado ?? { data: null, error: null });
   const updateQuery = crearQueryBuilder(opts.updateResultado ?? { data: null, error: null });
+  const pedidoCompletoQuery = crearQueryBuilder(
+    opts.pedidoCompletoResultado ?? { data: null, error: null },
+  );
+  const itemsQuery = crearQueryBuilder(opts.itemsResultado ?? { data: [], error: null });
+
+  // Cuenta cuantas veces se invoca select() sobre "orders": la primera es
+  // siempre la busqueda original (select().eq().eq().maybeSingle()); la
+  // segunda en adelante es la busqueda del pedido completo que agrego la
+  // Task 5 (select().eq().single()).
+  let selectsSobreOrders = 0;
 
   const from = vi.fn((tabla: string) => {
-    void tabla;
-    // Ambos caminos (select y update) comparten la misma tabla "orders" en
-    // este webhook, asi que se distingue por cual metodo se invoca despues.
+    if (tabla === "order_items") {
+      return {
+        select: (...args: unknown[]) => itemsQuery.builder.select(...args),
+      };
+    }
+    // tabla === "orders"
     return {
-      select: (...args: unknown[]) => selectQuery.builder.select(...args),
+      select: (...args: unknown[]) => {
+        selectsSobreOrders += 1;
+        return selectsSobreOrders === 1
+          ? selectQuery.builder.select(...args)
+          : pedidoCompletoQuery.builder.select(...args);
+      },
       update: (...args: unknown[]) => updateQuery.builder.update(...args),
     };
   });
 
   const rpc = vi.fn(() => Promise.resolve(opts.rpcResultado ?? { data: null, error: null }));
 
-  return { from, rpc, selectQuery, updateQuery };
+  const getUserById = vi.fn(() =>
+    Promise.resolve(opts.usuarioResultado ?? { data: { user: null }, error: null }),
+  );
+  const auth = { admin: { getUserById } };
+
+  return { from, rpc, auth, selectQuery, updateQuery, pedidoCompletoQuery, itemsQuery };
 }
 
 describe("POST /api/webhooks/wompi", () => {

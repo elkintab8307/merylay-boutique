@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verificarFirmaEvento } from "@/lib/wompi/signature";
 import { eventoWompiSchema } from "@/lib/wompi/webhook-payload";
+import { enviarCorreo } from "@/lib/email/resend";
+import { ConfirmacionPedidoEmail } from "@/lib/email/templates/confirmacion-pedido-email";
 
 const ESTADOS_CANCELADOS = new Set(["DECLINED", "VOIDED", "ERROR"]);
 
@@ -190,6 +192,49 @@ export async function POST(request: NextRequest) {
         `[webhook wompi] Error confirmando el pago del pedido ${transaccion.reference} (transaccion ${transaccion.id}):`,
         errorRpc,
       );
+    }
+
+    if (!errorRpc) {
+      const { data: pedidoCompleto } = await admin
+        .from("orders")
+        .select("id, order_number, total, payment_method, user_id, shipping_address")
+        .eq("id", pedido.id)
+        .single();
+
+      if (pedidoCompleto) {
+        const { data: usuario } = await admin.auth.admin.getUserById(
+          pedidoCompleto.user_id,
+        );
+        const { data: items } = await admin
+          .from("order_items")
+          .select("name_snapshot, qty, line_total")
+          .eq("order_id", pedidoCompleto.id);
+
+        if (usuario.user?.email) {
+          const direccion = pedidoCompleto.shipping_address as {
+            fullName?: string;
+            address?: string;
+            city?: string;
+          } | null;
+
+          await enviarCorreo({
+            to: usuario.user.email,
+            subject: `Confirmación de tu pedido ${pedidoCompleto.order_number}`,
+            react: ConfirmacionPedidoEmail({
+              orderNumber: pedidoCompleto.order_number,
+              orderId: pedidoCompleto.id,
+              items: (items ?? []).map((item) => ({
+                nombre: item.name_snapshot,
+                qty: item.qty,
+                lineTotal: item.line_total,
+              })),
+              total: pedidoCompleto.total,
+              direccion,
+              metodoPago: pedidoCompleto.payment_method ?? "wompi",
+            }),
+          });
+        }
+      }
     }
   } else if (ESTADOS_CANCELADOS.has(transaccion.status)) {
     const { error: errorUpdate } = await admin
