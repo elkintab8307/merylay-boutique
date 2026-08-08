@@ -31,8 +31,9 @@ function crearSupabaseMock() {
   );
   // Sin usuario autenticado en la sesion mockeada: el bloque de envio de
   // correo de confirmacion (if (user?.email)) se omite, sin necesitar
-  // mockear tambien `from("order_items")` para estos tests, que no
-  // verifican el envio de correo (eso lo cubre otro archivo de tests).
+  // mockear tambien `from("order_items")` para estos tests. Estos tests no
+  // verifican el envio de correo -- a la fecha, ningun test cubre el
+  // disparo de `enviarCorreo` en este archivo (`checkout/actions.ts`).
   const getUser = vi.fn(() => Promise.resolve({ data: { user: null }, error: null }));
   return { rpc, auth: { getUser } };
 }
