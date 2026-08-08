@@ -8,9 +8,18 @@ import { createHash } from "node:crypto";
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { enviarCorreo } from "@/lib/email/resend";
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: vi.fn(),
+}));
+
+// Mockeado para que las pruebas nunca disparen una llamada de red real a
+// Resend (que ocurriria si `RESEND_API_KEY` esta presente en el entorno de
+// pruebas) y para poder verificar con quien/que asunto se intento enviar
+// el correo de confirmacion.
+vi.mock("@/lib/email/resend", () => ({
+  enviarCorreo: vi.fn(),
 }));
 
 const SECRET = "test_events_secret";
@@ -167,6 +176,8 @@ describe("POST /api/webhooks/wompi", () => {
   beforeEach(() => {
     vi.stubEnv("WOMPI_EVENTS_SECRET", SECRET);
     vi.mocked(createAdminClient).mockReset();
+    vi.mocked(enviarCorreo).mockReset();
+    vi.mocked(enviarCorreo).mockResolvedValue({ id: "email-test-id" });
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
@@ -441,10 +452,10 @@ describe("POST /api/webhooks/wompi", () => {
     );
   });
 
-  it("APPROVED con error al ejecutar la RPC de confirmacion: registra el error (incluyendo referencia y transaccion) y responde 200", async () => {
+  it("APPROVED con error al ejecutar la RPC de confirmacion: registra el error (incluyendo referencia y transaccion), responde 200 y NO envia correo de confirmacion", async () => {
     const errorRpc = { message: "el pedido no esta en un estado valido para confirmar el pago" };
     const admin = crearAdminMock({
-      selectResultado: { data: { id: "order-uuid-1", total: 44900 }, error: null },
+      selectResultado: { data: { id: "order-uuid-1", total: 44900, status: "pendiente" }, error: null },
       rpcResultado: { data: null, error: errorRpc },
     });
     vi.mocked(createAdminClient).mockReturnValue(admin as never);
@@ -461,6 +472,101 @@ describe("POST /api/webhooks/wompi", () => {
     expect(llamadaLog).toBeDefined();
     expect(llamadaLog?.[0]).toContain(evento.data.transaction.reference);
     expect(llamadaLog?.[1]).toBe(errorRpc);
+
+    // Una confirmacion de pago fallida (RPC con error) nunca debe generar
+    // un correo diciendole al cliente que su pedido quedo pagado: se
+    // verifica que el camino de envio ni siquiera se entra (no se busca al
+    // usuario) y que `enviarCorreo` jamas se invoca.
+    expect(admin.auth.admin.getUserById).not.toHaveBeenCalled();
+    expect(enviarCorreo).not.toHaveBeenCalled();
+  });
+
+  it("APPROVED con pago recien confirmado (el pedido estaba 'pendiente' antes de esta llamada): envia el correo de confirmacion al cliente", async () => {
+    const admin = crearAdminMock({
+      selectResultado: { data: { id: "order-uuid-1", total: 44900, status: "pendiente" }, error: null },
+      rpcResultado: { data: { id: "order-uuid-1", status: "pagado" }, error: null },
+      pedidoCompletoResultado: {
+        data: {
+          id: "order-uuid-1",
+          order_number: "ML-20260807-abc123",
+          total: 44900,
+          payment_method: "wompi",
+          user_id: "user-uuid-1",
+          shipping_address: { fullName: "Mery Lay", address: "Calle 1 # 2-3", city: "Bogotá" },
+        },
+        error: null,
+      },
+      usuarioResultado: { data: { user: { email: "cliente@example.com" } }, error: null },
+      itemsResultado: {
+        data: [{ name_snapshot: "Pijama Rosa Talla M", qty: 2, line_total: 44900 }],
+        error: null,
+      },
+    });
+    vi.mocked(createAdminClient).mockReturnValue(admin as never);
+
+    const { POST } = await import("../route");
+    const evento = construirEvento({ transaccion: { amount_in_cents: 4490000 } });
+    const response = await POST(crearRequest(evento));
+
+    expect(response.status).toBe(200);
+    expect(admin.auth.admin.getUserById).toHaveBeenCalledWith("user-uuid-1");
+    expect(enviarCorreo).toHaveBeenCalledTimes(1);
+    expect(enviarCorreo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "cliente@example.com",
+        subject: expect.stringContaining("ML-20260807-abc123"),
+      }),
+    );
+  });
+
+  it("APPROVED de un evento repetido/reenviado (el pedido ya estaba 'pagado' antes de esta llamada): NO reenvia un segundo correo de confirmacion", async () => {
+    // confirm_order_payment_wompi es idempotente: si el pedido ya esta
+    // 'pagado', retorna la fila sin error (para tolerar reenvios de Wompi
+    // dentro de la ventana de replay, o reintentos de red). Sin el chequeo
+    // de que el pedido en verdad estaba 'pendiente' ANTES de esta llamada,
+    // este escenario le mandaria al cliente un segundo correo duplicado
+    // por un pago que ya habia sido notificado.
+    // OJO: `pedidoCompletoResultado`/`usuarioResultado`/`itemsResultado` se
+    // rellenan con datos completos y validos a proposito (en vez de dejar
+    // los defaults `null` de `crearAdminMock`) -- si se dejaran vacios, el
+    // guard `if (pedidoCompleto)` bloquearia el envio de correo por si
+    // solo, y este test "pasaria" sin ejercer en realidad el chequeo de
+    // `pedido.status === "pendiente"` que es lo que se quiere probar aqui.
+    const admin = crearAdminMock({
+      selectResultado: { data: { id: "order-uuid-1", total: 44900, status: "pagado" }, error: null },
+      rpcResultado: { data: { id: "order-uuid-1", status: "pagado" }, error: null },
+      pedidoCompletoResultado: {
+        data: {
+          id: "order-uuid-1",
+          order_number: "ML-20260807-abc123",
+          total: 44900,
+          payment_method: "wompi",
+          user_id: "user-uuid-1",
+          shipping_address: { fullName: "Mery Lay", address: "Calle 1 # 2-3", city: "Bogotá" },
+        },
+        error: null,
+      },
+      usuarioResultado: { data: { user: { email: "cliente@example.com" } }, error: null },
+      itemsResultado: {
+        data: [{ name_snapshot: "Pijama Rosa Talla M", qty: 2, line_total: 44900 }],
+        error: null,
+      },
+    });
+    vi.mocked(createAdminClient).mockReturnValue(admin as never);
+
+    const { POST } = await import("../route");
+    const evento = construirEvento({ transaccion: { amount_in_cents: 4490000 } });
+    const response = await POST(crearRequest(evento));
+
+    expect(response.status).toBe(200);
+    // La RPC igual se invoca (es responsabilidad suya decidir que no hay
+    // nada que hacer); lo que se verifica es que, pese a no haber
+    // `errorRpc` y pese a que la busqueda del pedido completo (si se
+    // llegara a ejecutar) devolveria datos utilizables, no se dispara el
+    // correo para un pedido que ya estaba pagado antes de esta llamada.
+    expect(admin.rpc).toHaveBeenCalled();
+    expect(admin.auth.admin.getUserById).not.toHaveBeenCalled();
+    expect(enviarCorreo).not.toHaveBeenCalled();
   });
 
   it("DECLINED con error de Supabase al actualizar: registra el error (incluyendo referencia y transaccion) y responde 200", async () => {
