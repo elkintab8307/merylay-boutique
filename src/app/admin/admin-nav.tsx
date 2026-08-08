@@ -15,6 +15,9 @@ export function AdminNav() {
       <Link href="/admin/productos" className="hover:text-brand-rosa">
         Productos
       </Link>
+      <Link href="/admin/gastos" className="hover:text-brand-rosa">
+        Gastos
+      </Link>
     </nav>
   );
 }
