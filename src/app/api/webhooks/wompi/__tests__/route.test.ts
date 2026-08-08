@@ -147,12 +147,42 @@ describe("POST /api/webhooks/wompi", () => {
     expect(createAdminClient).not.toHaveBeenCalled();
   });
 
-  it("responde 400 si el cuerpo es JSON pero no cumple el esquema (faltan campos / tipos incorrectos)", async () => {
+  it("responde 400 si el cuerpo es JSON pero le faltan los campos requeridos (data.transaction vacio)", async () => {
     const { POST } = await import("../route");
     const cuerpoInvalido = {
       data: {},
-      signature: { properties: "transaction.id", checksum: "x" },
-      timestamp: 1,
+      signature: { properties: PROPIEDADES_ESPERADAS, checksum: "x".repeat(64) },
+      timestamp: Math.floor(Date.now() / 1000),
+    };
+    const response = await POST(crearRequest(cuerpoInvalido));
+    expect(response.status).toBe(400);
+    expect(createAdminClient).not.toHaveBeenCalled();
+  });
+
+  it("responde 400 (y no revienta con un TypeError/500) si signature.properties llega con el tipo incorrecto (string en vez de array)", async () => {
+    const { POST } = await import("../route");
+    const evento = construirEvento();
+    const cuerpoInvalido = {
+      ...evento,
+      signature: { ...evento.signature, properties: "transaction.id" },
+    };
+    const response = await POST(crearRequest(cuerpoInvalido));
+    expect(response.status).toBe(400);
+    expect(createAdminClient).not.toHaveBeenCalled();
+  });
+
+  it("responde 400 (y no revienta con un TypeError/500) si signature.properties es null en vez de un array", async () => {
+    // A diferencia del caso de arriba (string), aqui el guard de longitud
+    // del pinning (`properties.length === PROPIEDADES_ESPERADAS.length`)
+    // por si solo NO protege: `null.length` lanza un TypeError antes de
+    // llegar siquiera a comparar longitudes. Este caso aisla especificamente
+    // la proteccion que aporta el esquema zod (Important 1+4), que ninguno
+    // de los otros dos tests de esta suite ejercita.
+    const { POST } = await import("../route");
+    const evento = construirEvento();
+    const cuerpoInvalido = {
+      ...evento,
+      signature: { ...evento.signature, properties: null },
     };
     const response = await POST(crearRequest(cuerpoInvalido));
     expect(response.status).toBe(400);
@@ -198,6 +228,9 @@ describe("POST /api/webhooks/wompi", () => {
       p_order_id: "order-uuid-1",
       p_wompi_transaction_id: "txn-123",
     });
+    const llamadasEqBusqueda = admin.selectQuery.eq.mock.calls;
+    expect(llamadasEqBusqueda).toContainEqual(["order_number", "ML-20260807-abc123"]);
+    expect(llamadasEqBusqueda).toContainEqual(["payment_method", "wompi"]);
   });
 
   it("APPROVED con monto que no coincide con el total del pedido: NO llama la RPC", async () => {
@@ -236,23 +269,6 @@ describe("POST /api/webhooks/wompi", () => {
     expect(llamadasEq).toContainEqual(["payment_method", "wompi"]);
   });
 
-  it("DECLINED con el pedido ya pagado (0 filas afectadas por el filtro status='pendiente'): el filtro sigue presente, no hay forma de despagar", async () => {
-    const admin = crearAdminMock({
-      updateResultado: { data: [], error: null },
-    });
-    vi.mocked(createAdminClient).mockReturnValue(admin as never);
-
-    const { POST } = await import("../route");
-    const evento = construirEvento({
-      transaccion: { status: "DECLINED" },
-    });
-    const response = await POST(crearRequest(evento));
-
-    expect(response.status).toBe(200);
-    const llamadasEq = admin.updateQuery.eq.mock.calls;
-    expect(llamadasEq).toContainEqual(["status", "pendiente"]);
-  });
-
   it("PENDING (estado no reconocido como aprobado ni cancelado): responde 200 sin tocar la base de datos", async () => {
     const admin = crearAdminMock();
     vi.mocked(createAdminClient).mockReturnValue(admin as never);
@@ -266,7 +282,11 @@ describe("POST /api/webhooks/wompi", () => {
     expect(admin.rpc).not.toHaveBeenCalled();
   });
 
-  it("responde 400 si el timestamp esta fuera de la ventana de tolerancia de reintento", async () => {
+  it("responde 200 (no 400) si el timestamp esta fuera de la ventana de tolerancia, y registra el evento expirado", async () => {
+    // 200 y no 400: Wompi reenvia el mismo payload original (mismo
+    // timestamp) en cada reintento, asi que un timestamp ya expirado nunca
+    // se vuelve valido al reintentar. Devolver 400 aqui produciria un loop
+    // de reintentos permanente para un evento que jamas va a resolverse.
     const admin = crearAdminMock();
     vi.mocked(createAdminClient).mockReturnValue(admin as never);
 
@@ -275,8 +295,11 @@ describe("POST /api/webhooks/wompi", () => {
     const evento = construirEvento({ timestamp: timestampViejo });
     const response = await POST(crearRequest(evento));
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(200);
     expect(admin.from).not.toHaveBeenCalled();
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining(evento.data.transaction.reference),
+    );
   });
 
   it("APPROVED con error de Supabase al buscar el pedido: registra el error y aun asi responde 200 (para que Wompi no reintente indefinidamente)", async () => {
