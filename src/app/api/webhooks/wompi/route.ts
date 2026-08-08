@@ -31,6 +31,21 @@ function coincidePropiedadesEsperadas(properties: string[]): boolean {
 }
 
 export async function POST(request: NextRequest) {
+  // Fail-closed: si el secreto no esta configurado, `process.env...` seria
+  // `undefined` y se interpolaria como el string literal "undefined" en el
+  // hash de `verificarFirmaEvento`, convirtiendo el "secreto" en un valor
+  // publicamente adivinable -- cualquiera podria calcular un checksum valido
+  // y forjar eventos APPROVED. Se corta aqui, antes de tocar el cuerpo o la
+  // firma, para que una configuracion faltante rechace todo (ruidoso,
+  // diagnosticable, seguro) en vez de aceptar en silencio pagos forjados.
+  const secretoEventos = process.env.WOMPI_EVENTS_SECRET;
+  if (!secretoEventos) {
+    console.error(
+      "[webhook wompi] WOMPI_EVENTS_SECRET no esta configurado — rechazando todos los eventos del webhook.",
+    );
+    return NextResponse.json({ error: "Configuracion del servidor invalida." }, { status: 500 });
+  }
+
   let payload: unknown;
   try {
     payload = await request.json();
@@ -57,7 +72,7 @@ export async function POST(request: NextRequest) {
       },
       timestamp: evento.timestamp,
     },
-    process.env.WOMPI_EVENTS_SECRET!,
+    secretoEventos,
   );
 
   if (!firmaValida) {

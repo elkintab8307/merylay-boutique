@@ -140,6 +140,30 @@ describe("POST /api/webhooks/wompi", () => {
     vi.restoreAllMocks();
   });
 
+  it("responde 500 y no verifica nada si WOMPI_EVENTS_SECRET no esta configurado (fail-closed, no fail-open)", async () => {
+    // Si el guard no existiera, `process.env.WOMPI_EVENTS_SECRET` seria
+    // `undefined` y se interpolaria como el string literal "undefined" en
+    // el hash de verificarFirmaEvento -- cualquiera podria calcular un
+    // checksum valido usando "undefined" como secreto y forjar eventos
+    // APPROVED. Este test confirma que, en cambio, un secreto ausente
+    // rechaza todo de inmediato, sin tocar el cuerpo, la firma ni la BD.
+    vi.stubEnv("WOMPI_EVENTS_SECRET", "");
+
+    const admin = crearAdminMock();
+    vi.mocked(createAdminClient).mockReturnValue(admin as never);
+
+    const { POST } = await import("../route");
+    const evento = construirEvento();
+    const response = await POST(crearRequest(evento));
+
+    expect(response.status).toBe(500);
+    expect(createAdminClient).not.toHaveBeenCalled();
+    expect(admin.from).not.toHaveBeenCalled();
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("WOMPI_EVENTS_SECRET"),
+    );
+  });
+
   it("responde 400 si el cuerpo no es JSON valido", async () => {
     const { POST } = await import("../route");
     const response = await POST(crearRequest("esto no es json"));
