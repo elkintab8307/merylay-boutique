@@ -203,6 +203,7 @@ export type Database = {
           subtotal: number
           total: number
           user_id: string
+          wompi_transaction_id: string | null
         }
         Insert: {
           created_at?: string
@@ -215,6 +216,7 @@ export type Database = {
           subtotal: number
           total: number
           user_id: string
+          wompi_transaction_id?: string | null
         }
         Update: {
           created_at?: string
@@ -227,6 +229,7 @@ export type Database = {
           subtotal?: number
           total?: number
           user_id?: string
+          wompi_transaction_id?: string | null
         }
         Relationships: [
           {
@@ -513,6 +516,28 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      confirm_order_payment_wompi: {
+        Args: { p_order_id: string; p_wompi_transaction_id: string }
+        Returns: {
+          created_at: string
+          id: string
+          order_number: string
+          payment_method: string | null
+          shipping: number
+          shipping_address: Json | null
+          status: Database["public"]["Enums"]["order_status"]
+          subtotal: number
+          total: number
+          user_id: string
+          wompi_transaction_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       create_order: {
         Args: { p_payment_method: string; p_shipping_address: Json }
         Returns: {
@@ -526,6 +551,29 @@ export type Database = {
           subtotal: number
           total: number
           user_id: string
+          wompi_transaction_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_order_wompi: {
+        Args: { p_shipping_address: Json }
+        Returns: {
+          created_at: string
+          id: string
+          order_number: string
+          payment_method: string | null
+          shipping: number
+          shipping_address: Json | null
+          status: Database["public"]["Enums"]["order_status"]
+          subtotal: number
+          total: number
+          user_id: string
+          wompi_transaction_id: string | null
         }
         SetofOptions: {
           from: "*"
