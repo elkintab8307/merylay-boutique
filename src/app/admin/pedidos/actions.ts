@@ -1,5 +1,6 @@
 "use server";
 
+import { createElement } from "react";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -44,34 +45,49 @@ export async function cambiarEstadoPedido(
   const huboTransicionReal = pedidoAntes?.status !== parsed.data;
 
   if (huboTransicionReal && debeNotificarCambioEstado(parsed.data)) {
-    const admin = createAdminClient();
-    const { data: pedido } = await admin
-      .from("orders")
-      .select("id, order_number, user_id")
-      .eq("id", orderId)
-      .single();
+    // Todo el bloque del correo va dentro de un try/catch: el estado del pedido
+    // YA se actualizo. Si algo aqui lanzara (supabase-js puede lanzar ante
+    // fallos inesperados, no solo devolver `{error}`), se saltarian los dos
+    // `revalidatePath` de abajo y el admin veria como fallido un cambio de
+    // estado que en realidad se aplico.
+    // Nota: la plantilla se pasa con `createElement` en vez de invocarla como
+    // funcion — asi su cuerpo se ejecuta dentro del render de Resend (ya
+    // cubierto por el try/catch de `enviarCorreo`) y no aqui, de forma ansiosa.
+    try {
+      const admin = createAdminClient();
+      const { data: pedido } = await admin
+        .from("orders")
+        .select("id, order_number, user_id")
+        .eq("id", orderId)
+        .single();
 
-    if (pedido) {
-      const { data: usuario, error: errorUsuario } = await admin.auth.admin.getUserById(
-        pedido.user_id,
-      );
-      if (errorUsuario) {
-        console.error(
-          `[admin pedidos] Error obteniendo el email del usuario ${pedido.user_id} para el pedido ${pedido.order_number}:`,
-          errorUsuario,
+      if (pedido) {
+        const { data: usuario, error: errorUsuario } = await admin.auth.admin.getUserById(
+          pedido.user_id,
         );
+        if (errorUsuario) {
+          console.error(
+            `[admin pedidos] Error obteniendo el email del usuario ${pedido.user_id} para el pedido ${pedido.order_number}:`,
+            errorUsuario,
+          );
+        }
+        if (usuario.user?.email) {
+          await enviarCorreo({
+            to: usuario.user.email,
+            subject: `Actualización de tu pedido ${pedido.order_number}`,
+            react: createElement(CambioEstadoEmail, {
+              orderNumber: pedido.order_number,
+              orderId: pedido.id,
+              nuevoEstado: parsed.data,
+            }),
+          });
+        }
       }
-      if (usuario.user?.email) {
-        await enviarCorreo({
-          to: usuario.user.email,
-          subject: `Actualización de tu pedido ${pedido.order_number}`,
-          react: CambioEstadoEmail({
-            orderNumber: pedido.order_number,
-            orderId: pedido.id,
-            nuevoEstado: parsed.data,
-          }),
-        });
-      }
+    } catch (emailError) {
+      console.error(
+        `[email] Error preparando o enviando el correo de cambio de estado del pedido ${orderId}:`,
+        emailError,
+      );
     }
   }
 

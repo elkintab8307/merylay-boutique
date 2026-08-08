@@ -1,5 +1,6 @@
 "use server";
 
+import { createElement } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { registroSchema, type RegistroInput } from "@/lib/validation/auth";
 import { enviarCorreo } from "@/lib/email/resend";
@@ -29,11 +30,23 @@ export async function registro(
     return { error: "No pudimos crear tu cuenta. Intenta de nuevo." };
   }
 
-  await enviarCorreo({
-    to: parsed.data.email,
-    subject: "Bienvenida a MeryLay Boutique",
-    react: BienvenidaEmail({ nombre: parsed.data.fullName }),
-  });
+  // Mismo criterio que en checkout/webhook/admin: la cuenta YA quedo creada,
+  // asi que ningun fallo del correo de bienvenida puede convertirse en un
+  // "no pudimos crear tu cuenta" para quien si se registro. La plantilla se
+  // pasa con `createElement` (no invocada como funcion) para que su cuerpo se
+  // ejecute dentro del render de Resend y no aqui, de forma ansiosa.
+  try {
+    await enviarCorreo({
+      to: parsed.data.email,
+      subject: "Bienvenida a MeryLay Boutique",
+      react: createElement(BienvenidaEmail, { nombre: parsed.data.fullName }),
+    });
+  } catch (emailError) {
+    console.error(
+      "[email] Error preparando o enviando el correo de bienvenida:",
+      emailError,
+    );
+  }
 
   if (data.session) {
     return { success: true };

@@ -1,3 +1,4 @@
+import { createElement } from "react";
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verificarFirmaEvento } from "@/lib/wompi/signature";
@@ -201,45 +202,61 @@ export async function POST(request: NextRequest) {
     // el pedido ya estaba 'pagado' antes de esta llamada; sin este chequeo
     // se le enviaria al cliente un segundo correo de confirmacion duplicado.
     if (!errorRpc && pedido.status === "pendiente") {
-      const { data: pedidoCompleto } = await admin
-        .from("orders")
-        .select("id, order_number, total, payment_method, user_id, shipping_address")
-        .eq("id", pedido.id)
-        .single();
+      // Todo el bloque del correo va dentro de un try/catch: el pago YA quedo
+      // confirmado en la base de datos. Si algo aqui lanzara (supabase-js puede
+      // lanzar ante fallos inesperados, no solo devolver `{error}`), este
+      // manejador respondiria 500 y Wompi reintentaria un evento que en
+      // realidad ya se proceso con exito. Un correo que no sale nunca puede
+      // costar mas que eso.
+      // Nota: la plantilla se pasa con `createElement` en vez de invocarla como
+      // funcion — asi su cuerpo se ejecuta dentro del render de Resend (ya
+      // cubierto por el try/catch de `enviarCorreo`) y no aqui, de forma ansiosa.
+      try {
+        const { data: pedidoCompleto } = await admin
+          .from("orders")
+          .select("id, order_number, total, payment_method, user_id, shipping_address")
+          .eq("id", pedido.id)
+          .single();
 
-      if (pedidoCompleto) {
-        const { data: usuario } = await admin.auth.admin.getUserById(
-          pedidoCompleto.user_id,
-        );
-        const { data: items } = await admin
-          .from("order_items")
-          .select("name_snapshot, qty, line_total")
-          .eq("order_id", pedidoCompleto.id);
+        if (pedidoCompleto) {
+          const { data: usuario } = await admin.auth.admin.getUserById(
+            pedidoCompleto.user_id,
+          );
+          const { data: items } = await admin
+            .from("order_items")
+            .select("name_snapshot, qty, line_total")
+            .eq("order_id", pedidoCompleto.id);
 
-        if (usuario.user?.email) {
-          const direccion = pedidoCompleto.shipping_address as {
-            fullName?: string;
-            address?: string;
-            city?: string;
-          } | null;
+          if (usuario.user?.email) {
+            const direccion = pedidoCompleto.shipping_address as {
+              fullName?: string;
+              address?: string;
+              city?: string;
+            } | null;
 
-          await enviarCorreo({
-            to: usuario.user.email,
-            subject: `Confirmación de tu pedido ${pedidoCompleto.order_number}`,
-            react: ConfirmacionPedidoEmail({
-              orderNumber: pedidoCompleto.order_number,
-              orderId: pedidoCompleto.id,
-              items: (items ?? []).map((item) => ({
-                nombre: item.name_snapshot,
-                qty: item.qty,
-                lineTotal: item.line_total,
-              })),
-              total: pedidoCompleto.total,
-              direccion,
-              metodoPago: pedidoCompleto.payment_method ?? "wompi",
-            }),
-          });
+            await enviarCorreo({
+              to: usuario.user.email,
+              subject: `Confirmación de tu pedido ${pedidoCompleto.order_number}`,
+              react: createElement(ConfirmacionPedidoEmail, {
+                orderNumber: pedidoCompleto.order_number,
+                orderId: pedidoCompleto.id,
+                items: (items ?? []).map((item) => ({
+                  nombre: item.name_snapshot,
+                  qty: item.qty,
+                  lineTotal: item.line_total,
+                })),
+                total: pedidoCompleto.total,
+                direccion,
+                metodoPago: pedidoCompleto.payment_method ?? "wompi",
+              }),
+            });
+          }
         }
+      } catch (emailError) {
+        console.error(
+          `[email] Error preparando o enviando el correo de confirmación del pedido ${transaccion.reference} (transaccion ${transaccion.id}):`,
+          emailError,
+        );
       }
     }
   } else if (ESTADOS_CANCELADOS.has(transaccion.status)) {
