@@ -82,3 +82,60 @@ export async function iniciarPagoWompi(
     signature,
   };
 }
+
+// Reintento de pago para un pedido que ya existe. `create_order_wompi` vacia el
+// carrito al crear el pedido pendiente, asi que si el cliente cierra el widget
+// sin pagar se queda sin carrito y con un pedido que no puede pagar. Esta accion
+// no crea nada (nunca llama a la RPC ni toca el carrito): solo relee el pedido y
+// vuelve a calcular la firma de integridad con la MISMA referencia y el MISMO
+// monto, para que Wompi trate el reintento como el mismo pago y el webhook lo
+// resuelva igual que en el primer intento.
+export async function reintentarPagoWompi(
+  orderId: string,
+): Promise<{ error: string } | PagoWompiIniciado> {
+  const credenciales = obtenerCredencialesWompi();
+  if ("error" in credenciales) {
+    return credenciales;
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "Inicia sesión para reintentar el pago." };
+  }
+
+  // Se filtra por las cuatro condiciones a la vez: el pedido debe ser del
+  // usuario autenticado, seguir pendiente y ser de Wompi. Cualquier caso que no
+  // cumpla devuelve la misma respuesta generica, sin revelar si el pedido existe.
+  const { data: pedido, error } = await supabase
+    .from("orders")
+    .select("id, order_number, total")
+    .eq("id", orderId)
+    .eq("user_id", user.id)
+    .eq("status", "pendiente")
+    .eq("payment_method", "wompi")
+    .maybeSingle();
+
+  if (error || !pedido) {
+    return { error: "No se pudo reintentar el pago de este pedido." };
+  }
+
+  const amountInCents = Math.round(pedido.total * 100);
+  const signature = calcularFirmaIntegridad(
+    pedido.order_number,
+    amountInCents,
+    MONEDA,
+    credenciales.secretoIntegridad,
+  );
+
+  return {
+    orderId: pedido.id,
+    reference: pedido.order_number,
+    amountInCents,
+    currency: MONEDA,
+    publicKey: credenciales.publicKey,
+    signature,
+  };
+}
