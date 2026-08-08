@@ -8,9 +8,15 @@ const ESTADOS_CANCELADOS = new Set(["DECLINED", "VOIDED", "ERROR"]);
 // Lista fija de propiedades que Wompi firma para este tipo de evento
 // (transaction.updated). No se toma del cuerpo de la peticion: si se
 // confiara en `signature.properties` tal como llega, quien controla el
-// cuerpo tambien controlaria que campos cubre el checksum, permitiendo
-// alterar `reference` (que ni siquiera esta en esta lista) sin invalidar
-// la firma. Referencia: docs/superpowers/plans/2026-08-07-fase-11-2-pago-wompi.md
+// cuerpo tambien controlaria que valores se concatenan (sin separador, ver
+// `obtenerValorPorRuta`) para calcular el checksum, lo que permitiria
+// sustituir unos valores firmados por otros sin invalidar la firma. OJO:
+// esto NO ata `reference` a la firma — `reference` nunca formo parte del
+// conjunto que Wompi firma, con o sin este pin. Lo que realmente acota el
+// riesgo de reapuntar un evento valido a otro pedido es la combinacion de
+// la verificacion de monto (Important 3), la ventana de 5 minutos de abajo
+// y el scoping por `payment_method`/`status='pendiente'` en las consultas.
+// Referencia: docs/superpowers/plans/2026-08-07-fase-11-2-pago-wompi.md
 const PROPIEDADES_ESPERADAS = ["transaction.id", "transaction.status", "transaction.amount_in_cents"];
 
 // Ventana de tolerancia para el timestamp del evento: acota el tiempo
@@ -58,12 +64,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Firma invalida." }, { status: 401 });
   }
 
+  const transaccion = evento.data.transaction;
+
   const ahoraSegundos = Date.now() / 1000;
-  if (Math.abs(ahoraSegundos - evento.timestamp) > VENTANA_REPLAY_SEGUNDOS) {
-    return NextResponse.json({ error: "Evento expirado." }, { status: 400 });
+  const antiguedadSegundos = Math.abs(ahoraSegundos - evento.timestamp);
+  if (antiguedadSegundos > VENTANA_REPLAY_SEGUNDOS) {
+    // 200, no 400: un timestamp expirado nunca deja de estarlo en un
+    // reintento (Wompi reenvia el mismo payload original, con el mismo
+    // timestamp), asi que devolver un codigo que induce reintento aqui
+    // solo generaria un loop de reintentos permanente e inutil. Se registra
+    // para poder reconciliar manualmente un evento que llego tarde por algo
+    // mundano (downtime en un deploy, cola de entrega atrasada, etc.).
+    console.error(
+      `[webhook wompi] Evento fuera de la ventana de tolerancia para el pedido ${transaccion.reference} (transaccion ${transaccion.id}): antiguedad de ${Math.round(antiguedadSegundos)}s (limite ${VENTANA_REPLAY_SEGUNDOS}s).`,
+    );
+    return NextResponse.json({ ok: true });
   }
 
-  const transaccion = evento.data.transaction;
   const admin = createAdminClient();
 
   if (transaccion.status === "APPROVED") {
