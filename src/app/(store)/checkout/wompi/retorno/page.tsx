@@ -9,13 +9,9 @@ const MENSAJES_ESTADO: Record<string, string> = {
   PENDING: "Tu pago está siendo procesado. Te avisaremos cuando se confirme.",
 };
 
-type PageProps = {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-};
-
 export default async function WompiRetornoPage({
   searchParams,
-}: PageProps) {
+}: PageProps<"/checkout/wompi/retorno">) {
   const { orderId, estado } = await searchParams;
   const supabase = await createClient();
 
