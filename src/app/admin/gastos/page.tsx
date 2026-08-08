@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatPrice } from "@/lib/format";
 import { Button } from "@/components/ui/button";
+import { EliminarGastoButton } from "./eliminar-gasto-button";
 
 export default async function GastosPage({
   searchParams,
@@ -131,12 +132,15 @@ export default async function GastosPage({
                   <td className="py-2">{gasto.description}</td>
                   <td className="py-2">{formatPrice(gasto.amount)}</td>
                   <td className="py-2">
-                    <Link
-                      href={`/admin/gastos/${gasto.id}/editar`}
-                      className="text-brand-rosa hover:underline"
-                    >
-                      Editar
-                    </Link>
+                    <div className="flex items-center gap-3">
+                      <Link
+                        href={`/admin/gastos/${gasto.id}/editar`}
+                        className="text-brand-rosa hover:underline"
+                      >
+                        Editar
+                      </Link>
+                      <EliminarGastoButton id={gasto.id} />
+                    </div>
                   </td>
                 </tr>
               ))}

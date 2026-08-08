@@ -59,3 +59,17 @@ export async function updateGasto(
   revalidatePath("/admin/gastos");
   return {};
 }
+
+export async function deleteGasto(id: string): Promise<{ error?: string }> {
+  await requireAdmin();
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("expenses").delete().eq("id", id);
+
+  if (error) {
+    return { error: "No se pudo eliminar el gasto." };
+  }
+
+  revalidatePath("/admin/gastos");
+  return {};
+}
