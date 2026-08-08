@@ -31,6 +31,28 @@ describe("gastoSchema", () => {
     expect(gastoSchema.safeParse({ ...base, expenseDate: manana }).success).toBe(false);
   });
 
+  it("rechaza una fecha vacia", () => {
+    const result = gastoSchema.safeParse({ ...base, expenseDate: "" });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].message).toBe("Ingresa una fecha válida");
+    }
+  });
+
+  it("rechaza una fecha con formato no ISO", () => {
+    const result = gastoSchema.safeParse({ ...base, expenseDate: "12/31/2020" });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].message).toBe("Ingresa una fecha válida");
+    }
+  });
+
+  it("rechaza una fecha ISO inexistente", () => {
+    expect(gastoSchema.safeParse({ ...base, expenseDate: "2020-13-45" }).success).toBe(
+      false,
+    );
+  });
+
   it("rechaza un categoryId que no es uuid", () => {
     expect(gastoSchema.safeParse({ ...base, categoryId: "no-es-uuid" }).success).toBe(
       false,

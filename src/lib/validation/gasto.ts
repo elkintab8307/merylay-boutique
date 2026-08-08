@@ -4,8 +4,8 @@ export const gastoSchema = z.object({
   categoryId: z.string().uuid("Selecciona una categoría válida"),
   description: z.string().trim().min(3, "Ingresa una descripción de al menos 3 caracteres"),
   amount: z.number().positive("El monto debe ser mayor a cero"),
-  expenseDate: z
-    .string()
+  expenseDate: z.iso
+    .date("Ingresa una fecha válida")
     .refine((fecha) => fecha <= new Date().toISOString().slice(0, 10), {
       message: "La fecha no puede ser futura",
     }),
