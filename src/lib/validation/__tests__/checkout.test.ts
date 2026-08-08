@@ -32,4 +32,16 @@ describe("checkoutSchema", () => {
       checkoutSchema.safeParse({ ...base, paymentMethod: "bitcoin" }).success,
     ).toBe(false);
   });
+
+  it("acepta wompi como metodo de pago", () => {
+    expect(
+      checkoutSchema.safeParse({ ...base, paymentMethod: "wompi" }).success,
+    ).toBe(true);
+  });
+
+  it("rechaza los metodos de pago manuales removidos (tarjeta, nequi, daviplata)", () => {
+    expect(checkoutSchema.safeParse({ ...base, paymentMethod: "tarjeta" }).success).toBe(false);
+    expect(checkoutSchema.safeParse({ ...base, paymentMethod: "nequi" }).success).toBe(false);
+    expect(checkoutSchema.safeParse({ ...base, paymentMethod: "daviplata" }).success).toBe(false);
+  });
 });
