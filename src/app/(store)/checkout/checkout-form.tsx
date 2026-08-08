@@ -5,23 +5,50 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { checkoutSchema, type CheckoutInput } from "@/lib/validation/checkout";
 import { confirmarPedido } from "./actions";
+import { iniciarPagoWompi } from "./wompi-actions";
+import { WompiCheckoutButton } from "./wompi-checkout-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
+type DatosWompi = {
+  orderId: string;
+  reference: string;
+  amountInCents: number;
+  currency: string;
+  publicKey: string;
+  signature: string;
+};
+
 export function CheckoutForm() {
   const [serverError, setServerError] = useState<string | null>(null);
+  const [datosWompi, setDatosWompi] = useState<DatosWompi | null>(null);
 
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<CheckoutInput>({
     resolver: zodResolver(checkoutSchema),
     defaultValues: { paymentMethod: "transferencia" },
   });
 
+  const metodoSeleccionado = watch("paymentMethod");
+
   const onSubmit = async (data: CheckoutInput) => {
     setServerError(null);
+    setDatosWompi(null);
+
+    if (data.paymentMethod === "wompi") {
+      const result = await iniciarPagoWompi(data);
+      if ("error" in result) {
+        setServerError(result.error);
+        return;
+      }
+      setDatosWompi(result);
+      return;
+    }
+
     const result = await confirmarPedido(data);
     if (result?.error) {
       setServerError(result.error);
@@ -77,21 +104,27 @@ export function CheckoutForm() {
           {...register("paymentMethod")}
           className="w-full rounded-md border border-brand-rosa-claro bg-white px-3 py-2 text-sm"
         >
-          <option value="efectivo">Efectivo</option>
-          <option value="tarjeta">Tarjeta</option>
+          <option value="efectivo">Efectivo contra entrega</option>
           <option value="transferencia">Transferencia bancaria</option>
-          <option value="nequi">Nequi</option>
-          <option value="daviplata">Daviplata</option>
+          <option value="wompi">Pagar en línea con Wompi (tarjeta, PSE, Nequi)</option>
         </select>
       </div>
       {serverError && <p className="text-sm text-red-600">{serverError}</p>}
-      <Button
-        type="submit"
-        disabled={isSubmitting}
-        className="bg-brand-rosa text-brand-crema hover:bg-brand-rosa/90"
-      >
-        {isSubmitting ? "Procesando..." : "Confirmar pedido"}
-      </Button>
+      {datosWompi ? (
+        <WompiCheckoutButton {...datosWompi} />
+      ) : (
+        <Button
+          type="submit"
+          disabled={isSubmitting}
+          className="bg-brand-rosa text-brand-crema hover:bg-brand-rosa/90"
+        >
+          {isSubmitting
+            ? "Procesando..."
+            : metodoSeleccionado === "wompi"
+              ? "Continuar a pago con Wompi"
+              : "Confirmar pedido"}
+        </Button>
+      )}
     </form>
   );
 }
