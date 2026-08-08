@@ -8,6 +8,7 @@ import {
   Preview,
   Text,
 } from "@react-email/components";
+import { ESTADO_PEDIDO_LABELS } from "@/lib/validation/pedido";
 
 const MENSAJES_ESTADO: Record<string, string> = {
   enviado: "Tu pedido fue enviado",
@@ -25,6 +26,8 @@ export function CambioEstadoEmail({
   nuevoEstado: string;
 }) {
   const mensaje = MENSAJES_ESTADO[nuevoEstado] ?? "Tu pedido cambió de estado";
+  const estadoLabel =
+    (ESTADO_PEDIDO_LABELS as Record<string, string>)[nuevoEstado] ?? nuevoEstado;
 
   return (
     <Html>
@@ -37,7 +40,7 @@ export function CambioEstadoEmail({
           </Heading>
           <Text style={{ color: "#6E2A44", fontSize: "16px" }}>
             Tu pedido <strong>{orderNumber}</strong> ahora está{" "}
-            <strong>{nuevoEstado}</strong>.
+            <strong>{estadoLabel}</strong>.
           </Text>
           <Link
             href={`https://merylays.shop/cuenta/pedidos/${orderId}`}
