@@ -26,8 +26,15 @@ const DATOS_CHECKOUT: CheckoutInput = {
 };
 
 function crearSupabaseMock() {
-  const rpc = vi.fn(() => Promise.resolve({ data: { id: "order-uuid-1" }, error: null }));
-  return { rpc };
+  const rpc = vi.fn(() =>
+    Promise.resolve({ data: { id: "order-uuid-1", order_number: "ML-1", total: 10000 }, error: null }),
+  );
+  // Sin usuario autenticado en la sesion mockeada: el bloque de envio de
+  // correo de confirmacion (if (user?.email)) se omite, sin necesitar
+  // mockear tambien `from("order_items")` para estos tests, que no
+  // verifican el envio de correo (eso lo cubre otro archivo de tests).
+  const getUser = vi.fn(() => Promise.resolve({ data: { user: null }, error: null }));
+  return { rpc, auth: { getUser } };
 }
 
 describe("confirmarPedido", () => {
