@@ -18,10 +18,11 @@ export default async function EditarGastoPage({
     notFound();
   }
 
+  // Se cargan todas las categorias (incluidas las desactivadas) para que un
+  // gasto existente cuya categoria fue desactivada siga siendo editable.
   const { data: categorias } = await supabase
     .from("expense_categories")
     .select("id, name")
-    .eq("is_active", true)
     .order("name");
 
   return (
