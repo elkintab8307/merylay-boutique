@@ -4,6 +4,7 @@
 // (usa `cookies()` de next/headers via `createClient()`), igual que el
 // Route Handler de Wompi en `route.test.ts`.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/admin/require-admin";
@@ -114,6 +115,7 @@ describe("cambiarEstadoPedido", () => {
     } as never);
     vi.mocked(createClient).mockReset();
     vi.mocked(createAdminClient).mockReset();
+    vi.mocked(revalidatePath).mockClear();
     vi.mocked(enviarCorreo).mockReset();
     vi.mocked(enviarCorreo).mockResolvedValue({ id: "email-test-id" });
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -225,4 +227,41 @@ describe("cambiarEstadoPedido", () => {
     expect(resultado.error).toBeDefined();
     expect(enviarCorreo).not.toHaveBeenCalled();
   });
+
+  it(
+    "un fallo inesperado al preparar el correo no rompe el cambio de estado: " +
+      "sigue retornando exito y revalidando las rutas",
+    async () => {
+      // Cuando se ejecuta el bloque del correo, el estado del pedido YA quedo
+      // actualizado. Si un fallo inesperado de supabase-js (que puede lanzar,
+      // no solo devolver `{error}`) escapara, se saltarian los dos
+      // `revalidatePath` y el admin veria como fallido un cambio ya aplicado.
+      const supabase = crearSupabaseMock({
+        estadoActualResultado: { data: { status: "pagado" }, error: null },
+        updateResultado: { error: null },
+      });
+      vi.mocked(createClient).mockResolvedValue(supabase as never);
+
+      const admin = crearAdminMock({
+        pedidoResultado: {
+          data: { id: "order-1", order_number: "ML-1", user_id: "user-1" },
+          error: null,
+        },
+      });
+      admin.auth.admin.getUserById.mockRejectedValue(new Error("fallo inesperado de red"));
+      vi.mocked(createAdminClient).mockReturnValue(admin as never);
+
+      const { cambiarEstadoPedido } = await import("../actions");
+      const resultado = await cambiarEstadoPedido("order-1", "enviado");
+
+      expect(resultado).toEqual({});
+      expect(supabase.updateQuery.update).toHaveBeenCalledWith({ status: "enviado" });
+      expect(revalidatePath).toHaveBeenCalledWith("/admin/pedidos");
+      expect(revalidatePath).toHaveBeenCalledWith("/admin/pedidos/order-1");
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining("[email]"),
+        expect.any(Error),
+      );
+    },
+  );
 });

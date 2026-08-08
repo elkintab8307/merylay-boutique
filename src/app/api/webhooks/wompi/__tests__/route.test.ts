@@ -517,6 +517,15 @@ describe("POST /api/webhooks/wompi", () => {
         subject: expect.stringContaining("ML-20260807-abc123"),
       }),
     );
+    // Este correo SI puede afirmar que el pedido quedo confirmado: solo se
+    // dispara tras un APPROVED que en verdad transiciono el pedido a pagado.
+    // La variante "recibido" (checkout manual, pedido aun sin pagar) nunca
+    // debe llegar por este camino.
+    const [argumentos] = vi.mocked(enviarCorreo).mock.calls[0];
+    expect(argumentos.subject).toMatch(/confirmaci/i);
+    expect(argumentos.react.props).toEqual(
+      expect.objectContaining({ variante: "pagado" }),
+    );
   });
 
   it("APPROVED de un evento repetido/reenviado (el pedido ya estaba 'pagado' antes de esta llamada): NO reenvia un segundo correo de confirmacion", async () => {
@@ -568,6 +577,48 @@ describe("POST /api/webhooks/wompi", () => {
     expect(admin.auth.admin.getUserById).not.toHaveBeenCalled();
     expect(enviarCorreo).not.toHaveBeenCalled();
   });
+
+  it(
+    "APPROVED con un fallo inesperado al preparar el correo: responde 200 igualmente " +
+      "(el pago YA quedo confirmado; un 500 haria a Wompi reintentar un evento ya procesado)",
+    async () => {
+      const admin = crearAdminMock({
+        selectResultado: { data: { id: "order-uuid-1", total: 44900, status: "pendiente" }, error: null },
+        rpcResultado: { data: { id: "order-uuid-1", status: "pagado" }, error: null },
+        pedidoCompletoResultado: {
+          data: {
+            id: "order-uuid-1",
+            order_number: "ML-20260807-abc123",
+            total: 44900,
+            payment_method: "wompi",
+            user_id: "user-uuid-1",
+            shipping_address: null,
+          },
+          error: null,
+        },
+      });
+      // Las consultas extra que solo existen para armar el correo pueden
+      // lanzar ante fallos inesperados de supabase-js, no solo devolver
+      // `{error}`. Sin el try/catch alrededor del bloque, esto se convertiria
+      // en un 500 y Wompi reintentaria un pago que ya se confirmo.
+      admin.auth.admin.getUserById.mockRejectedValue(new Error("fallo inesperado de red"));
+      vi.mocked(createAdminClient).mockReturnValue(admin as never);
+
+      const { POST } = await import("../route");
+      const evento = construirEvento({ transaccion: { amount_in_cents: 4490000 } });
+      const response = await POST(crearRequest(evento));
+
+      expect(response.status).toBe(200);
+      expect(admin.rpc).toHaveBeenCalledWith("confirm_order_payment_wompi", {
+        p_order_id: "order-uuid-1",
+        p_wompi_transaction_id: "txn-123",
+      });
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining("[email]"),
+        expect.any(Error),
+      );
+    },
+  );
 
   it("DECLINED con error de Supabase al actualizar: registra el error (incluyendo referencia y transaccion) y responde 200", async () => {
     const errorUpdate = { message: "timeout" };
