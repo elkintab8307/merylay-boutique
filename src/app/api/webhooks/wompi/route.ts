@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
   if (transaccion.status === "APPROVED") {
     const { data: pedido, error: errorBusqueda } = await admin
       .from("orders")
-      .select("id, total")
+      .select("id, total, status")
       .eq("order_number", transaccion.reference)
       .eq("payment_method", "wompi")
       .maybeSingle();
@@ -194,7 +194,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!errorRpc) {
+    // Solo se notifica si ESTA llamada fue la que en verdad transiciono el
+    // pedido a pagado (pre-RPC ya estaba 'pendiente'). La RPC es idempotente
+    // -- si Wompi reenvia el mismo evento APPROVED dentro de la ventana de
+    // replay (o luego de un reintento de red), `errorRpc` sigue ausente pero
+    // el pedido ya estaba 'pagado' antes de esta llamada; sin este chequeo
+    // se le enviaria al cliente un segundo correo de confirmacion duplicado.
+    if (!errorRpc && pedido.status === "pendiente") {
       const { data: pedidoCompleto } = await admin
         .from("orders")
         .select("id, order_number, total, payment_method, user_id, shipping_address")
