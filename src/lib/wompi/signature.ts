@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 
 export function calcularFirmaIntegridad(
   reference: string,
@@ -30,6 +30,19 @@ export function verificarFirmaEvento(evento: EventoWompi, secret: string): boole
     obtenerValorPorRuta(evento.data, ruta),
   );
   const cadena = `${valores.join("")}${evento.timestamp}${secret}`;
-  const checksumCalculado = createHash("sha256").update(cadena).digest("hex");
-  return checksumCalculado.toLowerCase() === evento.signature.checksum.toLowerCase();
+  const checksumCalculado = createHash("sha256").update(cadena).digest("hex").toLowerCase();
+  const checksumRecibido = evento.signature.checksum.toLowerCase();
+
+  // Comparacion en tiempo constante: evita filtrar por timing cuanto del
+  // checksum coincide. Buffer.from(str, "hex") no lanza con hex invalido
+  // (simplemente decodifica lo que pueda), por lo que el guard de longitud
+  // cubre tambien el caso de un checksum mal formado sin lanzar excepcion.
+  const bufferCalculado = Buffer.from(checksumCalculado, "hex");
+  const bufferRecibido = Buffer.from(checksumRecibido, "hex");
+
+  if (bufferCalculado.length !== bufferRecibido.length) {
+    return false;
+  }
+
+  return timingSafeEqual(bufferCalculado, bufferRecibido);
 }
