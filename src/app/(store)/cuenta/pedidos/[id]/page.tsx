@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatPrice } from "@/lib/format";
+import { ReintentarPagoWompiButton } from "./reintentar-pago-wompi-button";
 
 type ShippingAddress = {
   fullName?: string;
@@ -56,6 +57,10 @@ export default async function PedidoDetallePage({
       <p className="mb-8 text-sm text-brand-ciruela/60">
         Estado: {pedido.status} · Método de pago: {pedido.payment_method}
       </p>
+
+      {pedido.status === "pendiente" && pedido.payment_method === "wompi" && (
+        <ReintentarPagoWompiButton orderId={pedido.id} />
+      )}
 
       <div className="mb-8 flex flex-col divide-y divide-brand-rosa-claro rounded-lg border border-brand-rosa-claro bg-white p-4">
         {(items ?? []).map((item, index) => (
