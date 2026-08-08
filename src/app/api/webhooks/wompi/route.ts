@@ -23,11 +23,30 @@ const PROPIEDADES_ESPERADAS = ["transaction.id", "transaction.status", "transact
 // durante el cual un evento valido capturado podria ser reenviado.
 const VENTANA_REPLAY_SEGUNDOS = 300;
 
+// Unico tipo de evento que este manejador sabe procesar. Wompi entrega otros
+// tipos (nequi_token.updated, etc.) a la misma URL: su `data` tiene otra forma
+// y no validaria contra `eventoWompiSchema`, asi que sin este filtro se
+// registrarian como "formato invalido" (ruido) y se responderia 400,
+// induciendo reintentos de algo que jamas vamos a procesar.
+const EVENTO_SOPORTADO = "transaction.updated";
+
+// Tope al tamano del cuerpo que se vuelca en el log de un evento que no
+// valida: alcanza para diagnosticar sin llenar los logs con payloads enteros.
+const MAX_CARACTERES_CUERPO_LOG = 300;
+
 function coincidePropiedadesEsperadas(properties: string[]): boolean {
   return (
     properties.length === PROPIEDADES_ESPERADAS.length &&
     properties.every((propiedad, indice) => propiedad === PROPIEDADES_ESPERADAS[indice])
   );
+}
+
+function resumirCuerpo(payload: unknown): string {
+  try {
+    return JSON.stringify(payload).slice(0, MAX_CARACTERES_CUERPO_LOG);
+  } catch {
+    return "<cuerpo no serializable>";
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -53,13 +72,38 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Cuerpo invalido." }, { status: 400 });
   }
 
+  // Se descartan los tipos de evento que no procesamos ANTES de validar el
+  // esquema, y con 200 (no 400): no son payloads malformados, simplemente no
+  // nos incumben. Solo se filtra cuando `event` viene y es un string distinto;
+  // un cuerpo sin `event` sigue su curso para que el esquema lo rechace.
+  const tipoEvento = (payload as { event?: unknown } | null)?.event;
+  if (typeof tipoEvento === "string" && tipoEvento !== EVENTO_SOPORTADO) {
+    return NextResponse.json({ ok: true });
+  }
+
   const parseo = eventoWompiSchema.safeParse(payload);
   if (!parseo.success) {
+    // Se registra: un rechazo silencioso y permanente es invisible hasta que
+    // un cliente reclama que pago y su pedido sigue pendiente. Aqui no hay
+    // `reference` confiable que reportar (puede que ni exista `data.transaction`),
+    // asi que se deja la traza que si se puede: los campos que fallaron y un
+    // extracto acotado del cuerpo.
+    console.error(
+      `[webhook wompi] Evento con formato invalido (rechazado con 400). Campos invalidos: ${parseo.error.issues
+        .map((issue) => issue.path.join(".") || "(raiz)")
+        .join(", ")}. Cuerpo (truncado):`,
+      resumirCuerpo(payload),
+    );
     return NextResponse.json({ error: "Evento con formato invalido." }, { status: 400 });
   }
   const evento = parseo.data;
 
   if (!coincidePropiedadesEsperadas(evento.signature.properties)) {
+    // OJO: la referencia proviene de un cuerpo cuya firma todavia NO se
+    // verifico; se registra solo como pista de diagnostico, no como un hecho.
+    console.error(
+      `[webhook wompi] signature.properties no coincide con la lista fijada para la referencia ${evento.data.transaction.reference} (transaccion ${evento.data.transaction.id}): recibido [${evento.signature.properties.join(", ")}], esperado [${PROPIEDADES_ESPERADAS.join(", ")}].`,
+    );
     return NextResponse.json({ error: "Evento con formato invalido." }, { status: 400 });
   }
 
@@ -76,6 +120,13 @@ export async function POST(request: NextRequest) {
   );
 
   if (!firmaValida) {
+    // Igual que arriba: la referencia sale de un cuerpo no autenticado y solo
+    // sirve como pista. Se registra porque un secreto mal rotado en Vercel
+    // rechazaria TODOS los pagos y, sin esta traza, el sintoma seria
+    // indistinguible de "Wompi no nos esta llamando".
+    console.error(
+      `[webhook wompi] Checksum invalido para la referencia ${evento.data.transaction.reference} (transaccion ${evento.data.transaction.id}) — evento rechazado con 401.`,
+    );
     return NextResponse.json({ error: "Firma invalida." }, { status: 401 });
   }
 

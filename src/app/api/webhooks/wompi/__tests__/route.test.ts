@@ -183,6 +183,67 @@ describe("POST /api/webhooks/wompi", () => {
     expect(createAdminClient).not.toHaveBeenCalled();
   });
 
+  it("registra el rechazo cuando el esquema no valida (un webhook que rechaza en silencio es invisible hasta que un cliente reclama)", async () => {
+    const { POST } = await import("../route");
+    const cuerpoInvalido = {
+      data: {},
+      signature: { properties: PROPIEDADES_ESPERADAS, checksum: "x".repeat(64) },
+      timestamp: Math.floor(Date.now() / 1000),
+    };
+    const response = await POST(crearRequest(cuerpoInvalido));
+
+    expect(response.status).toBe(400);
+    // No hay `reference` legible en un cuerpo que ni siquiera valida, asi que
+    // se exige al menos una traza diagnostica con el prefijo del webhook.
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("[webhook wompi]"),
+      expect.anything(),
+    );
+  });
+
+  it("registra el rechazo cuando signature.properties no coincide con la lista fijada, incluyendo la referencia", async () => {
+    const { POST } = await import("../route");
+    const evento = construirEvento({ properties: ["transaction.id"] });
+    const response = await POST(crearRequest(evento));
+
+    expect(response.status).toBe(400);
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining(evento.data.transaction.reference),
+    );
+  });
+
+  it("registra el rechazo cuando el checksum es invalido, incluyendo la referencia", async () => {
+    const { POST } = await import("../route");
+    const evento = construirEvento({ checksum: "0".repeat(64) });
+    const response = await POST(crearRequest(evento));
+
+    expect(response.status).toBe(401);
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining(evento.data.transaction.reference),
+    );
+  });
+
+  it("ignora (200, sin error registrado) los eventos de Wompi que no son transaction.updated", async () => {
+    // Wompi envia otros tipos de evento a la misma URL; su `data` tiene otra
+    // forma y no validaria contra el esquema. Devolver 400 y registrarlos
+    // como "formato invalido" seria ruido, ademas de inducir reintentos.
+    const admin = crearAdminMock();
+    vi.mocked(createAdminClient).mockReturnValue(admin as never);
+
+    const { POST } = await import("../route");
+    const response = await POST(
+      crearRequest({
+        event: "nequi_token.updated",
+        data: { nequi_token: { status: "APPROVED" } },
+        sent_at: new Date().toISOString(),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(createAdminClient).not.toHaveBeenCalled();
+    expect(console.error).not.toHaveBeenCalled();
+  });
+
   it("responde 400 (y no revienta con un TypeError/500) si signature.properties llega con el tipo incorrecto (string en vez de array)", async () => {
     const { POST } = await import("../route");
     const evento = construirEvento();
