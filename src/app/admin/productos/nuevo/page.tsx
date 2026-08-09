@@ -19,6 +19,7 @@ export default async function NuevoProductoPage() {
           categoryId: null,
           price: 0,
           compareAtPrice: null,
+          costPrice: null,
           sku: "",
           stock: 0,
           isActive: true,

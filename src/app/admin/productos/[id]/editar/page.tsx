@@ -18,7 +18,7 @@ export default async function EditarProductoPage({
     notFound();
   }
 
-  const [{ data: categorias }, { data: variantes }, { data: imagenes }] =
+  const [{ data: categorias }, { data: variantes }, { data: imagenes }, { data: costo }] =
     await Promise.all([
       supabase.from("categories").select("id, name").order("name"),
       supabase
@@ -30,6 +30,11 @@ export default async function EditarProductoPage({
         .select("id, url, is_primary")
         .eq("product_id", id)
         .order("sort_order"),
+      supabase
+        .from("product_costs")
+        .select("cost_price")
+        .eq("product_id", id)
+        .maybeSingle(),
     ]);
 
   return (
@@ -44,6 +49,7 @@ export default async function EditarProductoPage({
           categoryId: producto.category_id,
           price: producto.price,
           compareAtPrice: producto.compare_at_price,
+          costPrice: costo?.cost_price ?? null,
           sku: producto.sku,
           stock: producto.stock,
           isActive: producto.is_active,

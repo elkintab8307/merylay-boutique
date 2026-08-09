@@ -137,7 +137,7 @@ export function ProductoForm({
             ))}
           </select>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
           <div>
             <label htmlFor="price" className="text-sm text-brand-ciruela">
               Precio
@@ -164,6 +164,25 @@ export function ProductoForm({
                 setValueAs: (v) => (v === "" ? null : Number(v)),
               })}
             />
+          </div>
+          <div>
+            <label htmlFor="costPrice" className="text-sm text-brand-ciruela">
+              Costo de compra
+            </label>
+            <Input
+              id="costPrice"
+              type="number"
+              step="0.01"
+              {...register("costPrice", {
+                setValueAs: (v) => (v === "" ? null : Number(v)),
+              })}
+            />
+            <p className="text-xs text-brand-ciruela/60">
+              Información interna. No se muestra en la tienda pública.
+            </p>
+            {errors.costPrice && (
+              <p className="text-sm text-red-600">{errors.costPrice.message}</p>
+            )}
           </div>
         </div>
         <div className="grid grid-cols-2 gap-4">

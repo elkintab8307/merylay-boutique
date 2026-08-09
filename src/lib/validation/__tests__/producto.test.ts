@@ -59,6 +59,7 @@ describe("productoSchema", () => {
     categoryId: null,
     price: 89900,
     compareAtPrice: null,
+    costPrice: null,
     sku: "PJ-001",
     stock: 10,
     isActive: true,

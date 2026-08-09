@@ -85,6 +85,18 @@ export async function createProducto(
     }
   }
 
+  if (parsed.data.costPrice !== null) {
+    const { error: costoError } = await supabase.from("product_costs").upsert({
+      product_id: producto.id,
+      cost_price: parsed.data.costPrice,
+      updated_at: new Date().toISOString(),
+    });
+
+    if (costoError) {
+      return { error: "El producto se creo, pero hubo un error al guardar el costo." };
+    }
+  }
+
   if (imageFiles.length > 0) {
     const uploadResult = await uploadProductImages(producto.id, imageFiles);
     if (uploadResult.error) {
@@ -156,6 +168,18 @@ export async function updateProducto(
 
     if (variantesError) {
       return { error: "El producto se actualizo, pero hubo un error con las variantes." };
+    }
+  }
+
+  if (parsed.data.costPrice !== null) {
+    const { error: costoError } = await supabase.from("product_costs").upsert({
+      product_id: id,
+      cost_price: parsed.data.costPrice,
+      updated_at: new Date().toISOString(),
+    });
+
+    if (costoError) {
+      return { error: "El producto se actualizo, pero hubo un error al guardar el costo." };
     }
   }
 
