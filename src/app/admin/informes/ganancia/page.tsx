@@ -83,6 +83,31 @@ export default async function InformeGananciaPage({
             </div>
           </div>
           {datos.length > 0 && <GraficaGanancia datos={datos} />}
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
+                <th className="py-2">Fecha</th>
+                <th className="py-2">Ventas</th>
+                <th className="py-2">Costo de productos</th>
+                <th className="py-2">Gastos</th>
+                <th className="py-2">Ganancia</th>
+              </tr>
+            </thead>
+            <tbody>
+              {datos.map((fila) => (
+                <tr
+                  key={fila.fecha}
+                  className="border-b border-brand-rosa-claro/50"
+                >
+                  <td className="py-2">{fila.fecha}</td>
+                  <td className="py-2">{formatPrice(fila.ventas)}</td>
+                  <td className="py-2">{formatPrice(fila.costo_productos)}</td>
+                  <td className="py-2">{formatPrice(fila.gastos)}</td>
+                  <td className="py-2">{formatPrice(fila.ganancia)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </>
       )}
     </div>

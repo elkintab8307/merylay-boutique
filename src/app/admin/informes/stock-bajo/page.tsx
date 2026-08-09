@@ -13,23 +13,10 @@ export default async function InformeStockBajoPage() {
     .maybeSingle();
   const umbral = Number(ajuste?.value ?? UMBRAL_POR_DEFECTO);
 
-  const { data: todosLosProductos } = await supabase
-    .from("products")
-    .select("id, name");
-  const nombrePorProductoId = new Map(
-    (todosLosProductos ?? []).map((p) => [p.id, p.name]),
-  );
-
-  const { data: productosConVariante } = await supabase
-    .from("product_variants")
-    .select("product_id");
-  const idsConVariante = new Set(
-    (productosConVariante ?? []).map((v) => v.product_id),
-  );
-
   const { data: productos, error: errorProductos } = await supabase
     .from("products")
     .select("id, name, sku, stock")
+    .eq("is_active", true)
     .lte("stock", umbral)
     .order("stock");
 
@@ -40,6 +27,35 @@ export default async function InformeStockBajoPage() {
     .order("stock");
 
   const error = errorProductos || errorVariantes;
+
+  const idsCandidatos = Array.from(
+    new Set([
+      ...(productos ?? []).map((p) => p.id),
+      ...(variantes ?? []).map((v) => v.product_id),
+    ]),
+  );
+
+  const idsConVariante = new Set<string>();
+  const nombrePorProductoId = new Map<string, string>();
+
+  if (idsCandidatos.length > 0) {
+    const { data: productosConVariante } = await supabase
+      .from("product_variants")
+      .select("product_id")
+      .in("product_id", idsCandidatos);
+    for (const v of productosConVariante ?? []) {
+      idsConVariante.add(v.product_id);
+    }
+
+    const { data: productosRelacionados } = await supabase
+      .from("products")
+      .select("id, name")
+      .in("id", idsCandidatos);
+    for (const p of productosRelacionados ?? []) {
+      nombrePorProductoId.set(p.id, p.name);
+    }
+  }
+
   const productosSinVariante = (productos ?? []).filter(
     (p) => !idsConVariante.has(p.id),
   );
