@@ -166,6 +166,21 @@ export function CompraForm({
               >
                 Quitar
               </Button>
+              {errors.items?.[index]?.productId && (
+                <p className="col-span-5 text-sm text-red-600">
+                  {errors.items[index]?.productId?.message}
+                </p>
+              )}
+              {errors.items?.[index]?.qty && (
+                <p className="col-span-5 text-sm text-red-600">
+                  {errors.items[index]?.qty?.message}
+                </p>
+              )}
+              {errors.items?.[index]?.unitCost && (
+                <p className="col-span-5 text-sm text-red-600">
+                  {errors.items[index]?.unitCost?.message}
+                </p>
+              )}
             </div>
           );
         })}

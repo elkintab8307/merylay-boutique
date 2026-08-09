@@ -7,21 +7,19 @@ export default async function ComprasPage() {
   const supabase = await createClient();
   const { data: compras, error } = await supabase
     .from("purchases")
-    .select("id, purchase_date, supplier_id")
+    .select("id, purchase_date, supplier_id, purchase_items(line_total)")
     .order("purchase_date", { ascending: false });
 
   const { data: proveedores } = await supabase.from("suppliers").select("id, name");
   const proveedorNombreById = new Map((proveedores ?? []).map((p) => [p.id, p.name]));
 
-  const { data: items } = await supabase
-    .from("purchase_items")
-    .select("purchase_id, line_total");
   const totalPorCompra = new Map<string, number>();
-  for (const item of items ?? []) {
-    totalPorCompra.set(
-      item.purchase_id,
-      (totalPorCompra.get(item.purchase_id) ?? 0) + item.line_total,
+  for (const compra of compras ?? []) {
+    const total = (compra.purchase_items ?? []).reduce(
+      (sum, item) => sum + item.line_total,
+      0,
     );
+    totalPorCompra.set(compra.id, total);
   }
 
   return (

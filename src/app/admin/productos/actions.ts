@@ -151,7 +151,17 @@ export async function updateProducto(
   // vendida se elimina aqui, el DELETE fallara por la FK sin ON DELETE
   // CASCADE en esas tablas — revisar entonces una estrategia de diff en vez
   // de reemplazo total.
-  await supabase.from("product_variants").delete().eq("product_id", id);
+  const { error: deleteVariantesError } = await supabase
+    .from("product_variants")
+    .delete()
+    .eq("product_id", id);
+
+  if (deleteVariantesError) {
+    return {
+      error:
+        "El producto se actualizo, pero no se pudieron modificar las variantes porque una de ellas ya tiene compras registradas.",
+    };
+  }
 
   if (parsed.data.variantes.length > 0) {
     const { error: variantesError } = await supabase.from("product_variants").insert(
