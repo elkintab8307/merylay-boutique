@@ -400,6 +400,32 @@ export type Database = {
           },
         ]
       }
+      product_costs: {
+        Row: {
+          cost_price: number
+          product_id: string
+          updated_at: string
+        }
+        Insert: {
+          cost_price: number
+          product_id: string
+          updated_at?: string
+        }
+        Update: {
+          cost_price?: number
+          product_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_costs_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: true
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_images: {
         Row: {
           alt: string | null
@@ -559,6 +585,87 @@ export type Database = {
         }
         Relationships: []
       }
+      purchase_items: {
+        Row: {
+          id: string
+          line_total: number
+          product_id: string
+          purchase_id: string
+          qty: number
+          unit_cost: number
+        }
+        Insert: {
+          id?: string
+          line_total: number
+          product_id: string
+          purchase_id: string
+          qty: number
+          unit_cost: number
+        }
+        Update: {
+          id?: string
+          line_total?: number
+          product_id?: string
+          purchase_id?: string
+          qty?: number
+          unit_cost?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_items_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchases: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          purchase_date: string
+          supplier_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          purchase_date: string
+          supplier_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          purchase_date?: string
+          supplier_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchases_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchases_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       store_settings: {
         Row: {
           id: string
@@ -574,6 +681,30 @@ export type Database = {
           id?: string
           key?: string
           value?: Json
+        }
+        Relationships: []
+      }
+      suppliers: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          phone: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          phone?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          phone?: string | null
         }
         Relationships: []
       }
@@ -667,6 +798,22 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "pos_sales"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_purchase: {
+        Args: { p_items: Json; p_purchase_date: string; p_supplier_id: string }
+        Returns: {
+          created_at: string
+          created_by: string
+          id: string
+          purchase_date: string
+          supplier_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "purchases"
           isOneToOne: true
           isSetofReturn: false
         }
