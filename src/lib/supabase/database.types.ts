@@ -828,6 +828,57 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      informe_compras_serie: {
+        Args: { p_desde: string; p_hasta: string }
+        Returns: {
+          fecha: string
+          monto: number
+          proveedor: string
+        }[]
+      }
+      informe_ganancia_serie: {
+        Args: { p_desde: string; p_hasta: string }
+        Returns: {
+          costo_productos: number
+          fecha: string
+          ganancia: number
+          gastos: number
+          unidades_sin_costo: number
+          ventas: number
+        }[]
+      }
+      informe_gastos_serie: {
+        Args: { p_desde: string; p_hasta: string }
+        Returns: {
+          categoria: string
+          fecha: string
+          monto: number
+        }[]
+      }
+      informe_metodos_pago: {
+        Args: { p_desde: string; p_hasta: string }
+        Returns: {
+          metodo: string
+          total: number
+        }[]
+      }
+      informe_productos_vendidos: {
+        Args: { p_desde: string; p_hasta: string; p_limit?: number }
+        Returns: {
+          ingreso: number
+          nombre: string
+          product_id: string
+          qty: number
+        }[]
+      }
+      informe_ventas_serie: {
+        Args: { p_desde: string; p_hasta: string }
+        Returns: {
+          canal: string
+          fecha: string
+          monto: number
+        }[]
+      }
       is_admin: { Args: never; Returns: boolean }
       is_staff_or_above: { Args: never; Returns: boolean }
       is_superadmin: { Args: never; Returns: boolean }
