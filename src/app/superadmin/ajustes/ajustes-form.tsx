@@ -110,6 +110,30 @@ export function AjustesForm({
 
       <div className="flex flex-col gap-4">
         <h2 className="font-heading text-lg text-brand-ciruela">
+          Inventario
+        </h2>
+        <div>
+          <label
+            htmlFor="stockBajoUmbral"
+            className="text-sm text-brand-ciruela"
+          >
+            Umbral de stock bajo (unidades)
+          </label>
+          <Input
+            id="stockBajoUmbral"
+            type="number"
+            {...register("stockBajoUmbral", { valueAsNumber: true })}
+          />
+          {errors.stockBajoUmbral && (
+            <p className="text-sm text-red-600">
+              {errors.stockBajoUmbral.message}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-4">
+        <h2 className="font-heading text-lg text-brand-ciruela">
           Redes sociales
         </h2>
         <div>

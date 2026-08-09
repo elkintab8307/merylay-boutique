@@ -37,6 +37,9 @@ export default async function AjustesPage() {
     envioCostoDefecto: Number(
       valueByKey.get(STORE_SETTINGS_KEYS.envioCostoDefecto) ?? 0,
     ),
+    stockBajoUmbral: Number(
+      valueByKey.get(STORE_SETTINGS_KEYS.stockBajoUmbral) ?? 5,
+    ),
     redesInstagram: String(
       valueByKey.get(STORE_SETTINGS_KEYS.redesInstagram) ?? "",
     ),

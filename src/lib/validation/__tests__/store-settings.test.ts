@@ -10,6 +10,7 @@ const base = {
   redesFacebook: "",
   redesTiktok: "",
   redesWhatsapp: "",
+  stockBajoUmbral: 5,
 };
 
 describe("storeSettingsSchema", () => {
@@ -37,6 +38,22 @@ describe("storeSettingsSchema", () => {
     const result = storeSettingsSchema.safeParse({
       ...base,
       envioCostoDefecto: -100,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rechaza un umbral de stock bajo negativo", () => {
+    const result = storeSettingsSchema.safeParse({
+      ...base,
+      stockBajoUmbral: -1,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rechaza un umbral de stock bajo con decimales", () => {
+    const result = storeSettingsSchema.safeParse({
+      ...base,
+      stockBajoUmbral: 5.5,
     });
     expect(result.success).toBe(false);
   });

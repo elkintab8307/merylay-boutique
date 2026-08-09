@@ -19,6 +19,10 @@ export const storeSettingsSchema = z.object({
   redesFacebook: optionalUrl,
   redesTiktok: optionalUrl,
   redesWhatsapp: optionalUrl,
+  stockBajoUmbral: z
+    .number({ error: "Ingresa un umbral válido" })
+    .int("El umbral debe ser un número entero")
+    .min(0, "El umbral no puede ser negativo"),
 });
 
 export type StoreSettingsInput = z.infer<typeof storeSettingsSchema>;
@@ -32,4 +36,5 @@ export const STORE_SETTINGS_KEYS: Record<keyof StoreSettingsInput, string> = {
   redesFacebook: "redes_facebook",
   redesTiktok: "redes_tiktok",
   redesWhatsapp: "redes_whatsapp",
+  stockBajoUmbral: "stock_bajo_umbral",
 };
