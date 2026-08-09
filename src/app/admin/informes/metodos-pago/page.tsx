@@ -1,0 +1,74 @@
+import { createClient } from "@/lib/supabase/server";
+import { resolverRango } from "@/lib/informes/rango-fecha";
+import { formatPrice } from "@/lib/format";
+import { RangoFechaFiltro } from "../rango-fecha-filtro";
+import { GraficaMetodosPago } from "./grafica-metodos-pago";
+
+export default async function InformeMetodosPagoPage({
+  searchParams,
+}: PageProps<"/admin/informes/metodos-pago">) {
+  const params = await searchParams;
+  const { desde, hasta } = resolverRango({
+    desde: typeof params.desde === "string" ? params.desde : undefined,
+    hasta: typeof params.hasta === "string" ? params.hasta : undefined,
+  });
+
+  const supabase = await createClient();
+  const { data: filas, error } = await supabase.rpc("informe_metodos_pago", {
+    p_desde: desde,
+    p_hasta: hasta,
+  });
+
+  const datos = (filas ?? []).map((fila) => ({
+    metodo: fila.metodo,
+    total: fila.total,
+  }));
+  const total = datos.reduce((sum, d) => sum + d.total, 0);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <h1 className="font-heading text-2xl text-brand-ciruela">
+        Métodos de pago
+      </h1>
+      <RangoFechaFiltro
+        basePath="/admin/informes/metodos-pago"
+        desde={desde}
+        hasta={hasta}
+      />
+      {error ? (
+        <p className="text-sm text-red-600">
+          No se pudo cargar el informe de métodos de pago.
+        </p>
+      ) : (
+        <>
+          <div className="rounded-lg border border-brand-rosa-claro bg-white p-4">
+            <p className="text-sm text-brand-ciruela/70">Total del periodo</p>
+            <p className="font-heading text-2xl text-brand-rosa">
+              {formatPrice(total)}
+            </p>
+          </div>
+          {datos.length > 0 && <GraficaMetodosPago datos={datos} />}
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
+                <th className="py-2">Método</th>
+                <th className="py-2">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {datos.map((fila) => (
+                <tr
+                  key={fila.metodo}
+                  className="border-b border-brand-rosa-claro/50"
+                >
+                  <td className="py-2 capitalize">{fila.metodo}</td>
+                  <td className="py-2">{formatPrice(fila.total)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+    </div>
+  );
+}
