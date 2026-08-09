@@ -11,6 +11,7 @@ export const compraSchema = z.object({
     .array(
       z.object({
         productId: z.string().uuid("Selecciona un producto válido"),
+        variantId: z.string().uuid("Selecciona una variante válida").nullable().optional(),
         qty: z.number().int().positive("La cantidad debe ser mayor a cero"),
         unitCost: z.number().positive("El costo unitario debe ser mayor a cero"),
       }),

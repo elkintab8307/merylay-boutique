@@ -47,4 +47,28 @@ describe("compraSchema", () => {
       false,
     );
   });
+
+  it("acepta un item con variantId valido", () => {
+    expect(
+      compraSchema.safeParse({
+        ...base,
+        items: [
+          {
+            ...base.items[0],
+            variantId: "33333333-3333-4333-8333-333333333333",
+          },
+        ],
+      }).success,
+    ).toBe(true);
+  });
+
+  it("acepta un item sin variantId (o null), igual que antes", () => {
+    expect(
+      compraSchema.safeParse({
+        ...base,
+        items: [{ ...base.items[0], variantId: null }],
+      }).success,
+    ).toBe(true);
+    expect(compraSchema.safeParse(base).success).toBe(true);
+  });
 });
