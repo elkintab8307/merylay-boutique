@@ -91,12 +91,15 @@ export default async function AdminDashboardPage() {
           </p>
         </Link>
 
-        <div className="rounded-lg border border-brand-rosa-claro bg-white p-4">
+        <Link
+          href="/admin/informes/stock-bajo"
+          className="rounded-lg border border-brand-rosa-claro bg-white p-4 hover:border-brand-rosa"
+        >
           <p className="text-sm text-brand-ciruela/70">Stock bajo</p>
           <p className="font-heading text-2xl text-brand-rosa">
             {stockBajoCompleto.length}
           </p>
-        </div>
+        </Link>
       </div>
 
       {stockBajo.length > 0 && (
