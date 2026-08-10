@@ -676,6 +676,21 @@ export type Database = {
           },
         ]
       }
+      sku_counters: {
+        Row: {
+          prefix: string
+          siguiente: number
+        }
+        Insert: {
+          prefix: string
+          siguiente?: number
+        }
+        Update: {
+          prefix?: string
+          siguiente?: number
+        }
+        Relationships: []
+      }
       store_settings: {
         Row: {
           id: string
@@ -828,6 +843,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      generar_sku_producto: { Args: { p_category_id: string }; Returns: string }
       informe_compras_serie: {
         Args: { p_desde: string; p_hasta: string }
         Returns: {
