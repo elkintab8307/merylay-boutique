@@ -3,10 +3,19 @@
 import { createClient } from "@/lib/supabase/server";
 import { resolveEmail } from "@/lib/auth/resolve-email";
 import { loginSchema, type LoginInput } from "@/lib/validation/auth";
+import type { Database } from "@/lib/supabase/database.types";
+
+type UserRole = Database["public"]["Enums"]["user_role"];
+
+function destinoPorDefecto(role: UserRole | undefined): string {
+  if (role === "superadmin" || role === "admin") return "/admin";
+  if (role === "staff") return "/pos";
+  return "/";
+}
 
 export async function login(
   input: LoginInput,
-): Promise<{ error: string } | { success: true }> {
+): Promise<{ error: string } | { success: true; destinoPorDefecto: string }> {
   const parsed = loginSchema.safeParse(input);
   if (!parsed.success) {
     return { error: "Revisa los datos ingresados." };
@@ -18,7 +27,7 @@ export async function login(
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password: parsed.data.password,
   });
@@ -27,5 +36,11 @@ export async function login(
     return { error: "Usuario o contraseña incorrectos." };
   }
 
-  return { success: true };
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", data.user.id)
+    .single();
+
+  return { success: true, destinoPorDefecto: destinoPorDefecto(profile?.role) };
 }

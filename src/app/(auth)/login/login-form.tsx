@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirectTo") ?? "/";
+  const redirectTo = searchParams.get("redirectTo");
   const [serverError, setServerError] = useState<string | null>(null);
 
   const {
@@ -37,7 +37,7 @@ export function LoginForm() {
       clearLocalCart();
     }
 
-    router.push(redirectTo);
+    router.push(redirectTo ?? result.destinoPorDefecto);
     router.refresh();
   };
 
