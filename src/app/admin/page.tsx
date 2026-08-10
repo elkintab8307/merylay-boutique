@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatPrice } from "@/lib/format";
 import { inicioDelDiaBogota } from "@/lib/date/inicio-del-dia";
-import { buildLowStockItems, LOW_STOCK_THRESHOLD } from "@/lib/admin/low-stock";
+import { buildLowStockItems, obtenerUmbralStockBajo } from "@/lib/admin/low-stock";
 
 export default async function AdminDashboardPage() {
   const supabase = await createClient();
@@ -14,6 +14,7 @@ export default async function AdminDashboardPage() {
     { count: pedidosPendientes, error: pendientesError },
     { data: productos, error: productosError },
     { data: variantes, error: variantesError },
+    umbralStockBajo,
   ] = await Promise.all([
     supabase
       .from("orders")
@@ -29,6 +30,7 @@ export default async function AdminDashboardPage() {
     supabase
       .from("product_variants")
       .select("id, product_id, talla, color, stock"),
+    obtenerUmbralStockBajo(),
   ]);
 
   const huboError =
@@ -60,7 +62,7 @@ export default async function AdminDashboardPage() {
   const stockBajoCompleto = buildLowStockItems(
     productosActivos,
     variantesActivas,
-    LOW_STOCK_THRESHOLD,
+    umbralStockBajo,
   );
   const stockBajo = stockBajoCompleto.slice(0, 10);
 

@@ -1,4 +1,17 @@
-export const LOW_STOCK_THRESHOLD = 2;
+import { createClient } from "@/lib/supabase/server";
+import { STORE_SETTINGS_KEYS } from "@/lib/validation/store-settings";
+
+const UMBRAL_STOCK_BAJO_POR_DEFECTO = 5;
+
+export async function obtenerUmbralStockBajo(): Promise<number> {
+  const supabase = await createClient();
+  const { data: ajuste } = await supabase
+    .from("store_settings")
+    .select("value")
+    .eq("key", STORE_SETTINGS_KEYS.stockBajoUmbral)
+    .maybeSingle();
+  return Number(ajuste?.value ?? UMBRAL_STOCK_BAJO_POR_DEFECTO);
+}
 
 export type LowStockItem = {
   productId: string;

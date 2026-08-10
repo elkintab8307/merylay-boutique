@@ -1,17 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
-import { STORE_SETTINGS_KEYS } from "@/lib/validation/store-settings";
-
-const UMBRAL_POR_DEFECTO = 5;
+import { obtenerUmbralStockBajo } from "@/lib/admin/low-stock";
 
 export default async function InformeStockBajoPage() {
   const supabase = await createClient();
-
-  const { data: ajuste } = await supabase
-    .from("store_settings")
-    .select("value")
-    .eq("key", STORE_SETTINGS_KEYS.stockBajoUmbral)
-    .maybeSingle();
-  const umbral = Number(ajuste?.value ?? UMBRAL_POR_DEFECTO);
+  const umbral = await obtenerUmbralStockBajo();
 
   const { data: productos, error: errorProductos } = await supabase
     .from("products")

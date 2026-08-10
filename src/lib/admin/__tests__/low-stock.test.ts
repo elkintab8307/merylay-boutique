@@ -56,9 +56,4 @@ describe("buildLowStockItems", () => {
     );
     expect(items.map((i) => i.stock)).toEqual([0, 2]);
   });
-
-  it("LOW_STOCK_THRESHOLD vale 2", async () => {
-    const { LOW_STOCK_THRESHOLD } = await import("../low-stock");
-    expect(LOW_STOCK_THRESHOLD).toBe(2);
-  });
 });
