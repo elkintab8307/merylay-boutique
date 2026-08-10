@@ -42,6 +42,7 @@ export default async function EditarProductoPage({
       <h1 className="font-heading text-2xl text-brand-ciruela">Editar producto</h1>
       <ProductoForm
         productoId={producto.id}
+        skuActual={producto.sku}
         defaultValues={{
           name: producto.name,
           slug: producto.slug,
@@ -50,14 +51,12 @@ export default async function EditarProductoPage({
           price: producto.price,
           compareAtPrice: producto.compare_at_price,
           costPrice: costo?.cost_price ?? null,
-          sku: producto.sku,
           stock: producto.stock,
           isActive: producto.is_active,
           isFeatured: producto.is_featured,
           variantes: (variantes ?? []).map((v) => ({
             talla: v.talla ?? "",
             color: v.color ?? "",
-            sku: v.sku,
             priceOverride: v.price_override,
             stock: v.stock,
           })),

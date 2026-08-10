@@ -20,12 +20,11 @@ export default async function NuevoProductoPage() {
           price: 0,
           compareAtPrice: null,
           costPrice: null,
-          sku: "",
           stock: 0,
           isActive: true,
           isFeatured: false,
           variantes: [
-            { talla: "", color: "", sku: "", priceOverride: null, stock: 0 },
+            { talla: "", color: "", priceOverride: null, stock: 0 },
           ],
         }}
         categoriasDisponibles={categorias ?? []}

@@ -21,11 +21,13 @@ type ProductImage = { id: string; url: string; is_primary: boolean };
 
 export function ProductoForm({
   productoId,
+  skuActual,
   defaultValues,
   categoriasDisponibles,
   imagenesExistentes = [],
 }: {
   productoId?: string;
+  skuActual?: string;
   defaultValues: ProductoInput;
   categoriasDisponibles: CategoriaOption[];
   imagenesExistentes?: ProductImage[];
@@ -185,29 +187,24 @@ export function ProductoForm({
             )}
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="sku" className="text-sm text-brand-ciruela">
-              SKU
-            </label>
-            <Input id="sku" {...register("sku")} />
-            {errors.sku && (
-              <p className="text-sm text-red-600">{errors.sku.message}</p>
-            )}
-          </div>
-          <div>
-            <label htmlFor="stock" className="text-sm text-brand-ciruela">
-              Stock
-            </label>
-            <Input
-              id="stock"
-              type="number"
-              {...register("stock", { valueAsNumber: true })}
-            />
-            {errors.stock && (
-              <p className="text-sm text-red-600">{errors.stock.message}</p>
-            )}
-          </div>
+        {skuActual && (
+          <p className="text-xs text-brand-ciruela/60">
+            SKU:{" "}
+            <span className="font-medium text-brand-ciruela">{skuActual}</span>
+          </p>
+        )}
+        <div>
+          <label htmlFor="stock" className="text-sm text-brand-ciruela">
+            Stock
+          </label>
+          <Input
+            id="stock"
+            type="number"
+            {...register("stock", { valueAsNumber: true })}
+          />
+          {errors.stock && (
+            <p className="text-sm text-red-600">{errors.stock.message}</p>
+          )}
         </div>
         <div className="flex gap-6">
           <label className="flex items-center gap-2 text-sm text-brand-ciruela">
@@ -228,7 +225,7 @@ export function ProductoForm({
             type="button"
             variant="outline"
             onClick={() =>
-              append({ talla: "", color: "", sku: "", priceOverride: null, stock: 0 })
+              append({ talla: "", color: "", priceOverride: null, stock: 0 })
             }
             className="border-brand-rosa text-brand-rosa hover:bg-brand-rosa/10"
           >
@@ -238,7 +235,7 @@ export function ProductoForm({
         {fields.map((field, index) => (
           <div
             key={field.id}
-            className="grid grid-cols-5 items-end gap-2 rounded-md border border-brand-rosa-claro p-3"
+            className="grid grid-cols-4 items-end gap-2 rounded-md border border-brand-rosa-claro p-3"
           >
             <div>
               <label className="text-xs text-brand-ciruela">Talla</label>
@@ -247,10 +244,6 @@ export function ProductoForm({
             <div>
               <label className="text-xs text-brand-ciruela">Color</label>
               <Input {...register(`variantes.${index}.color` as const)} />
-            </div>
-            <div>
-              <label className="text-xs text-brand-ciruela">SKU</label>
-              <Input {...register(`variantes.${index}.sku` as const)} />
             </div>
             <div>
               <label className="text-xs text-brand-ciruela">Stock</label>
@@ -270,12 +263,15 @@ export function ProductoForm({
               Quitar
             </Button>
             {errors.variantes?.[index]?.talla && (
-              <p className="col-span-5 text-sm text-red-600">
+              <p className="col-span-4 text-sm text-red-600">
                 {errors.variantes[index]?.talla?.message}
               </p>
             )}
           </div>
         ))}
+        {errors.variantes?.message && (
+          <p className="text-sm text-red-600">{errors.variantes.message}</p>
+        )}
       </div>
 
       <div className="flex flex-col gap-3">
