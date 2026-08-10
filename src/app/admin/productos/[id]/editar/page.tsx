@@ -23,7 +23,7 @@ export default async function EditarProductoPage({
       supabase.from("categories").select("id, name").order("name"),
       supabase
         .from("product_variants")
-        .select("talla, color, sku, price_override, stock")
+        .select("talla, color, price_override, stock")
         .eq("product_id", id),
       supabase
         .from("product_images")

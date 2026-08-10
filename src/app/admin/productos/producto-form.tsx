@@ -269,8 +269,10 @@ export function ProductoForm({
             )}
           </div>
         ))}
-        {errors.variantes?.message && (
-          <p className="text-sm text-red-600">{errors.variantes.message}</p>
+        {(errors.variantes?.root?.message ?? errors.variantes?.message) && (
+          <p className="text-sm text-red-600">
+            {errors.variantes?.root?.message ?? errors.variantes?.message}
+          </p>
         )}
       </div>
 
