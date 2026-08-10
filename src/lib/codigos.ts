@@ -1,6 +1,5 @@
 import QRCode from "qrcode";
-// @ts-expect-error bwip-js no tiene tipos de TypeScript
-import bwipjs from "bwip-js";
+import bwipjs from "bwip-js/node";
 
 export async function generarCodigoQr(texto: string): Promise<string> {
   return QRCode.toDataURL(texto);
