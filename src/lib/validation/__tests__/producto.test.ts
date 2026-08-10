@@ -7,7 +7,6 @@ describe("varianteSchema", () => {
       varianteSchema.safeParse({
         talla: "M",
         color: "",
-        sku: "SKU-1",
         priceOverride: null,
         stock: 5,
       }).success,
@@ -19,7 +18,6 @@ describe("varianteSchema", () => {
       varianteSchema.safeParse({
         talla: "",
         color: "Rosa",
-        sku: "SKU-1",
         priceOverride: null,
         stock: 5,
       }).success,
@@ -31,19 +29,6 @@ describe("varianteSchema", () => {
       varianteSchema.safeParse({
         talla: "",
         color: "",
-        sku: "SKU-1",
-        priceOverride: null,
-        stock: 5,
-      }).success,
-    ).toBe(false);
-  });
-
-  it("rechaza variante sin sku", () => {
-    expect(
-      varianteSchema.safeParse({
-        talla: "M",
-        color: "Rosa",
-        sku: "",
         priceOverride: null,
         stock: 5,
       }).success,
@@ -60,7 +45,6 @@ describe("productoSchema", () => {
     price: 89900,
     compareAtPrice: null,
     costPrice: null,
-    sku: "PJ-001",
     stock: 10,
     isActive: true,
     isFeatured: false,
@@ -75,9 +59,7 @@ describe("productoSchema", () => {
     expect(
       productoSchema.safeParse({
         ...base,
-        variantes: [
-          { talla: "M", color: "Rosa", sku: "PJ-001-M-ROSA", priceOverride: null, stock: 3 },
-        ],
+        variantes: [{ talla: "M", color: "Rosa", priceOverride: null, stock: 3 }],
       }).success,
     ).toBe(true);
   });
@@ -86,7 +68,36 @@ describe("productoSchema", () => {
     expect(productoSchema.safeParse({ ...base, price: -1 }).success).toBe(false);
   });
 
-  it("rechaza sku vacio", () => {
-    expect(productoSchema.safeParse({ ...base, sku: "" }).success).toBe(false);
+  it("rechaza dos variantes con la misma talla y color", () => {
+    const result = productoSchema.safeParse({
+      ...base,
+      variantes: [
+        { talla: "M", color: "Rosa", priceOverride: null, stock: 3 },
+        { talla: "M", color: "Rosa", priceOverride: null, stock: 5 },
+      ],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rechaza dos variantes con la misma combinacion aunque cambien mayusculas o espacios", () => {
+    const result = productoSchema.safeParse({
+      ...base,
+      variantes: [
+        { talla: "M", color: "Rosa", priceOverride: null, stock: 3 },
+        { talla: " m ", color: "ROSA", priceOverride: null, stock: 5 },
+      ],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("acepta variantes con talla o color distintos", () => {
+    const result = productoSchema.safeParse({
+      ...base,
+      variantes: [
+        { talla: "M", color: "Rosa", priceOverride: null, stock: 3 },
+        { talla: "L", color: "Rosa", priceOverride: null, stock: 5 },
+      ],
+    });
+    expect(result.success).toBe(true);
   });
 });
