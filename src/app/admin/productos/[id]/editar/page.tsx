@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { generarCodigoBarras, generarCodigoQr } from "@/lib/codigos";
 import { ProductoForm } from "../../producto-form";
 
 export default async function EditarProductoPage({
@@ -18,24 +19,32 @@ export default async function EditarProductoPage({
     notFound();
   }
 
-  const [{ data: categorias }, { data: variantes }, { data: imagenes }, { data: costo }] =
-    await Promise.all([
-      supabase.from("categories").select("id, name").order("name"),
-      supabase
-        .from("product_variants")
-        .select("talla, color, price_override, stock")
-        .eq("product_id", id),
-      supabase
-        .from("product_images")
-        .select("id, url, is_primary")
-        .eq("product_id", id)
-        .order("sort_order"),
-      supabase
-        .from("product_costs")
-        .select("cost_price")
-        .eq("product_id", id)
-        .maybeSingle(),
-    ]);
+  const [
+    { data: categorias },
+    { data: variantes },
+    { data: imagenes },
+    { data: costo },
+    codigoBarras,
+    codigoQr,
+  ] = await Promise.all([
+    supabase.from("categories").select("id, name").order("name"),
+    supabase
+      .from("product_variants")
+      .select("talla, color, price_override, stock")
+      .eq("product_id", id),
+    supabase
+      .from("product_images")
+      .select("id, url, is_primary")
+      .eq("product_id", id)
+      .order("sort_order"),
+    supabase
+      .from("product_costs")
+      .select("cost_price")
+      .eq("product_id", id)
+      .maybeSingle(),
+    generarCodigoBarras(producto.sku),
+    generarCodigoQr(producto.sku),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -43,6 +52,8 @@ export default async function EditarProductoPage({
       <ProductoForm
         productoId={producto.id}
         skuActual={producto.sku}
+        codigoBarras={codigoBarras}
+        codigoQr={codigoQr}
         defaultValues={{
           name: producto.name,
           slug: producto.slug,

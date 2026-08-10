@@ -22,12 +22,16 @@ type ProductImage = { id: string; url: string; is_primary: boolean };
 export function ProductoForm({
   productoId,
   skuActual,
+  codigoBarras,
+  codigoQr,
   defaultValues,
   categoriasDisponibles,
   imagenesExistentes = [],
 }: {
   productoId?: string;
   skuActual?: string;
+  codigoBarras?: string;
+  codigoQr?: string;
   defaultValues: ProductoInput;
   categoriasDisponibles: CategoriaOption[];
   imagenesExistentes?: ProductImage[];
@@ -192,6 +196,39 @@ export function ProductoForm({
             SKU:{" "}
             <span className="font-medium text-brand-ciruela">{skuActual}</span>
           </p>
+        )}
+        {(codigoBarras || codigoQr) && (
+          <div className="flex flex-wrap gap-6">
+            {codigoBarras && (
+              <div className="flex flex-col gap-1">
+                <p className="text-xs text-brand-ciruela/60">Código de barras</p>
+                <Image
+                  src={codigoBarras}
+                  alt={`Código de barras ${skuActual ?? ""}`}
+                  width={300}
+                  height={100}
+                  unoptimized
+                  className="h-20 w-auto rounded-md border border-brand-rosa-claro bg-white p-2"
+                />
+              </div>
+            )}
+            {codigoQr && (
+              <div className="flex flex-col gap-1">
+                <p className="text-xs text-brand-ciruela/60">Código QR</p>
+                <Image
+                  src={codigoQr}
+                  alt={`Código QR ${skuActual ?? ""}`}
+                  width={150}
+                  height={150}
+                  unoptimized
+                  className="h-24 w-24 rounded-md border border-brand-rosa-claro bg-white p-2"
+                />
+              </div>
+            )}
+            <p className="w-full text-xs text-brand-ciruela/60">
+              Para uso interno. Se usará más adelante para imprimir etiquetas.
+            </p>
+          </div>
         )}
         <div>
           <label htmlFor="stock" className="text-sm text-brand-ciruela">
