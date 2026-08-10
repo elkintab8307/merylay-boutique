@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { productoSchema, type ProductoInput } from "@/lib/validation/producto";
 import { slugify } from "@/lib/slug";
 import { uploadProductImages } from "@/lib/admin/upload-product-images";
+import { generarSkuVariante } from "@/lib/sku";
 
 async function uniqueSlug(baseSlug: string, ignoreId?: string) {
   const supabase = await createClient();
@@ -42,6 +43,21 @@ export async function createProducto(
   const supabase = await createClient();
   const slug = await uniqueSlug(slugify(parsed.data.slug || parsed.data.name));
 
+  // El tipo generado para el RPC exige `p_category_id: string` (no admite
+  // null), pero la funcion SQL (020_sku_automatico.sql) si maneja
+  // `p_category_id is not null` explicitamente y cae al prefijo "GEN" sin
+  // categoria: el typegen de Supabase no captura la nulabilidad real de
+  // los parametros de funcion. La aserción preserva el envio de null en
+  // runtime, que es el comportamiento correcto.
+  const { data: skuGenerado, error: skuError } = await supabase.rpc(
+    "generar_sku_producto",
+    { p_category_id: parsed.data.categoryId as string },
+  );
+
+  if (skuError || !skuGenerado) {
+    return { error: "No se pudo generar el SKU del producto." };
+  }
+
   const { data: producto, error } = await supabase
     .from("products")
     .insert({
@@ -51,7 +67,7 @@ export async function createProducto(
       category_id: parsed.data.categoryId,
       price: parsed.data.price,
       compare_at_price: parsed.data.compareAtPrice,
-      sku: parsed.data.sku,
+      sku: skuGenerado,
       stock: parsed.data.stock,
       is_active: parsed.data.isActive,
       is_featured: parsed.data.isFeatured,
@@ -60,9 +76,7 @@ export async function createProducto(
     .single();
 
   if (error || !producto) {
-    return {
-      error: "No se pudo crear el producto. Verifica que el SKU no este repetido.",
-    };
+    return { error: "No se pudo crear el producto." };
   }
 
   if (parsed.data.variantes.length > 0) {
@@ -72,7 +86,11 @@ export async function createProducto(
         name: nombreVariante(variante.talla, variante.color),
         talla: variante.talla || null,
         color: variante.color || null,
-        sku: variante.sku,
+        sku: generarSkuVariante(
+          skuGenerado,
+          variante.talla || null,
+          variante.color || null,
+        ),
         price_override: variante.priceOverride,
         stock: variante.stock,
       })),
@@ -80,7 +98,7 @@ export async function createProducto(
 
     if (variantesError) {
       return {
-        error: "El producto se creo, pero hubo un error con las variantes. Revisa los SKU.",
+        error: "El producto se creo, pero hubo un error con las variantes.",
       };
     }
   }
@@ -123,7 +141,7 @@ export async function updateProducto(
   const supabase = await createClient();
   const slug = await uniqueSlug(slugify(parsed.data.slug || parsed.data.name), id);
 
-  const { error } = await supabase
+  const { data: productoActualizado, error } = await supabase
     .from("products")
     .update({
       name: parsed.data.name,
@@ -132,17 +150,16 @@ export async function updateProducto(
       category_id: parsed.data.categoryId,
       price: parsed.data.price,
       compare_at_price: parsed.data.compareAtPrice,
-      sku: parsed.data.sku,
       stock: parsed.data.stock,
       is_active: parsed.data.isActive,
       is_featured: parsed.data.isFeatured,
     })
-    .eq("id", id);
+    .eq("id", id)
+    .select("sku")
+    .single();
 
-  if (error) {
-    return {
-      error: "No se pudo actualizar el producto. Verifica que el SKU no este repetido.",
-    };
+  if (error || !productoActualizado) {
+    return { error: "No se pudo actualizar el producto." };
   }
 
   // Nota: estrategia simple de "borrar y reinsertar" variantes. Es segura
@@ -170,7 +187,11 @@ export async function updateProducto(
         name: nombreVariante(variante.talla, variante.color),
         talla: variante.talla || null,
         color: variante.color || null,
-        sku: variante.sku,
+        sku: generarSkuVariante(
+          productoActualizado.sku,
+          variante.talla || null,
+          variante.color || null,
+        ),
         price_override: variante.priceOverride,
         stock: variante.stock,
       })),
