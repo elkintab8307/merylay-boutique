@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { formatPrice } from "@/lib/format";
+import { calcularDescuento } from "@/lib/store/discount";
 import { FavoriteButton } from "@/components/store/favorite-button";
 
 export type ProductCardData = {
@@ -10,6 +11,7 @@ export type ProductCardData = {
   price: number;
   compareAtPrice: number | null;
   imageUrl: string | null;
+  tallas: string[];
 };
 
 export function ProductCard({
@@ -21,10 +23,12 @@ export function ProductCard({
   currentUserId: string | null;
   initialFavorite: boolean;
 }) {
+  const descuento = calcularDescuento(product.price, product.compareAtPrice);
+
   return (
     <Link
       href={`/producto/${product.slug}`}
-      className="flex flex-col gap-2 rounded-lg border border-brand-rosa-claro bg-white p-3 transition hover:shadow-md"
+      className="flex flex-col gap-2 rounded-lg border border-brand-rosa-claro bg-white p-3 shadow-brand-sm transition hover:shadow-brand-md"
     >
       <div className="relative aspect-square w-full overflow-hidden rounded-md bg-brand-rosa-claro">
         {product.imageUrl ? (
@@ -38,6 +42,11 @@ export function ProductCard({
           <div className="flex h-full items-center justify-center text-sm text-brand-ciruela/50">
             Sin imagen
           </div>
+        )}
+        {descuento !== null && (
+          <span className="absolute left-2 top-2 rounded-full bg-brand-rosa px-2 py-0.5 text-xs font-semibold text-brand-crema">
+            -{descuento}%
+          </span>
         )}
         <div className="absolute right-2 top-2">
           <FavoriteButton
@@ -54,6 +63,9 @@ export function ProductCard({
         </div>
       </div>
       <span className="font-body text-sm text-brand-ciruela">{product.name}</span>
+      {product.tallas.length > 0 && (
+        <span className="text-xs text-brand-ciruela/60">{product.tallas.join(" · ")}</span>
+      )}
       <div className="flex items-baseline gap-2">
         <span className="font-heading text-brand-rosa">{formatPrice(product.price)}</span>
         {product.compareAtPrice && product.compareAtPrice > product.price && (

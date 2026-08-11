@@ -118,6 +118,17 @@ export default async function CategoriaPage({
       : Promise.resolve({ data: [] as { product_id: string }[] }),
   ]);
   const imagenPorProducto = new Map((imagenes ?? []).map((img) => [img.product_id, img.url]));
+  const tallasPorProducto = new Map<string, string[]>();
+  for (const variante of variantesCategoria ?? []) {
+    if (!variante.talla || !idsFiltrados.includes(variante.product_id)) continue;
+    const actuales = tallasPorProducto.get(variante.product_id) ?? [];
+    if (!actuales.includes(variante.talla)) {
+      tallasPorProducto.set(variante.product_id, [...actuales, variante.talla]);
+    }
+  }
+  for (const [productId, tallas] of tallasPorProducto) {
+    tallasPorProducto.set(productId, [...tallas].sort());
+  }
   const favoritosSet = new Set((favoritos ?? []).map((f) => f.product_id));
 
   const productos: ProductCardData[] = productosFiltrados.map((p) => ({
@@ -127,6 +138,7 @@ export default async function CategoriaPage({
     price: p.price,
     compareAtPrice: p.compare_at_price,
     imageUrl: imagenPorProducto.get(p.id) ?? null,
+    tallas: tallasPorProducto.get(p.id) ?? [],
   }));
 
   return (
