@@ -81,11 +81,17 @@ páginas específicas (Fase B/C).
 
 ### Layout de la tienda pública
 
-`src/app/(store)/layout.tsx` (nuevo) envuelve `children` con
-`<TrackingPixels />` y `<SiteHeader />`. `src/app/layout.tsx` (raíz)
-deja de importar/renderizar `SiteHeader` — solo mantiene fuentes y el
-`<body>` base, que ahora heredan `/admin`, `/pos` y `/superadmin` sin el
-header de cliente encima.
+`(store)` (catálogo, carrito, checkout, cuenta) y `(auth)` (login,
+registro) son dos grupos de rutas hermanos — ambos públicos, ninguno
+parte del panel admin. Un componente compartido
+`src/components/layout/public-layout-shell.tsx` renderiza
+`<TrackingPixels />` + `<SiteHeader />` + `children`; `src/app/(store)/layout.tsx`
+y `src/app/(auth)/layout.tsx` (nuevo, no existía) son envoltorios de
+tres líneas que lo usan cada uno. `src/app/layout.tsx` (raíz) deja de
+importar/renderizar `SiteHeader` — solo mantiene fuentes y el `<body>`
+base, que ahora heredan `/admin`, `/pos` y `/superadmin` sin el header
+de cliente encima, y sin los pixeles de seguimiento (que tampoco tiene
+sentido disparar sobre actividad del staff).
 
 ### Tipografía
 
