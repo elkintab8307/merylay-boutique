@@ -26,7 +26,7 @@ export function CategoryGrid({ categorias }: { categorias: CategoriaGridItem[] }
             ) : (
               <div className="absolute inset-0 bg-gradient-to-br from-brand-rosa to-brand-oro" />
             )}
-            <div className="absolute inset-0 bg-brand-ciruela/25" />
+            <div className="absolute inset-0 bg-brand-ciruela/50" />
             <span className="relative z-10 font-heading text-lg text-brand-crema">
               {categoria.name}
             </span>

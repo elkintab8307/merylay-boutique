@@ -4,7 +4,7 @@ import { HeroSection } from "@/components/store/hero-section";
 import { BenefitsBar } from "@/components/store/benefits-bar";
 import { CategoryGrid } from "@/components/store/category-grid";
 import { CollectionBanners } from "@/components/store/collection-banners";
-import type { HeroContenido, BannerContenido } from "@/lib/validation/home-contenido";
+import { heroStoredSchema, bannersStoredSchema } from "@/lib/validation/home-contenido";
 
 export default async function HomePage() {
   const supabase = await createClient();
@@ -92,8 +92,10 @@ export default async function HomePage() {
   }));
 
   const settingsByKey = new Map((settingsRows ?? []).map((r) => [r.key, r.value]));
-  const hero = (settingsByKey.get("home_hero") ?? null) as HeroContenido | null;
-  const banners = (settingsByKey.get("home_banners") ?? []) as BannerContenido[];
+  const heroParsed = heroStoredSchema.safeParse(settingsByKey.get("home_hero"));
+  const hero = heroParsed.success ? heroParsed.data : null;
+  const bannersParsed = bannersStoredSchema.safeParse(settingsByKey.get("home_banners"));
+  const banners = bannersParsed.success ? bannersParsed.data : [];
 
   return (
     <main className="mx-auto flex max-w-6xl flex-col gap-16 px-6 py-10">

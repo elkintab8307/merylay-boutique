@@ -41,20 +41,26 @@ export function HomeContenidoForm({
   const onSubmit = async (data: HomeContenidoInput) => {
     setServerError(null);
     setSuccess(false);
-    const result = await guardarContenidoHome(
-      data,
-      heroImageFile,
-      banner1ImageFile,
-      banner2ImageFile,
-      heroImageActual,
-      banner1ImageActual,
-      banner2ImageActual,
-    );
-    if (result?.error) {
-      setServerError(result.error);
-      return;
+    try {
+      const result = await guardarContenidoHome(
+        data,
+        heroImageFile,
+        banner1ImageFile,
+        banner2ImageFile,
+        heroImageActual,
+        banner1ImageActual,
+        banner2ImageActual,
+      );
+      if (result?.error) {
+        setServerError(result.error);
+        return;
+      }
+      setSuccess(true);
+    } catch {
+      setServerError(
+        "No se pudo guardar el contenido de inicio. Verifica que las imágenes no superen los 8MB.",
+      );
     }
-    setSuccess(true);
   };
 
   return (

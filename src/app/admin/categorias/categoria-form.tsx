@@ -40,17 +40,23 @@ export function CategoriaForm({
 
   const onSubmit = async (data: CategoriaInput) => {
     setServerError(null);
-    const result = categoriaId
-      ? await updateCategoria(categoriaId, data, imageFile, imagenActual)
-      : await createCategoria(data, imageFile);
+    try {
+      const result = categoriaId
+        ? await updateCategoria(categoriaId, data, imageFile, imagenActual)
+        : await createCategoria(data, imageFile);
 
-    if (result?.error) {
-      setServerError(result.error);
-      return;
+      if (result?.error) {
+        setServerError(result.error);
+        return;
+      }
+
+      router.push("/admin/categorias");
+      router.refresh();
+    } catch {
+      setServerError(
+        "No se pudo guardar la categoría. Verifica que la imagen no supere los 8MB.",
+      );
     }
-
-    router.push("/admin/categorias");
-    router.refresh();
   };
 
   return (

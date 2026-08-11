@@ -3,10 +3,10 @@ import {
   STORE_SETTINGS_KEYS,
   type StoreSettingsInput,
 } from "@/lib/validation/store-settings";
-import type {
-  HeroContenido,
-  BannerContenido,
-  HomeContenidoInput,
+import {
+  heroStoredSchema,
+  bannersStoredSchema,
+  type HomeContenidoInput,
 } from "@/lib/validation/home-contenido";
 import { AjustesForm } from "./ajustes-form";
 import { HomeContenidoForm } from "./home-contenido-form";
@@ -58,9 +58,10 @@ export default async function AjustesPage() {
     ),
   };
 
-  const heroStored = valueByKey.get("home_hero") as HeroContenido | undefined;
-  const bannersStored =
-    (valueByKey.get("home_banners") as BannerContenido[] | undefined) ?? [];
+  const heroParsed = heroStoredSchema.safeParse(valueByKey.get("home_hero"));
+  const heroStored = heroParsed.success ? heroParsed.data : null;
+  const bannersParsed = bannersStoredSchema.safeParse(valueByKey.get("home_banners"));
+  const bannersStored = bannersParsed.success ? bannersParsed.data : [];
 
   const homeDefaultValues: HomeContenidoInput = {
     hero: {
