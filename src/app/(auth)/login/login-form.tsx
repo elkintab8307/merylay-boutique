@@ -8,6 +8,8 @@ import { loginSchema, type LoginInput } from "@/lib/validation/auth";
 import { login } from "./actions";
 import { getLocalCart, clearLocalCart } from "@/lib/cart/local-cart";
 import { mergeGuestCart } from "@/lib/cart/merge-guest-cart-action";
+import { getLocalFavorites, clearLocalFavorites } from "@/lib/favorites/local-favorites";
+import { mergeGuestFavorites } from "@/lib/favorites/merge-guest-favorites-action";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -35,6 +37,12 @@ export function LoginForm() {
     if (guestCart.length > 0) {
       await mergeGuestCart(guestCart);
       clearLocalCart();
+    }
+
+    const guestFavorites = getLocalFavorites();
+    if (guestFavorites.length > 0) {
+      await mergeGuestFavorites(guestFavorites);
+      clearLocalFavorites();
     }
 
     router.push(redirectTo ?? result.destinoPorDefecto);
