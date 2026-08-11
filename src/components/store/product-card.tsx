@@ -1,8 +1,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { formatPrice } from "@/lib/format";
+import { FavoriteButton } from "@/components/store/favorite-button";
 
 export type ProductCardData = {
+  id: string;
   slug: string;
   name: string;
   price: number;
@@ -10,7 +12,15 @@ export type ProductCardData = {
   imageUrl: string | null;
 };
 
-export function ProductCard({ product }: { product: ProductCardData }) {
+export function ProductCard({
+  product,
+  currentUserId,
+  initialFavorite,
+}: {
+  product: ProductCardData;
+  currentUserId: string | null;
+  initialFavorite: boolean;
+}) {
   return (
     <Link
       href={`/producto/${product.slug}`}
@@ -29,6 +39,19 @@ export function ProductCard({ product }: { product: ProductCardData }) {
             Sin imagen
           </div>
         )}
+        <div className="absolute right-2 top-2">
+          <FavoriteButton
+            productId={product.id}
+            currentUserId={currentUserId}
+            initialFavorite={initialFavorite}
+            product={{
+              slug: product.slug,
+              name: product.name,
+              price: product.price,
+              imageUrl: product.imageUrl,
+            }}
+          />
+        </div>
       </div>
       <span className="font-body text-sm text-brand-ciruela">{product.name}</span>
       <div className="flex items-baseline gap-2">

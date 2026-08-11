@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatPrice } from "@/lib/format";
 import { ProductGallery } from "./product-gallery";
 import { ProductVariantSelector } from "./product-variant-selector";
+import { FavoriteButton } from "@/components/store/favorite-button";
 
 export default async function ProductoPage({
   params,
@@ -34,6 +35,15 @@ export default async function ProductoPage({
     supabase.auth.getUser(),
   ]);
 
+  const { data: favorito } = user
+    ? await supabase
+        .from("favorites")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("product_id", producto.id)
+        .maybeSingle()
+    : { data: null };
+
   const variantesMapeadas = (variantes ?? []).map((v) => ({
     id: v.id,
     talla: v.talla,
@@ -50,7 +60,20 @@ export default async function ProductoPage({
       <ProductGallery images={imagenes ?? []} productName={producto.name} />
 
       <div className="flex flex-col gap-4">
-        <h1 className="font-heading text-3xl text-brand-ciruela">{producto.name}</h1>
+        <div className="flex items-start justify-between gap-4">
+          <h1 className="font-heading text-3xl text-brand-ciruela">{producto.name}</h1>
+          <FavoriteButton
+            productId={producto.id}
+            currentUserId={user?.id ?? null}
+            initialFavorite={Boolean(favorito)}
+            product={{
+              slug: producto.slug,
+              name: producto.name,
+              price: producto.price,
+              imageUrl: imagenPrincipal,
+            }}
+          />
+        </div>
         <div className="flex items-baseline gap-3">
           <span className="font-heading text-2xl text-brand-rosa">
             {formatPrice(producto.price)}

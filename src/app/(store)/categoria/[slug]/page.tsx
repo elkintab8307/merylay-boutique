@@ -23,12 +23,15 @@ export default async function CategoriaPage({
 
   const supabase = await createClient();
 
-  const { data: categoria } = await supabase
-    .from("categories")
-    .select("id, name, slug")
-    .eq("slug", slug)
-    .eq("is_active", true)
-    .single();
+  const [{ data: categoria }, { data: { user } }] = await Promise.all([
+    supabase
+      .from("categories")
+      .select("id, name, slug")
+      .eq("slug", slug)
+      .eq("is_active", true)
+      .single(),
+    supabase.auth.getUser(),
+  ]);
 
   if (!categoria) {
     notFound();
@@ -98,17 +101,27 @@ export default async function CategoriaPage({
   }
 
   const idsFiltrados = productosFiltrados.map((p) => p.id);
-  const { data: imagenes } =
+  const [{ data: imagenes }, { data: favoritos }] = await Promise.all([
     idsFiltrados.length > 0
-      ? await supabase
+      ? supabase
           .from("product_images")
           .select("product_id, url")
           .in("product_id", idsFiltrados)
           .eq("is_primary", true)
-      : { data: [] };
+      : Promise.resolve({ data: [] as { product_id: string; url: string }[] }),
+    user && idsFiltrados.length > 0
+      ? supabase
+          .from("favorites")
+          .select("product_id")
+          .eq("user_id", user.id)
+          .in("product_id", idsFiltrados)
+      : Promise.resolve({ data: [] as { product_id: string }[] }),
+  ]);
   const imagenPorProducto = new Map((imagenes ?? []).map((img) => [img.product_id, img.url]));
+  const favoritosSet = new Set((favoritos ?? []).map((f) => f.product_id));
 
   const productos: ProductCardData[] = productosFiltrados.map((p) => ({
+    id: p.id,
     slug: p.slug,
     name: p.name,
     price: p.price,
@@ -214,7 +227,12 @@ export default async function CategoriaPage({
           {productos.length > 0 ? (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
               {productos.map((producto) => (
-                <ProductCard key={producto.slug} product={producto} />
+                <ProductCard
+                  key={producto.slug}
+                  product={producto}
+                  currentUserId={user?.id ?? null}
+                  initialFavorite={favoritosSet.has(producto.id)}
+                />
               ))}
             </div>
           ) : (

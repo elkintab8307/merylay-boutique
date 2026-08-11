@@ -5,27 +5,39 @@ import { ProductCard, type ProductCardData } from "@/components/store/product-ca
 export default async function HomePage() {
   const supabase = await createClient();
 
-  const { data: destacados } = await supabase
-    .from("products")
-    .select("id, name, slug, price, compare_at_price")
-    .eq("is_active", true)
-    .eq("is_featured", true)
-    .order("created_at", { ascending: false })
-    .limit(8);
+  const [{ data: destacados }, { data: { user } }] = await Promise.all([
+    supabase
+      .from("products")
+      .select("id, name, slug, price, compare_at_price")
+      .eq("is_active", true)
+      .eq("is_featured", true)
+      .order("created_at", { ascending: false })
+      .limit(8),
+    supabase.auth.getUser(),
+  ]);
 
   const destacadoIds = (destacados ?? []).map((p) => p.id);
-  const { data: imagenesDestacados } =
+  const [{ data: imagenesDestacados }, { data: favoritos }] = await Promise.all([
     destacadoIds.length > 0
-      ? await supabase
+      ? supabase
           .from("product_images")
           .select("product_id, url")
           .in("product_id", destacadoIds)
           .eq("is_primary", true)
-      : { data: [] };
+      : Promise.resolve({ data: [] as { product_id: string; url: string }[] }),
+    user && destacadoIds.length > 0
+      ? supabase
+          .from("favorites")
+          .select("product_id")
+          .eq("user_id", user.id)
+          .in("product_id", destacadoIds)
+      : Promise.resolve({ data: [] as { product_id: string }[] }),
+  ]);
 
   const imagenPorProducto = new Map(
     (imagenesDestacados ?? []).map((img) => [img.product_id, img.url]),
   );
+  const favoritosSet = new Set((favoritos ?? []).map((f) => f.product_id));
 
   const { data: categorias } = await supabase
     .from("categories")
@@ -34,6 +46,7 @@ export default async function HomePage() {
     .order("sort_order");
 
   const productosDestacados: ProductCardData[] = (destacados ?? []).map((p) => ({
+    id: p.id,
     slug: p.slug,
     name: p.name,
     price: p.price,
@@ -59,7 +72,12 @@ export default async function HomePage() {
           <h2 className="font-heading text-2xl text-brand-ciruela">Destacados</h2>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
             {productosDestacados.map((producto) => (
-              <ProductCard key={producto.slug} product={producto} />
+              <ProductCard
+                key={producto.slug}
+                product={producto}
+                currentUserId={user?.id ?? null}
+                initialFavorite={favoritosSet.has(producto.id)}
+              />
             ))}
           </div>
         </section>
