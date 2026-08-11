@@ -41,12 +41,19 @@ export default async function FavoritosPage() {
 
   const imagenPorProducto = new Map((imagenes ?? []).map((img) => [img.product_id, img.url]));
 
+  const { data: variantesFavoritos } =
+    productIds.length > 0
+      ? await supabase.from("product_variants").select("product_id").in("product_id", productIds)
+      : { data: [] as { product_id: string }[] };
+  const productosConVariantes = new Set((variantesFavoritos ?? []).map((v) => v.product_id));
+
   const items: FavoriteItemView[] = (productos ?? []).map((p) => ({
     productId: p.id,
     name: p.name,
     slug: p.slug,
     price: p.price,
     imageUrl: imagenPorProducto.get(p.id) ?? null,
+    hasVariants: productosConVariantes.has(p.id),
   }));
 
   return (

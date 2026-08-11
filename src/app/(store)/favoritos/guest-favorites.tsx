@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { formatPrice } from "@/lib/format";
 import { Button } from "@/components/ui/button";
+import { createClient } from "@/lib/supabase/client";
 import {
   getLocalFavorites,
   saveLocalFavorites,
@@ -17,11 +18,26 @@ export function GuestFavorites() {
   const [items, setItems] = useState<LocalFavoriteItem[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [productosConVariantes, setProductosConVariantes] = useState<Set<string>>(new Set());
 
   useEffect(() => {
+    const localItems = getLocalFavorites();
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setItems(getLocalFavorites());
+    setItems(localItems);
     setLoaded(true);
+
+    if (localItems.length === 0) return;
+    const supabase = createClient();
+    supabase
+      .from("product_variants")
+      .select("product_id")
+      .in(
+        "product_id",
+        localItems.map((i) => i.productId),
+      )
+      .then(({ data }) => {
+        setProductosConVariantes(new Set((data ?? []).map((v) => v.product_id)));
+      });
   }, []);
 
   const handleRemove = (item: LocalFavoriteItem) => {
@@ -85,13 +101,22 @@ export function GuestFavorites() {
               <p className="text-sm text-brand-rosa">{formatPrice(item.price)}</p>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => handleAddToCart(item)}
-                className="rounded-md border border-brand-rosa px-3 py-1.5 text-sm text-brand-rosa hover:bg-brand-rosa/10"
-              >
-                Agregar al carrito
-              </button>
+              {productosConVariantes.has(item.productId) ? (
+                <Link
+                  href={`/producto/${item.slug}`}
+                  className="rounded-md border border-brand-rosa px-3 py-1.5 text-sm text-brand-rosa hover:bg-brand-rosa/10"
+                >
+                  Ver producto
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleAddToCart(item)}
+                  className="rounded-md border border-brand-rosa px-3 py-1.5 text-sm text-brand-rosa hover:bg-brand-rosa/10"
+                >
+                  Agregar al carrito
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => handleRemove(item)}

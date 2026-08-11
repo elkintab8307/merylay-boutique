@@ -41,8 +41,10 @@ export function LoginForm() {
 
     const guestFavorites = getLocalFavorites();
     if (guestFavorites.length > 0) {
-      await mergeGuestFavorites(guestFavorites);
-      clearLocalFavorites();
+      const favoritesResult = await mergeGuestFavorites(guestFavorites);
+      if (!favoritesResult.error) {
+        clearLocalFavorites();
+      }
     }
 
     router.push(redirectTo ?? result.destinoPorDefecto);

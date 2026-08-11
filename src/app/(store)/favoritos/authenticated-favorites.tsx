@@ -10,6 +10,7 @@ export type FavoriteItemView = {
   slug: string;
   price: number;
   imageUrl: string | null;
+  hasVariants: boolean;
 };
 
 export function AuthenticatedFavorites({ items }: { items: FavoriteItemView[] }) {
@@ -44,7 +45,12 @@ export function AuthenticatedFavorites({ items }: { items: FavoriteItemView[] })
             </Link>
             <p className="text-sm text-brand-rosa">{formatPrice(item.price)}</p>
           </div>
-          <FavoriteItemControls productId={item.productId} unitPrice={item.price} />
+          <FavoriteItemControls
+            productId={item.productId}
+            slug={item.slug}
+            unitPrice={item.price}
+            hasVariants={item.hasVariants}
+          />
         </div>
       ))}
     </div>
