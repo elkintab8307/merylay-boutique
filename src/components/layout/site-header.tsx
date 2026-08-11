@@ -38,6 +38,9 @@ export async function SiteHeader() {
             <Link href="/carrito" className="hover:text-brand-rosa">
               Carrito
             </Link>
+            <Link href="/favoritos" className="hover:text-brand-rosa">
+              Favoritos
+            </Link>
             {currentUser && (
               <Link href="/cuenta/pedidos" className="hover:text-brand-rosa">
                 Mis pedidos
