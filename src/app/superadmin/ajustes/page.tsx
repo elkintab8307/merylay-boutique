@@ -3,7 +3,13 @@ import {
   STORE_SETTINGS_KEYS,
   type StoreSettingsInput,
 } from "@/lib/validation/store-settings";
+import type {
+  HeroContenido,
+  BannerContenido,
+  HomeContenidoInput,
+} from "@/lib/validation/home-contenido";
 import { AjustesForm } from "./ajustes-form";
+import { HomeContenidoForm } from "./home-contenido-form";
 
 export default async function AjustesPage() {
   const supabase = await createClient();
@@ -52,12 +58,46 @@ export default async function AjustesPage() {
     ),
   };
 
+  const heroStored = valueByKey.get("home_hero") as HeroContenido | undefined;
+  const bannersStored =
+    (valueByKey.get("home_banners") as BannerContenido[] | undefined) ?? [];
+
+  const homeDefaultValues: HomeContenidoInput = {
+    hero: {
+      titulo: heroStored?.titulo ?? "",
+      subtitulo: heroStored?.subtitulo ?? "",
+      textoBoton: heroStored?.textoBoton ?? "",
+      linkBoton: heroStored?.linkBoton ?? "",
+    },
+    banner1: {
+      titulo: bannersStored[0]?.titulo ?? "",
+      link: bannersStored[0]?.link ?? "",
+    },
+    banner2: {
+      titulo: bannersStored[1]?.titulo ?? "",
+      link: bannersStored[1]?.link ?? "",
+    },
+  };
+
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="font-heading text-2xl text-brand-ciruela">
-        Ajustes de la tienda
-      </h1>
-      <AjustesForm defaultValues={defaultValues} />
+    <div className="flex flex-col gap-10">
+      <div className="flex flex-col gap-6">
+        <h1 className="font-heading text-2xl text-brand-ciruela">
+          Ajustes de la tienda
+        </h1>
+        <AjustesForm defaultValues={defaultValues} />
+      </div>
+      <div className="flex flex-col gap-6">
+        <h2 className="font-heading text-xl text-brand-ciruela">
+          Contenido del inicio
+        </h2>
+        <HomeContenidoForm
+          defaultValues={homeDefaultValues}
+          heroImageActual={heroStored?.imageUrl ?? null}
+          banner1ImageActual={bannersStored[0]?.imageUrl ?? null}
+          banner2ImageActual={bannersStored[1]?.imageUrl ?? null}
+        />
+      </div>
     </div>
   );
 }
