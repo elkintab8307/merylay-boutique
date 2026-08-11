@@ -4,6 +4,7 @@ import { getCurrentProfile } from "@/lib/auth/get-current-user";
 import { logout } from "@/lib/auth/logout-action";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
+import { MobileNavSheet } from "./mobile-nav-sheet";
 
 export async function SiteHeader() {
   const supabase = await createClient();
@@ -22,10 +23,11 @@ export async function SiteHeader() {
         <div className="flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3">
             <Image
-              src="/brand/isotipo-placeholder.svg"
+              src="/brand/logo-principal.png"
               alt="MeryLay Boutique"
               width={40}
               height={40}
+              className="rounded-full"
             />
             <span className="font-script text-3xl text-brand-rosa">
               MeryLay Boutique
@@ -64,17 +66,28 @@ export async function SiteHeader() {
           </div>
         </div>
         {categorias && categorias.length > 0 && (
-          <nav className="flex gap-4 text-sm text-brand-ciruela">
-            {categorias.map((categoria) => (
-              <Link
-                key={categoria.id}
-                href={`/categoria/${categoria.slug}`}
-                className="hover:text-brand-rosa"
-              >
-                {categoria.name}
-              </Link>
-            ))}
-          </nav>
+          <>
+            <nav className="hidden gap-4 text-sm text-brand-ciruela md:flex">
+              {categorias.map((categoria) => (
+                <Link
+                  key={categoria.id}
+                  href={`/categoria/${categoria.slug}`}
+                  className="hover:text-brand-rosa"
+                >
+                  {categoria.name}
+                </Link>
+              ))}
+            </nav>
+            <div className="md:hidden">
+              <MobileNavSheet
+                triggerLabel="Categorías"
+                links={categorias.map((categoria) => ({
+                  href: `/categoria/${categoria.slug}`,
+                  label: categoria.name,
+                }))}
+              />
+            </div>
+          </>
         )}
       </div>
     </header>
