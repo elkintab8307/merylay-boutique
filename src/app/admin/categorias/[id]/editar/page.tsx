@@ -39,6 +39,7 @@ export default async function EditarCategoriaPage({
           isActive: categoria.is_active,
         }}
         categoriasDisponibles={categorias ?? []}
+        imagenActual={categoria.image_url}
       />
     </div>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
@@ -16,13 +17,16 @@ export function CategoriaForm({
   categoriaId,
   defaultValues,
   categoriasDisponibles,
+  imagenActual = null,
 }: {
   categoriaId?: string;
   defaultValues: CategoriaInput;
   categoriasDisponibles: CategoriaOption[];
+  imagenActual?: string | null;
 }) {
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
 
   const {
     register,
@@ -37,8 +41,8 @@ export function CategoriaForm({
   const onSubmit = async (data: CategoriaInput) => {
     setServerError(null);
     const result = categoriaId
-      ? await updateCategoria(categoriaId, data)
-      : await createCategoria(data);
+      ? await updateCategoria(categoriaId, data, imageFile, imagenActual)
+      : await createCategoria(data, imageFile);
 
     if (result?.error) {
       setServerError(result.error);
@@ -115,6 +119,23 @@ export function CategoriaForm({
         {errors.sortOrder && (
           <p className="text-sm text-red-600">{errors.sortOrder.message}</p>
         )}
+      </div>
+      <div className="flex flex-col gap-2">
+        <label className="text-sm text-brand-ciruela">Imagen</label>
+        {imagenActual && (
+          <Image
+            src={imagenActual}
+            alt=""
+            width={200}
+            height={112}
+            className="h-28 w-full max-w-xs rounded-md object-cover"
+          />
+        )}
+        <input
+          type="file"
+          accept="image/*"
+          onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+        />
       </div>
       <label className="flex items-center gap-2 text-sm text-brand-ciruela">
         <input type="checkbox" {...register("isActive")} />

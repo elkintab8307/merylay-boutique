@@ -5,6 +5,7 @@ import { requireAdmin } from "@/lib/admin/require-admin";
 import { createClient } from "@/lib/supabase/server";
 import { categoriaSchema, type CategoriaInput } from "@/lib/validation/categoria";
 import { slugify } from "@/lib/slug";
+import { subirImagenCategoria } from "@/lib/admin/upload-category-image";
 
 async function uniqueSlug(baseSlug: string, ignoreId?: string) {
   const supabase = await createClient();
@@ -25,12 +26,20 @@ async function uniqueSlug(baseSlug: string, ignoreId?: string) {
 
 export async function createCategoria(
   input: CategoriaInput,
+  imageFile: File | null,
 ): Promise<{ error?: string }> {
   await requireAdmin();
 
   const parsed = categoriaSchema.safeParse(input);
   if (!parsed.success) {
     return { error: "Revisa los datos ingresados." };
+  }
+
+  let imageUrl: string | null = null;
+  if (imageFile) {
+    const uploadResult = await subirImagenCategoria(imageFile);
+    if (uploadResult.error) return { error: uploadResult.error };
+    imageUrl = uploadResult.url ?? null;
   }
 
   const supabase = await createClient();
@@ -43,6 +52,7 @@ export async function createCategoria(
     parent_id: parsed.data.parentId,
     sort_order: parsed.data.sortOrder,
     is_active: parsed.data.isActive,
+    image_url: imageUrl,
   });
 
   if (error) {
@@ -56,12 +66,21 @@ export async function createCategoria(
 export async function updateCategoria(
   id: string,
   input: CategoriaInput,
+  imageFile: File | null,
+  imagenActual: string | null,
 ): Promise<{ error?: string }> {
   await requireAdmin();
 
   const parsed = categoriaSchema.safeParse(input);
   if (!parsed.success) {
     return { error: "Revisa los datos ingresados." };
+  }
+
+  let imageUrl = imagenActual;
+  if (imageFile) {
+    const uploadResult = await subirImagenCategoria(imageFile);
+    if (uploadResult.error) return { error: uploadResult.error };
+    imageUrl = uploadResult.url ?? imagenActual;
   }
 
   const supabase = await createClient();
@@ -76,6 +95,7 @@ export async function updateCategoria(
       parent_id: parsed.data.parentId,
       sort_order: parsed.data.sortOrder,
       is_active: parsed.data.isActive,
+      image_url: imageUrl,
     })
     .eq("id", id);
 
