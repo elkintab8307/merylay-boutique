@@ -4,31 +4,43 @@ import { HeroSection } from "@/components/store/hero-section";
 import { BenefitsBar } from "@/components/store/benefits-bar";
 import { CategoryGrid } from "@/components/store/category-grid";
 import { CollectionBanners } from "@/components/store/collection-banners";
+import { ReviewsSection, type ReviewItem } from "@/components/store/reviews-section";
 import { heroStoredSchema, bannersStoredSchema } from "@/lib/validation/home-contenido";
 
 export default async function HomePage() {
   const supabase = await createClient();
 
-  const [{ data: destacados }, { data: { user } }, { data: categorias }, { data: settingsRows }] =
-    await Promise.all([
-      supabase
-        .from("products")
-        .select("id, name, slug, price, compare_at_price")
-        .eq("is_active", true)
-        .eq("is_featured", true)
-        .order("created_at", { ascending: false })
-        .limit(8),
-      supabase.auth.getUser(),
-      supabase
-        .from("categories")
-        .select("id, name, slug, image_url")
-        .eq("is_active", true)
-        .order("sort_order"),
-      supabase
-        .from("store_settings")
-        .select("key, value")
-        .in("key", ["home_hero", "home_banners"]),
-    ]);
+  const [
+    { data: destacados },
+    { data: { user } },
+    { data: categorias },
+    { data: settingsRows },
+    { data: resenasData },
+  ] = await Promise.all([
+    supabase
+      .from("products")
+      .select("id, name, slug, price, compare_at_price")
+      .eq("is_active", true)
+      .eq("is_featured", true)
+      .order("created_at", { ascending: false })
+      .limit(8),
+    supabase.auth.getUser(),
+    supabase
+      .from("categories")
+      .select("id, name, slug, image_url")
+      .eq("is_active", true)
+      .order("sort_order"),
+    supabase
+      .from("store_settings")
+      .select("key, value")
+      .in("key", ["home_hero", "home_banners"]),
+    supabase
+      .from("reviews")
+      .select("id, customer_name, body, rating, image_url")
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true })
+      .limit(6),
+  ]);
 
   let productosBase = destacados ?? [];
   if (productosBase.length === 0) {
@@ -97,6 +109,14 @@ export default async function HomePage() {
   const bannersParsed = bannersStoredSchema.safeParse(settingsByKey.get("home_banners"));
   const banners = bannersParsed.success ? bannersParsed.data : [];
 
+  const resenas: ReviewItem[] = (resenasData ?? []).map((r) => ({
+    id: r.id,
+    customerName: r.customer_name,
+    body: r.body,
+    rating: r.rating,
+    imageUrl: r.image_url,
+  }));
+
   return (
     <main className="mx-auto flex max-w-6xl flex-col gap-16 px-6 py-10">
       <HeroSection hero={hero} primerCategoriaSlug={categorias?.[0]?.slug ?? null} />
@@ -126,6 +146,8 @@ export default async function HomePage() {
           </div>
         </section>
       )}
+
+      <ReviewsSection resenas={resenas} />
     </main>
   );
 }
