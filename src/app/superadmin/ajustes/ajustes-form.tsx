@@ -93,6 +93,20 @@ export function AjustesForm({
             <p className="text-sm text-red-600">{errors.direccion.message}</p>
           )}
         </div>
+        <div>
+          <label
+            htmlFor="mensajePromocional"
+            className="text-sm text-brand-ciruela"
+          >
+            Mensaje promocional
+          </label>
+          <Input id="mensajePromocional" {...register("mensajePromocional")} />
+          {errors.mensajePromocional && (
+            <p className="text-sm text-red-600">
+              {errors.mensajePromocional.message}
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-col gap-4">
