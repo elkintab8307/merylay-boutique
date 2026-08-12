@@ -7,6 +7,7 @@ const ENLACES_BASE = [
   { href: "/admin/pedidos", label: "Pedidos" },
   { href: "/admin/categorias", label: "Categorías" },
   { href: "/admin/productos", label: "Productos" },
+  { href: "/admin/resenas", label: "Reseñas" },
   { href: "/admin/gastos", label: "Gastos" },
   { href: "/admin/compras", label: "Compras" },
   { href: "/admin/informes", label: "Informes" },
