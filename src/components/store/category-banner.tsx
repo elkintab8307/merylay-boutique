@@ -14,7 +14,7 @@ export function CategoryBanner({
       {imageUrl ? (
         <Image src={imageUrl} alt="" fill priority className="object-cover" />
       ) : (
-        <div className="absolute inset-0 bg-gradient-to-br from-brand-rosa to-brand-oro" />
+        <div className="absolute inset-0 bg-gradient-to-br from-brand-rosa-claro via-brand-crema to-brand-rosa-medio" />
       )}
       {imageUrl && (
         <div className="absolute inset-0 bg-gradient-to-t from-brand-ciruela/70 via-brand-ciruela/20 to-transparent" />

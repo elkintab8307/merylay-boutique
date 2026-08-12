@@ -182,7 +182,7 @@ export default async function CategoriaPage({
                   {tallas.map((talla) => (
                     <label
                       key={talla}
-                      className="flex w-fit cursor-pointer items-center gap-2 rounded-full border border-brand-rosa-claro px-3 py-1 text-sm text-brand-ciruela has-[:checked]:border-brand-rosa has-[:checked]:bg-brand-rosa has-[:checked]:text-brand-crema"
+                      className="flex w-fit cursor-pointer items-center gap-2 rounded-full border border-brand-rosa-claro px-3 py-1 text-sm text-brand-ciruela has-[:checked]:border-brand-rosa has-[:checked]:bg-brand-rosa has-[:checked]:text-brand-crema has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand-oro has-[:focus-visible]:ring-offset-2"
                     >
                       <input
                         type="checkbox"
@@ -205,7 +205,7 @@ export default async function CategoriaPage({
                   {colores.map((color) => (
                     <label
                       key={color}
-                      className="flex w-fit cursor-pointer items-center gap-2 rounded-full border border-brand-rosa-claro px-3 py-1 text-sm text-brand-ciruela has-[:checked]:border-brand-rosa has-[:checked]:bg-brand-rosa has-[:checked]:text-brand-crema"
+                      className="flex w-fit cursor-pointer items-center gap-2 rounded-full border border-brand-rosa-claro px-3 py-1 text-sm text-brand-ciruela has-[:checked]:border-brand-rosa has-[:checked]:bg-brand-rosa has-[:checked]:text-brand-crema has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand-oro has-[:focus-visible]:ring-offset-2"
                     >
                       <input
                         type="checkbox"
