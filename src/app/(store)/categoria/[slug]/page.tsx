@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ProductCard, type ProductCardData } from "@/components/store/product-card";
+import { Breadcrumbs } from "@/components/store/breadcrumbs";
+import { CategoryBanner } from "@/components/store/category-banner";
 import { getVariantOptions } from "@/lib/store/variants";
 import { resolveSort } from "@/lib/store/sort";
 
@@ -26,7 +28,7 @@ export default async function CategoriaPage({
   const [{ data: categoria }, { data: { user } }] = await Promise.all([
     supabase
       .from("categories")
-      .select("id, name, slug")
+      .select("id, name, slug, image_url, description")
       .eq("slug", slug)
       .eq("is_active", true)
       .single(),
@@ -143,7 +145,12 @@ export default async function CategoriaPage({
 
   return (
     <main className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-12">
-      <h1 className="font-heading text-3xl text-brand-ciruela">{categoria.name}</h1>
+      <Breadcrumbs items={[{ label: "Inicio", href: "/" }, { label: categoria.name }]} />
+      <CategoryBanner
+        name={categoria.name}
+        description={categoria.description}
+        imageUrl={categoria.image_url}
+      />
 
       <div className="flex flex-col gap-8 md:flex-row">
         <aside className="w-full shrink-0 md:w-56">
@@ -171,17 +178,18 @@ export default async function CategoriaPage({
             {tallas.length > 0 && (
               <div>
                 <h2 className="mb-2 font-heading text-sm text-brand-ciruela">Talla</h2>
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-wrap gap-2">
                   {tallas.map((talla) => (
                     <label
                       key={talla}
-                      className="flex items-center gap-2 text-sm text-brand-ciruela"
+                      className="flex w-fit cursor-pointer items-center gap-2 rounded-full border border-brand-rosa-claro px-3 py-1 text-sm text-brand-ciruela has-[:checked]:border-brand-rosa has-[:checked]:bg-brand-rosa has-[:checked]:text-brand-crema"
                     >
                       <input
                         type="checkbox"
                         name="talla"
                         value={talla}
                         defaultChecked={tallasSeleccionadas.includes(talla)}
+                        className="sr-only"
                       />
                       {talla}
                     </label>
@@ -193,17 +201,18 @@ export default async function CategoriaPage({
             {colores.length > 0 && (
               <div>
                 <h2 className="mb-2 font-heading text-sm text-brand-ciruela">Color</h2>
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-wrap gap-2">
                   {colores.map((color) => (
                     <label
                       key={color}
-                      className="flex items-center gap-2 text-sm text-brand-ciruela"
+                      className="flex w-fit cursor-pointer items-center gap-2 rounded-full border border-brand-rosa-claro px-3 py-1 text-sm text-brand-ciruela has-[:checked]:border-brand-rosa has-[:checked]:bg-brand-rosa has-[:checked]:text-brand-crema"
                     >
                       <input
                         type="checkbox"
                         name="color"
                         value={color}
                         defaultChecked={coloresSeleccionados.includes(color)}
+                        className="sr-only"
                       />
                       {color}
                     </label>
