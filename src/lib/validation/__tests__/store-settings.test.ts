@@ -6,6 +6,7 @@ const base = {
   contactoEmail: "contacto@merylayboutique.com",
   contactoTelefono: "3001234567",
   envioCostoDefecto: 15000,
+  direccion: "Calle 10 #20-30, Bogotá",
   redesInstagram: "",
   redesFacebook: "",
   redesTiktok: "",

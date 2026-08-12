@@ -15,6 +15,7 @@ export const storeSettingsSchema = z.object({
     .number({ error: "Ingresa un costo de envío válido" })
     .int("El costo de envío debe ser un número entero")
     .min(0, "El costo de envío no puede ser negativo"),
+  direccion: z.string().trim(),
   redesInstagram: optionalUrl,
   redesFacebook: optionalUrl,
   redesTiktok: optionalUrl,
@@ -32,6 +33,7 @@ export const STORE_SETTINGS_KEYS: Record<keyof StoreSettingsInput, string> = {
   contactoEmail: "contacto_email",
   contactoTelefono: "contacto_telefono",
   envioCostoDefecto: "envio_costo_defecto",
+  direccion: "direccion",
   redesInstagram: "redes_instagram",
   redesFacebook: "redes_facebook",
   redesTiktok: "redes_tiktok",
