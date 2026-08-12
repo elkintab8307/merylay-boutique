@@ -66,33 +66,35 @@ export default async function InformeStockBajoPage() {
           No se pudo cargar el informe de stock bajo.
         </p>
       ) : (
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
-              <th className="py-2">Producto</th>
-              <th className="py-2">SKU</th>
-              <th className="py-2">Stock</th>
-            </tr>
-          </thead>
-          <tbody>
-            {productosSinVariante.map((p) => (
-              <tr key={p.id} className="border-b border-brand-rosa-claro/50">
-                <td className="py-2">{p.name}</td>
-                <td className="py-2">{p.sku}</td>
-                <td className="py-2">{p.stock}</td>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
+                <th className="py-2">Producto</th>
+                <th className="py-2">SKU</th>
+                <th className="py-2">Stock</th>
               </tr>
-            ))}
-            {(variantes ?? []).map((v) => (
-              <tr key={v.id} className="border-b border-brand-rosa-claro/50">
-                <td className="py-2">
-                  {nombrePorProductoId.get(v.product_id) ?? "-"} — {v.name}
-                </td>
-                <td className="py-2">{v.sku}</td>
-                <td className="py-2">{v.stock}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {productosSinVariante.map((p) => (
+                <tr key={p.id} className="border-b border-brand-rosa-claro/50">
+                  <td className="py-2">{p.name}</td>
+                  <td className="py-2">{p.sku}</td>
+                  <td className="py-2">{p.stock}</td>
+                </tr>
+              ))}
+              {(variantes ?? []).map((v) => (
+                <tr key={v.id} className="border-b border-brand-rosa-claro/50">
+                  <td className="py-2">
+                    {nombrePorProductoId.get(v.product_id) ?? "-"} — {v.name}
+                  </td>
+                  <td className="py-2">{v.sku}</td>
+                  <td className="py-2">{v.stock}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

@@ -23,37 +23,39 @@ export default async function ProveedoresPage() {
       {error ? (
         <p className="text-sm text-red-600">No se pudieron cargar los proveedores.</p>
       ) : (
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
-              <th className="py-2">Nombre</th>
-              <th className="py-2">Teléfono</th>
-              <th className="py-2">Activo</th>
-              <th className="py-2">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(proveedores ?? []).map((proveedor) => (
-              <tr key={proveedor.id} className="border-b border-brand-rosa-claro/50">
-                <td className="py-2">{proveedor.name}</td>
-                <td className="py-2">{proveedor.phone ?? "-"}</td>
-                <td className="py-2">{proveedor.is_active ? "Sí" : "No"}</td>
-                <td className="flex gap-3 py-2">
-                  <Link
-                    href={`/admin/compras/proveedores/${proveedor.id}/editar`}
-                    className="text-brand-rosa hover:underline"
-                  >
-                    Editar
-                  </Link>
-                  <ToggleProveedorButton
-                    id={proveedor.id}
-                    isActive={proveedor.is_active}
-                  />
-                </td>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
+                <th className="py-2">Nombre</th>
+                <th className="py-2">Teléfono</th>
+                <th className="py-2">Activo</th>
+                <th className="py-2">Acciones</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {(proveedores ?? []).map((proveedor) => (
+                <tr key={proveedor.id} className="border-b border-brand-rosa-claro/50">
+                  <td className="py-2">{proveedor.name}</td>
+                  <td className="py-2">{proveedor.phone ?? "-"}</td>
+                  <td className="py-2">{proveedor.is_active ? "Sí" : "No"}</td>
+                  <td className="flex gap-3 py-2">
+                    <Link
+                      href={`/admin/compras/proveedores/${proveedor.id}/editar`}
+                      className="text-brand-rosa hover:underline"
+                    >
+                      Editar
+                    </Link>
+                    <ToggleProveedorButton
+                      id={proveedor.id}
+                      isActive={proveedor.is_active}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

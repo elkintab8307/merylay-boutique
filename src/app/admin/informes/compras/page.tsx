@@ -74,27 +74,29 @@ export default async function InformeComprasPage({
           {datosGrafica.length > 0 && (
             <GraficaCompras datos={datosGrafica} series={series} />
           )}
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
-                <th className="py-2">Proveedor</th>
-                <th className="py-2">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {Array.from(totalPorProveedor.entries()).map(
-                ([proveedor, monto]) => (
-                  <tr
-                    key={proveedor}
-                    className="border-b border-brand-rosa-claro/50"
-                  >
-                    <td className="py-2">{proveedor}</td>
-                    <td className="py-2">{formatPrice(monto)}</td>
-                  </tr>
-                ),
-              )}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
+                  <th className="py-2">Proveedor</th>
+                  <th className="py-2">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from(totalPorProveedor.entries()).map(
+                  ([proveedor, monto]) => (
+                    <tr
+                      key={proveedor}
+                      className="border-b border-brand-rosa-claro/50"
+                    >
+                      <td className="py-2">{proveedor}</td>
+                      <td className="py-2">{formatPrice(monto)}</td>
+                    </tr>
+                  ),
+                )}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
     </div>

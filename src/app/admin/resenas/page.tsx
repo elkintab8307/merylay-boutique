@@ -20,36 +20,38 @@ export default async function ResenasPage() {
           </Button>
         </Link>
       </div>
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
-            <th className="py-2">Clienta</th>
-            <th className="py-2">Calificación</th>
-            <th className="py-2">Orden</th>
-            <th className="py-2">Activa</th>
-            <th className="py-2">Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          {resenas?.map((resena) => (
-            <tr key={resena.id} className="border-b border-brand-rosa-claro/50">
-              <td className="py-2">{resena.customer_name}</td>
-              <td className="py-2">{resena.rating} / 5</td>
-              <td className="py-2">{resena.sort_order}</td>
-              <td className="py-2">{resena.is_active ? "Sí" : "No"}</td>
-              <td className="flex gap-3 py-2">
-                <Link
-                  href={`/admin/resenas/${resena.id}/editar`}
-                  className="text-brand-rosa hover:underline"
-                >
-                  Editar
-                </Link>
-                <ToggleResenaButton id={resena.id} isActive={resena.is_active} />
-              </td>
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
+              <th className="py-2">Clienta</th>
+              <th className="py-2">Calificación</th>
+              <th className="py-2">Orden</th>
+              <th className="py-2">Activa</th>
+              <th className="py-2">Acciones</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {resenas?.map((resena) => (
+              <tr key={resena.id} className="border-b border-brand-rosa-claro/50">
+                <td className="py-2">{resena.customer_name}</td>
+                <td className="py-2">{resena.rating} / 5</td>
+                <td className="py-2">{resena.sort_order}</td>
+                <td className="py-2">{resena.is_active ? "Sí" : "No"}</td>
+                <td className="flex gap-3 py-2">
+                  <Link
+                    href={`/admin/resenas/${resena.id}/editar`}
+                    className="text-brand-rosa hover:underline"
+                  >
+                    Editar
+                  </Link>
+                  <ToggleResenaButton id={resena.id} isActive={resena.is_active} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

@@ -48,25 +48,27 @@ export default async function InformeMetodosPagoPage({
             </p>
           </div>
           {datos.length > 0 && <GraficaMetodosPago datos={datos} />}
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
-                <th className="py-2">Método</th>
-                <th className="py-2">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {datos.map((fila) => (
-                <tr
-                  key={fila.metodo}
-                  className="border-b border-brand-rosa-claro/50"
-                >
-                  <td className="py-2 capitalize">{fila.metodo}</td>
-                  <td className="py-2">{formatPrice(fila.total)}</td>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
+                  <th className="py-2">Método</th>
+                  <th className="py-2">Total</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {datos.map((fila) => (
+                  <tr
+                    key={fila.metodo}
+                    className="border-b border-brand-rosa-claro/50"
+                  >
+                    <td className="py-2 capitalize">{fila.metodo}</td>
+                    <td className="py-2">{formatPrice(fila.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
     </div>

@@ -112,40 +112,42 @@ export default async function GastosPage({
             <p className="text-sm text-brand-ciruela/70">Total del periodo filtrado</p>
             <p className="font-heading text-2xl text-brand-rosa">{formatPrice(total)}</p>
           </div>
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
-                <th className="py-2">Fecha</th>
-                <th className="py-2">Categoría</th>
-                <th className="py-2">Descripción</th>
-                <th className="py-2">Monto</th>
-                <th className="py-2">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(gastos ?? []).map((gasto) => (
-                <tr key={gasto.id} className="border-b border-brand-rosa-claro/50">
-                  <td className="py-2">{gasto.expense_date}</td>
-                  <td className="py-2">
-                    {categoriaNombreById.get(gasto.category_id) ?? "-"}
-                  </td>
-                  <td className="py-2">{gasto.description}</td>
-                  <td className="py-2">{formatPrice(gasto.amount)}</td>
-                  <td className="py-2">
-                    <div className="flex items-center gap-3">
-                      <Link
-                        href={`/admin/gastos/${gasto.id}/editar`}
-                        className="text-brand-rosa hover:underline"
-                      >
-                        Editar
-                      </Link>
-                      <EliminarGastoButton id={gasto.id} />
-                    </div>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
+                  <th className="py-2">Fecha</th>
+                  <th className="py-2">Categoría</th>
+                  <th className="py-2">Descripción</th>
+                  <th className="py-2">Monto</th>
+                  <th className="py-2">Acciones</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {(gastos ?? []).map((gasto) => (
+                  <tr key={gasto.id} className="border-b border-brand-rosa-claro/50">
+                    <td className="py-2">{gasto.expense_date}</td>
+                    <td className="py-2">
+                      {categoriaNombreById.get(gasto.category_id) ?? "-"}
+                    </td>
+                    <td className="py-2">{gasto.description}</td>
+                    <td className="py-2">{formatPrice(gasto.amount)}</td>
+                    <td className="py-2">
+                      <div className="flex items-center gap-3">
+                        <Link
+                          href={`/admin/gastos/${gasto.id}/editar`}
+                          className="text-brand-rosa hover:underline"
+                        >
+                          Editar
+                        </Link>
+                        <EliminarGastoButton id={gasto.id} />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
     </div>

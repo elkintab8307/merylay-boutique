@@ -45,27 +45,29 @@ export default async function InformeProductosPage({
       ) : (
         <>
           {datos.length > 0 && <GraficaProductos datos={datos} />}
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
-                <th className="py-2">Producto</th>
-                <th className="py-2">Unidades</th>
-                <th className="py-2">Ingreso</th>
-              </tr>
-            </thead>
-            <tbody>
-              {datos.map((fila) => (
-                <tr
-                  key={fila.productId}
-                  className="border-b border-brand-rosa-claro/50"
-                >
-                  <td className="py-2">{fila.nombre}</td>
-                  <td className="py-2">{fila.qty}</td>
-                  <td className="py-2">{formatPrice(fila.ingreso)}</td>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
+                  <th className="py-2">Producto</th>
+                  <th className="py-2">Unidades</th>
+                  <th className="py-2">Ingreso</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {datos.map((fila) => (
+                  <tr
+                    key={fila.productId}
+                    className="border-b border-brand-rosa-claro/50"
+                  >
+                    <td className="py-2">{fila.nombre}</td>
+                    <td className="py-2">{fila.qty}</td>
+                    <td className="py-2">{formatPrice(fila.ingreso)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
     </div>

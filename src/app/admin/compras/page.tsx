@@ -42,26 +42,28 @@ export default async function ComprasPage() {
       {error ? (
         <p className="text-sm text-red-600">No se pudieron cargar las compras.</p>
       ) : (
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
-              <th className="py-2">Fecha</th>
-              <th className="py-2">Proveedor</th>
-              <th className="py-2">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(compras ?? []).map((compra) => (
-              <tr key={compra.id} className="border-b border-brand-rosa-claro/50">
-                <td className="py-2">{compra.purchase_date}</td>
-                <td className="py-2">
-                  {proveedorNombreById.get(compra.supplier_id) ?? "-"}
-                </td>
-                <td className="py-2">{formatPrice(totalPorCompra.get(compra.id) ?? 0)}</td>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
+                <th className="py-2">Fecha</th>
+                <th className="py-2">Proveedor</th>
+                <th className="py-2">Total</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {(compras ?? []).map((compra) => (
+                <tr key={compra.id} className="border-b border-brand-rosa-claro/50">
+                  <td className="py-2">{compra.purchase_date}</td>
+                  <td className="py-2">
+                    {proveedorNombreById.get(compra.supplier_id) ?? "-"}
+                  </td>
+                  <td className="py-2">{formatPrice(totalPorCompra.get(compra.id) ?? 0)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

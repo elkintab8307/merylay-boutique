@@ -69,31 +69,33 @@ export default async function InformeVentasPage({
             </div>
           </div>
           {datos.length > 0 && <GraficaVentas datos={datos} />}
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
-                <th className="py-2">Fecha</th>
-                <th className="py-2">Tienda</th>
-                <th className="py-2">POS</th>
-                <th className="py-2">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {datos.map((fila) => (
-                <tr
-                  key={fila.fecha}
-                  className="border-b border-brand-rosa-claro/50"
-                >
-                  <td className="py-2">{fila.fecha}</td>
-                  <td className="py-2">{formatPrice(fila.tienda)}</td>
-                  <td className="py-2">{formatPrice(fila.pos)}</td>
-                  <td className="py-2">
-                    {formatPrice(fila.tienda + fila.pos)}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
+                  <th className="py-2">Fecha</th>
+                  <th className="py-2">Tienda</th>
+                  <th className="py-2">POS</th>
+                  <th className="py-2">Total</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {datos.map((fila) => (
+                  <tr
+                    key={fila.fecha}
+                    className="border-b border-brand-rosa-claro/50"
+                  >
+                    <td className="py-2">{fila.fecha}</td>
+                    <td className="py-2">{formatPrice(fila.tienda)}</td>
+                    <td className="py-2">{formatPrice(fila.pos)}</td>
+                    <td className="py-2">
+                      {formatPrice(fila.tienda + fila.pos)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
     </div>
