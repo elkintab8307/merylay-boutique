@@ -37,7 +37,11 @@ export function ReviewsSection({ resenas }: { resenas: ReviewItem[] }) {
                 <span className="font-body text-sm text-brand-ciruela">
                   {resena.customerName}
                 </span>
-                <div className="flex gap-0.5">
+                <div
+                  className="flex gap-0.5"
+                  role="img"
+                  aria-label={`${resena.rating} de 5 estrellas`}
+                >
                   {Array.from({ length: 5 }).map((_, index) => (
                     <Star
                       key={index}
