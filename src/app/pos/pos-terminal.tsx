@@ -110,7 +110,7 @@ export function PosTerminal() {
                 <button
                   type="button"
                   onClick={() => handleUpdateQty(item.productId, item.variantId, item.qty - 1)}
-                  className="h-7 w-7 rounded-md border border-brand-rosa-claro text-brand-ciruela"
+                  className="h-11 w-11 rounded-md border border-brand-rosa-claro text-brand-ciruela"
                 >
                   -
                 </button>
@@ -118,7 +118,7 @@ export function PosTerminal() {
                 <button
                   type="button"
                   onClick={() => handleUpdateQty(item.productId, item.variantId, item.qty + 1)}
-                  className="h-7 w-7 rounded-md border border-brand-rosa-claro text-brand-ciruela"
+                  className="h-11 w-11 rounded-md border border-brand-rosa-claro text-brand-ciruela"
                 >
                   +
                 </button>
