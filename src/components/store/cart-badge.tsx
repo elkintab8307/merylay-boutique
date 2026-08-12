@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getLocalCart } from "@/lib/cart/local-cart";
+import { getLocalCart, CART_UPDATED_EVENT } from "@/lib/cart/local-cart";
 
 export function CartBadge({
   initialCount,
@@ -14,10 +14,16 @@ export function CartBadge({
 
   useEffect(() => {
     if (currentUserId) return;
+
+    const actualizarConteo = () => {
+      setCount(getLocalCart().reduce((sum, item) => sum + item.qty, 0));
+    };
+
     // Un invitado no tiene carrito en el servidor; el conteo real
     // vive en localStorage y solo se conoce tras montar en el navegador.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setCount(getLocalCart().reduce((sum, item) => sum + item.qty, 0));
+    actualizarConteo();
+    window.addEventListener(CART_UPDATED_EVENT, actualizarConteo);
+    return () => window.removeEventListener(CART_UPDATED_EVENT, actualizarConteo);
   }, [currentUserId]);
 
   if (count <= 0) return null;

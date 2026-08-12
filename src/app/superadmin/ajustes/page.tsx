@@ -10,7 +10,7 @@ import {
 } from "@/lib/validation/home-contenido";
 import { AjustesForm } from "./ajustes-form";
 import { HomeContenidoForm } from "./home-contenido-form";
-import { horarioPorDefecto, type Horario } from "@/lib/validation/horario";
+import { horarioPorDefecto, horarioSchema } from "@/lib/validation/horario";
 import { HorarioForm } from "./horario-form";
 
 export default async function AjustesPage() {
@@ -83,8 +83,8 @@ export default async function AjustesPage() {
     },
   };
 
-  const horarioStored = valueByKey.get("horario") as Horario | undefined;
-  const horarioDefaultValues = horarioStored ?? horarioPorDefecto();
+  const horarioParsed = horarioSchema.safeParse(valueByKey.get("horario"));
+  const horarioDefaultValues = horarioParsed.success ? horarioParsed.data : horarioPorDefecto();
 
   return (
     <div className="flex flex-col gap-10">

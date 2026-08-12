@@ -42,3 +42,9 @@ export function horarioPorDefecto(): Horario {
     hasta: "18:00",
   }));
 }
+
+export function ordenarHorario(horario: Horario): Horario {
+  return DIAS_SEMANA.map((dia) => horario.find((h) => h.dia === dia)).filter(
+    (h): h is HorarioDia => Boolean(h),
+  );
+}

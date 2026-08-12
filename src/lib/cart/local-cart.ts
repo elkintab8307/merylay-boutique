@@ -11,6 +11,8 @@ export type LocalCartItem = {
 
 const STORAGE_KEY = "merylay-cart";
 
+export const CART_UPDATED_EVENT = "merylay-cart-updated";
+
 function sameItem(a: LocalCartItem, b: { productId: string; variantId: string | null }): boolean {
   return a.productId === b.productId && a.variantId === b.variantId;
 }
@@ -64,9 +66,11 @@ export function getLocalCart(): LocalCartItem[] {
 export function saveLocalCart(items: LocalCartItem[]): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  window.dispatchEvent(new Event(CART_UPDATED_EVENT));
 }
 
 export function clearLocalCart(): void {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(STORAGE_KEY);
+  window.dispatchEvent(new Event(CART_UPDATED_EVENT));
 }

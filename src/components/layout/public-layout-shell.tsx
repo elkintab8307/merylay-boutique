@@ -8,7 +8,7 @@ export function PublicLayoutShell({ children }: { children: ReactNode }) {
     <>
       <TrackingPixels />
       <SiteHeader />
-      {children}
+      <div className="flex-1">{children}</div>
       <SiteFooter />
     </>
   );

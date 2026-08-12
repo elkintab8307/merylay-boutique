@@ -1,6 +1,6 @@
 import { MessageCircle, Camera, Music2, ThumbsUp, MapPin, Clock } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { DIA_LABEL, DIAS_SEMANA, type Horario } from "@/lib/validation/horario";
+import { DIA_LABEL, horarioSchema, ordenarHorario } from "@/lib/validation/horario";
 
 export async function SiteFooter() {
   const supabase = await createClient();
@@ -20,18 +20,14 @@ export async function SiteFooter() {
   const settingsByKey = new Map((settingsRows ?? []).map((r) => [r.key, r.value]));
   const nombreTienda = String(settingsByKey.get("nombre_tienda") ?? "MeryLay Boutique");
   const direccion = settingsByKey.get("direccion");
-  const horario = settingsByKey.get("horario") as Horario | undefined;
+  const horarioParsed = horarioSchema.safeParse(settingsByKey.get("horario"));
   const redesWhatsapp = settingsByKey.get("redes_whatsapp");
   const redesInstagram = settingsByKey.get("redes_instagram");
   const redesTiktok = settingsByKey.get("redes_tiktok");
   const redesFacebook = settingsByKey.get("redes_facebook");
 
   const hayRedes = redesWhatsapp || redesInstagram || redesTiktok || redesFacebook;
-  const horarioOrdenado = horario
-    ? DIAS_SEMANA.map((dia) => horario.find((h) => h.dia === dia)).filter(
-        (h): h is Horario[number] => Boolean(h),
-      )
-    : [];
+  const horarioOrdenado = horarioParsed.success ? ordenarHorario(horarioParsed.data) : [];
 
   return (
     <footer className="mt-16 bg-brand-ciruela px-6 py-12 text-brand-crema">

@@ -49,6 +49,7 @@ export async function addToCart(
   }
 
   revalidatePath("/carrito");
+  revalidatePath("/", "layout");
   return {};
 }
 
@@ -67,6 +68,7 @@ export async function updateCartItemQty(
   }
 
   revalidatePath("/carrito");
+  revalidatePath("/", "layout");
   return {};
 }
 
@@ -75,5 +77,6 @@ export async function removeCartItem(cartItemId: string): Promise<{ error?: stri
   const { error } = await supabase.from("cart_items").delete().eq("id", cartItemId);
   if (error) return { error: "No se pudo eliminar el producto del carrito." };
   revalidatePath("/carrito");
+  revalidatePath("/", "layout");
   return {};
 }
