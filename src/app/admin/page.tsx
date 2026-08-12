@@ -83,7 +83,7 @@ export default async function AdminDashboardPage() {
 
         <Link
           href="/admin/pedidos?status=pendiente"
-          className="rounded-lg border border-brand-rosa-claro bg-white p-4 shadow-brand-sm hover:border-brand-rosa hover:shadow-brand-md"
+          className="rounded-lg border border-brand-rosa-claro bg-white p-4 shadow-brand-sm transition hover:border-brand-rosa hover:shadow-brand-md"
         >
           <p className="text-sm text-brand-ciruela/70">Pedidos pendientes</p>
           <p className="font-heading text-2xl text-brand-rosa">
@@ -93,7 +93,7 @@ export default async function AdminDashboardPage() {
 
         <Link
           href="/admin/informes/stock-bajo"
-          className="rounded-lg border border-brand-rosa-claro bg-white p-4 shadow-brand-sm hover:border-brand-rosa hover:shadow-brand-md"
+          className="rounded-lg border border-brand-rosa-claro bg-white p-4 shadow-brand-sm transition hover:border-brand-rosa hover:shadow-brand-md"
         >
           <p className="text-sm text-brand-ciruela/70">Stock bajo</p>
           <p className="font-heading text-2xl text-brand-rosa">
