@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth/get-current-user";
 import { logout } from "@/lib/auth/logout-action";
+import { destinoPorRol } from "@/lib/auth/destino-por-rol";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { MobileNavSheet } from "./mobile-nav-sheet";
@@ -48,7 +49,16 @@ export async function SiteHeader() {
             )}
             {currentUser ? (
               <div className="flex items-center gap-3">
-                <span>{currentUser.profile.username}</span>
+                {(() => {
+                  const destino = destinoPorRol(currentUser.profile.role);
+                  return destino === "/" ? (
+                    <span>{currentUser.profile.username}</span>
+                  ) : (
+                    <Link href={destino} className="hover:text-brand-rosa hover:underline">
+                      {currentUser.profile.username}
+                    </Link>
+                  );
+                })()}
                 <form action={logout}>
                   <Button
                     type="submit"

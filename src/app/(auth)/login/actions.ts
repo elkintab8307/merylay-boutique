@@ -3,15 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { resolveEmail } from "@/lib/auth/resolve-email";
 import { loginSchema, type LoginInput } from "@/lib/validation/auth";
-import type { Database } from "@/lib/supabase/database.types";
-
-type UserRole = Database["public"]["Enums"]["user_role"];
-
-function destinoPorDefecto(role: UserRole | undefined): string {
-  if (role === "superadmin" || role === "admin") return "/admin";
-  if (role === "staff") return "/pos";
-  return "/";
-}
+import { destinoPorRol } from "@/lib/auth/destino-por-rol";
 
 export async function login(
   input: LoginInput,
@@ -42,5 +34,5 @@ export async function login(
     .eq("id", data.user.id)
     .single();
 
-  return { success: true, destinoPorDefecto: destinoPorDefecto(profile?.role) };
+  return { success: true, destinoPorDefecto: destinoPorRol(profile?.role) };
 }
