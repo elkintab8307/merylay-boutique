@@ -52,6 +52,7 @@ export async function createCategoria(
     parent_id: parsed.data.parentId,
     sort_order: parsed.data.sortOrder,
     is_active: parsed.data.isActive,
+    is_featured: parsed.data.isFeatured,
     image_url: imageUrl,
   });
 
@@ -95,6 +96,7 @@ export async function updateCategoria(
       parent_id: parsed.data.parentId,
       sort_order: parsed.data.sortOrder,
       is_active: parsed.data.isActive,
+      is_featured: parsed.data.isFeatured,
       image_url: imageUrl,
     })
     .eq("id", id);

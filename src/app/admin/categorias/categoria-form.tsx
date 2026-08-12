@@ -147,6 +147,10 @@ export function CategoriaForm({
         <input type="checkbox" {...register("isActive")} />
         Activa
       </label>
+      <label className="flex items-center gap-2 text-sm text-brand-ciruela">
+        <input type="checkbox" {...register("isFeatured")} />
+        Destacar en inicio
+      </label>
       {serverError && <p className="text-sm text-red-600">{serverError}</p>}
       <Button
         type="submit"
