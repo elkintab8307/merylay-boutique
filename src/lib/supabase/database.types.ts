@@ -712,6 +712,39 @@ export type Database = {
           },
         ]
       }
+      reviews: {
+        Row: {
+          body: string
+          created_at: string
+          customer_name: string
+          id: string
+          image_url: string | null
+          is_active: boolean
+          rating: number
+          sort_order: number
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          customer_name: string
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          rating: number
+          sort_order?: number
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          customer_name?: string
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          rating?: number
+          sort_order?: number
+        }
+        Relationships: []
+      }
       sku_counters: {
         Row: {
           prefix: string
