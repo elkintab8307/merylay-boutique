@@ -62,7 +62,7 @@ export function PosTerminal() {
 
   return (
     <div className="grid gap-8 md:grid-cols-2">
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 rounded-lg border border-brand-rosa-claro bg-white p-4 shadow-brand-sm">
         <h2 className="font-heading text-xl text-brand-ciruela">Buscar producto</h2>
         <div className="flex gap-2">
           <Input
@@ -90,7 +90,7 @@ export function PosTerminal() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 rounded-lg border border-brand-rosa-claro bg-white p-4 shadow-brand-sm">
         <h2 className="font-heading text-xl text-brand-ciruela">Venta actual</h2>
         {items.length === 0 ? (
           <p className="text-sm text-brand-ciruela/60">
