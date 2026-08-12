@@ -7,6 +7,7 @@ const base = {
   contactoTelefono: "3001234567",
   envioCostoDefecto: 15000,
   direccion: "Calle 10 #20-30, Bogotá",
+  mensajePromocional: "",
   redesInstagram: "",
   redesFacebook: "",
   redesTiktok: "",

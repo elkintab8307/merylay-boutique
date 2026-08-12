@@ -9,6 +9,7 @@ describe("categoriaSchema", () => {
     parentId: null,
     sortOrder: 0,
     isActive: true,
+    isFeatured: false,
   };
 
   it("acepta datos validos", () => {

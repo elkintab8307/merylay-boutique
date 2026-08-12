@@ -37,6 +37,7 @@ export default async function EditarCategoriaPage({
           parentId: categoria.parent_id,
           sortOrder: categoria.sort_order,
           isActive: categoria.is_active,
+          isFeatured: categoria.is_featured,
         }}
         categoriasDisponibles={categorias ?? []}
         imagenActual={categoria.image_url}

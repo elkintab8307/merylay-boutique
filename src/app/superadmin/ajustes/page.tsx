@@ -46,6 +46,9 @@ export default async function AjustesPage() {
       valueByKey.get(STORE_SETTINGS_KEYS.envioCostoDefecto) ?? 0,
     ),
     direccion: String(valueByKey.get(STORE_SETTINGS_KEYS.direccion) ?? ""),
+    mensajePromocional: String(
+      valueByKey.get(STORE_SETTINGS_KEYS.mensajePromocional) ?? "",
+    ),
     stockBajoUmbral: Number(
       valueByKey.get(STORE_SETTINGS_KEYS.stockBajoUmbral) ?? 5,
     ),

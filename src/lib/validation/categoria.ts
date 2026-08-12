@@ -7,6 +7,7 @@ export const categoriaSchema = z.object({
   parentId: z.string().uuid().nullable(),
   sortOrder: z.number().int().min(0),
   isActive: z.boolean(),
+  isFeatured: z.boolean(),
 });
 
 export type CategoriaInput = z.infer<typeof categoriaSchema>;
