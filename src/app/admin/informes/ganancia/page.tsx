@@ -55,13 +55,13 @@ export default async function InformeGananciaPage({
             </p>
           )}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
-            <div className="rounded-lg border border-brand-rosa-claro bg-white p-4">
+            <div className="rounded-lg border border-brand-rosa-claro bg-white p-4 shadow-brand-sm">
               <p className="text-sm text-brand-ciruela/70">Ventas</p>
               <p className="font-heading text-2xl text-brand-rosa">
                 {formatPrice(totalVentas)}
               </p>
             </div>
-            <div className="rounded-lg border border-brand-rosa-claro bg-white p-4">
+            <div className="rounded-lg border border-brand-rosa-claro bg-white p-4 shadow-brand-sm">
               <p className="text-sm text-brand-ciruela/70">
                 Costo de productos
               </p>
@@ -69,13 +69,13 @@ export default async function InformeGananciaPage({
                 {formatPrice(totalCosto)}
               </p>
             </div>
-            <div className="rounded-lg border border-brand-rosa-claro bg-white p-4">
+            <div className="rounded-lg border border-brand-rosa-claro bg-white p-4 shadow-brand-sm">
               <p className="text-sm text-brand-ciruela/70">Gastos</p>
               <p className="font-heading text-2xl text-brand-rosa">
                 {formatPrice(totalGastos)}
               </p>
             </div>
-            <div className="rounded-lg border border-brand-rosa-claro bg-white p-4">
+            <div className="rounded-lg border border-brand-rosa-claro bg-white p-4 shadow-brand-sm">
               <p className="text-sm text-brand-ciruela/70">Ganancia</p>
               <p className="font-heading text-2xl text-brand-rosa">
                 {formatPrice(totalGanancia)}

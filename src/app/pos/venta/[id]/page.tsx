@@ -50,7 +50,7 @@ export default async function ReciboVentaPage({
     <main className="mx-auto max-w-md px-6 py-12">
       <div
         id="receipt-imprimible"
-        className="flex flex-col gap-4 rounded-lg border border-brand-rosa-claro bg-white p-6"
+        className="flex flex-col gap-4 rounded-lg border border-brand-rosa-claro bg-white p-6 shadow-brand-sm"
       >
         <div className="flex flex-col items-center gap-1 text-center">
           <span className="font-script text-2xl text-brand-rosa">MeryLay Boutique</span>

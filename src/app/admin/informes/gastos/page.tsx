@@ -65,7 +65,7 @@ export default async function InformeGastosPage({
         </p>
       ) : (
         <>
-          <div className="rounded-lg border border-brand-rosa-claro bg-white p-4">
+          <div className="rounded-lg border border-brand-rosa-claro bg-white p-4 shadow-brand-sm">
             <p className="text-sm text-brand-ciruela/70">Total del periodo</p>
             <p className="font-heading text-2xl text-brand-rosa">
               {formatPrice(total)}

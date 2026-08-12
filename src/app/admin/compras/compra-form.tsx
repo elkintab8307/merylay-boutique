@@ -189,7 +189,7 @@ export function CompraForm({
         )}
       </div>
 
-      <div className="rounded-lg border border-brand-rosa-claro bg-white p-4">
+      <div className="rounded-lg border border-brand-rosa-claro bg-white p-4 shadow-brand-sm">
         <p className="text-sm text-brand-ciruela/70">Total de la compra</p>
         <p className="font-heading text-2xl text-brand-rosa">{formatPrice(total)}</p>
       </div>

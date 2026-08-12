@@ -63,7 +63,7 @@ export default function InformesPage() {
           <Link
             key={href}
             href={href}
-            className="flex flex-col gap-2 rounded-lg border border-brand-rosa-claro bg-white p-4 hover:border-brand-rosa"
+            className="flex flex-col gap-2 rounded-lg border border-brand-rosa-claro bg-white p-4 shadow-brand-sm hover:border-brand-rosa hover:shadow-brand-md"
           >
             <Icono className="h-6 w-6 text-brand-rosa" />
             <p className="font-heading text-lg text-brand-ciruela">

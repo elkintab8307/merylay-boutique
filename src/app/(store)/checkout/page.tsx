@@ -48,7 +48,7 @@ export default async function CheckoutPage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
       <h1 className="mb-8 font-heading text-3xl text-brand-ciruela">Finalizar compra</h1>
-      <div className="mb-8 flex flex-col gap-2 rounded-lg border border-brand-rosa-claro bg-white p-4">
+      <div className="mb-8 flex flex-col gap-2 rounded-lg border border-brand-rosa-claro bg-white p-4 shadow-brand-sm">
         {items.map((item) => (
           <div key={item.id} className="flex justify-between text-sm text-brand-ciruela">
             <span>

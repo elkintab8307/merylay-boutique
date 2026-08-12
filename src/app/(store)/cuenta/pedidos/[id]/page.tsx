@@ -62,7 +62,7 @@ export default async function PedidoDetallePage({
         <ReintentarPagoWompiButton orderId={pedido.id} />
       )}
 
-      <div className="mb-8 flex flex-col divide-y divide-brand-rosa-claro rounded-lg border border-brand-rosa-claro bg-white p-4">
+      <div className="mb-8 flex flex-col divide-y divide-brand-rosa-claro rounded-lg border border-brand-rosa-claro bg-white p-4 shadow-brand-sm">
         {(items ?? []).map((item, index) => (
           <div key={index} className="flex justify-between py-2 text-sm text-brand-ciruela">
             <span>
@@ -78,7 +78,7 @@ export default async function PedidoDetallePage({
       </div>
 
       {direccion && (
-        <div className="rounded-lg border border-brand-rosa-claro bg-white p-4 text-sm text-brand-ciruela">
+        <div className="rounded-lg border border-brand-rosa-claro bg-white p-4 text-sm text-brand-ciruela shadow-brand-sm">
           <h2 className="mb-2 font-heading text-base">Envío</h2>
           <p>{direccion.fullName}</p>
           <p>{direccion.phone}</p>

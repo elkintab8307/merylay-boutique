@@ -56,7 +56,7 @@ export default async function AdminPedidoDetallePage({
 
       <EstadoPedidoSelect orderId={pedido.id} estadoActual={pedido.status} />
 
-      <div className="flex flex-col divide-y divide-brand-rosa-claro rounded-lg border border-brand-rosa-claro bg-white p-4">
+      <div className="flex flex-col divide-y divide-brand-rosa-claro rounded-lg border border-brand-rosa-claro bg-white p-4 shadow-brand-sm">
         {itemsError ? (
           <p className="text-sm text-red-600">
             No se pudieron cargar los detalles del pedido.
@@ -83,7 +83,7 @@ export default async function AdminPedidoDetallePage({
       </div>
 
       {direccion && (
-        <div className="rounded-lg border border-brand-rosa-claro bg-white p-4 text-sm text-brand-ciruela">
+        <div className="rounded-lg border border-brand-rosa-claro bg-white p-4 text-sm text-brand-ciruela shadow-brand-sm">
           <h2 className="mb-2 font-heading text-base">Envío</h2>
           <p>{direccion.fullName}</p>
           <p>{direccion.phone}</p>

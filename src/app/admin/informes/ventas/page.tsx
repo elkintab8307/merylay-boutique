@@ -49,19 +49,19 @@ export default async function InformeVentasPage({
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="rounded-lg border border-brand-rosa-claro bg-white p-4">
+            <div className="rounded-lg border border-brand-rosa-claro bg-white p-4 shadow-brand-sm">
               <p className="text-sm text-brand-ciruela/70">Tienda</p>
               <p className="font-heading text-2xl text-brand-rosa">
                 {formatPrice(totalTienda)}
               </p>
             </div>
-            <div className="rounded-lg border border-brand-rosa-claro bg-white p-4">
+            <div className="rounded-lg border border-brand-rosa-claro bg-white p-4 shadow-brand-sm">
               <p className="text-sm text-brand-ciruela/70">POS</p>
               <p className="font-heading text-2xl text-brand-rosa">
                 {formatPrice(totalPos)}
               </p>
             </div>
-            <div className="rounded-lg border border-brand-rosa-claro bg-white p-4">
+            <div className="rounded-lg border border-brand-rosa-claro bg-white p-4 shadow-brand-sm">
               <p className="text-sm text-brand-ciruela/70">Total</p>
               <p className="font-heading text-2xl text-brand-rosa">
                 {formatPrice(totalTienda + totalPos)}
