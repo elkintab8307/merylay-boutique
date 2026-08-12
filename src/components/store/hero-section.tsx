@@ -20,15 +20,17 @@ export function HeroSection({
   const imageUrl = hero?.imageUrl ?? null;
 
   return (
-    <section className="relative flex min-h-[380px] items-center overflow-hidden rounded-2xl">
-      {imageUrl ? (
-        <Image src={imageUrl} alt={titulo} fill priority className="object-cover" />
-      ) : (
-        <div className="absolute inset-0 bg-gradient-to-br from-brand-rosa-claro via-brand-crema to-brand-rosa-medio" />
-      )}
-      {imageUrl && (
-        <div className="absolute inset-0 bg-gradient-to-t from-brand-ciruela/70 via-brand-ciruela/20 to-transparent" />
-      )}
+    <section className="relative flex min-h-[380px] items-center rounded-2xl">
+      <div className="absolute inset-0 overflow-hidden rounded-2xl">
+        {imageUrl ? (
+          <Image src={imageUrl} alt={titulo} fill priority className="object-cover" />
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-br from-brand-rosa-claro via-brand-crema to-brand-rosa-medio" />
+        )}
+        {imageUrl && (
+          <div className="absolute inset-0 bg-gradient-to-t from-brand-ciruela/70 via-brand-ciruela/20 to-transparent" />
+        )}
+      </div>
       <div
         className={`relative z-10 flex flex-col gap-4 px-8 py-16 sm:px-16 ${
           imageUrl ? "text-brand-crema" : "text-brand-ciruela"
@@ -46,10 +48,10 @@ export function HeroSection({
       <div className="absolute bottom-0 left-1/2 z-10 flex h-20 w-20 -translate-x-1/2 translate-y-1/2 items-center justify-center overflow-hidden rounded-full border-4 border-brand-crema bg-brand-crema shadow-brand-md">
         <Image
           src="/brand/logo-principal.png"
-          alt="MeryLay Boutique"
+          alt=""
           width={80}
           height={80}
-          className="object-cover"
+          className="h-full w-full object-contain"
         />
       </div>
     </section>

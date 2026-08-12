@@ -13,7 +13,7 @@ export async function PromoBar() {
   if (!mensaje) return null;
 
   return (
-    <div className="bg-brand-rosa px-4 py-2 text-center text-xs font-medium text-brand-crema sm:text-sm">
+    <div className="bg-brand-ciruela px-4 py-2 text-center text-xs font-medium text-brand-crema sm:text-sm">
       {mensaje}
     </div>
   );
