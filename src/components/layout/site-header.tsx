@@ -76,7 +76,7 @@ export async function SiteHeader() {
         </Link>
         <div className="flex items-center gap-1">
           <Link
-            href="/productos"
+            href="/buscar"
             aria-label="Buscar productos"
             className="inline-flex h-10 w-10 items-center justify-center rounded-full text-brand-ciruela hover:bg-brand-rosa-claro/30"
           >
