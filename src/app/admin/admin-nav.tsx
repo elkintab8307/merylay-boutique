@@ -4,6 +4,7 @@ import { MobileNavSheet } from "@/components/layout/mobile-nav-sheet";
 
 const ENLACES_BASE = [
   { href: "/admin", label: "Panel" },
+  { href: "/pos", label: "POS" },
   { href: "/admin/pedidos", label: "Pedidos" },
   { href: "/admin/categorias", label: "Categorías" },
   { href: "/admin/productos", label: "Productos" },
