@@ -43,6 +43,15 @@ export function HeroSection({
           </Button>
         </Link>
       </div>
+      <div className="absolute bottom-0 left-1/2 z-10 flex h-20 w-20 -translate-x-1/2 translate-y-1/2 items-center justify-center overflow-hidden rounded-full border-4 border-brand-crema bg-brand-crema shadow-brand-md">
+        <Image
+          src="/brand/logo-principal.png"
+          alt="MeryLay Boutique"
+          width={80}
+          height={80}
+          className="object-cover"
+        />
+      </div>
     </section>
   );
 }

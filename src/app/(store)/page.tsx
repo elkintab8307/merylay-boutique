@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ProductCard, type ProductCardData } from "@/components/store/product-card";
 import { HeroSection } from "@/components/store/hero-section";
 import { BenefitsBar } from "@/components/store/benefits-bar";
-import { CategoryGrid } from "@/components/store/category-grid";
+import { FeaturedCategories } from "@/components/store/featured-categories";
 import { CollectionBanners } from "@/components/store/collection-banners";
 import { ReviewsSection, type ReviewItem } from "@/components/store/reviews-section";
 import { heroStoredSchema, bannersStoredSchema } from "@/lib/validation/home-contenido";
@@ -27,7 +27,7 @@ export default async function HomePage() {
     supabase.auth.getUser(),
     supabase
       .from("categories")
-      .select("id, name, slug, image_url")
+      .select("id, name, slug, image_url, is_featured")
       .eq("is_active", true)
       .order("sort_order"),
     supabase
@@ -121,13 +121,10 @@ export default async function HomePage() {
     <main className="mx-auto flex max-w-6xl flex-col gap-16 px-6 py-10">
       <HeroSection hero={hero} primerCategoriaSlug={categorias?.[0]?.slug ?? null} />
       <BenefitsBar />
-      <CategoryGrid
-        categorias={(categorias ?? []).map((c) => ({
-          id: c.id,
-          name: c.name,
-          slug: c.slug,
-          imageUrl: c.image_url,
-        }))}
+      <FeaturedCategories
+        categorias={(categorias ?? [])
+          .filter((c) => c.is_featured)
+          .map((c) => ({ id: c.id, name: c.name, slug: c.slug, imageUrl: c.image_url }))}
       />
       <CollectionBanners banners={banners} />
 
