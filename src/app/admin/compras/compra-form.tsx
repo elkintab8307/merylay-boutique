@@ -103,7 +103,7 @@ export function CompraForm({
           return (
             <div
               key={field.id}
-              className="grid grid-cols-[2fr_1.5fr_1fr_1fr_auto] items-end gap-3 rounded-md border border-brand-rosa-claro p-3"
+              className="grid grid-cols-1 items-end gap-3 rounded-md border border-brand-rosa-claro p-3 sm:grid-cols-[2fr_1.5fr_1fr_1fr_auto]"
             >
               <div>
                 <label className="text-sm text-brand-ciruela">Producto</label>

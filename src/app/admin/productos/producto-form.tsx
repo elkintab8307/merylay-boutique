@@ -272,7 +272,7 @@ export function ProductoForm({
         {fields.map((field, index) => (
           <div
             key={field.id}
-            className="grid grid-cols-4 items-end gap-2 rounded-md border border-brand-rosa-claro p-3"
+            className="grid grid-cols-2 items-end gap-2 rounded-md border border-brand-rosa-claro p-3 sm:grid-cols-4"
           >
             <div>
               <label className="text-xs text-brand-ciruela">Talla</label>
