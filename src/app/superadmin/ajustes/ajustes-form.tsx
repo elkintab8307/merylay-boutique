@@ -84,6 +84,15 @@ export function AjustesForm({
             </p>
           )}
         </div>
+        <div>
+          <label htmlFor="direccion" className="text-sm text-brand-ciruela">
+            Dirección
+          </label>
+          <Input id="direccion" {...register("direccion")} />
+          {errors.direccion && (
+            <p className="text-sm text-red-600">{errors.direccion.message}</p>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-col gap-4">

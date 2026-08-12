@@ -14,6 +14,7 @@ import {
   type BannerContenido,
 } from "@/lib/validation/home-contenido";
 import { subirImagenBanner } from "@/lib/admin/upload-banner-image";
+import { horarioSchema, type Horario } from "@/lib/validation/horario";
 
 export async function guardarAjustes(
   input: StoreSettingsInput,
@@ -112,6 +113,28 @@ export async function guardarContenidoHome(
 
   if (error) {
     return { error: "No se pudo guardar el contenido de inicio." };
+  }
+
+  revalidatePath("/superadmin/ajustes");
+  revalidatePath("/");
+  return {};
+}
+
+export async function guardarHorario(horario: Horario): Promise<{ error?: string }> {
+  await requireSuperadmin();
+
+  const parsed = horarioSchema.safeParse(horario);
+  if (!parsed.success) {
+    return { error: "Revisa los datos del horario." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("store_settings")
+    .upsert({ key: "horario", value: parsed.data }, { onConflict: "key" });
+
+  if (error) {
+    return { error: "No se pudo guardar el horario." };
   }
 
   revalidatePath("/superadmin/ajustes");

@@ -10,6 +10,8 @@ import {
 } from "@/lib/validation/home-contenido";
 import { AjustesForm } from "./ajustes-form";
 import { HomeContenidoForm } from "./home-contenido-form";
+import { horarioPorDefecto, type Horario } from "@/lib/validation/horario";
+import { HorarioForm } from "./horario-form";
 
 export default async function AjustesPage() {
   const supabase = await createClient();
@@ -81,6 +83,9 @@ export default async function AjustesPage() {
     },
   };
 
+  const horarioStored = valueByKey.get("horario") as Horario | undefined;
+  const horarioDefaultValues = horarioStored ?? horarioPorDefecto();
+
   return (
     <div className="flex flex-col gap-10">
       <div className="flex flex-col gap-6">
@@ -99,6 +104,10 @@ export default async function AjustesPage() {
           banner1ImageActual={bannersStored[0]?.imageUrl ?? null}
           banner2ImageActual={bannersStored[1]?.imageUrl ?? null}
         />
+      </div>
+      <div className="flex flex-col gap-6">
+        <h2 className="font-heading text-xl text-brand-ciruela">Horario de atención</h2>
+        <HorarioForm defaultValues={horarioDefaultValues} />
       </div>
     </div>
   );
