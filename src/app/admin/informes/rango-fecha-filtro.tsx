@@ -18,10 +18,12 @@ export function RangoFechaFiltro({
   basePath,
   desde,
   hasta,
+  error,
 }: {
   basePath: string;
   desde: string;
   hasta: string;
+  error?: string | null;
 }) {
   const presets = [
     { label: "Hoy", rango: rangoHoy() },
@@ -31,54 +33,61 @@ export function RangoFechaFiltro({
   ];
 
   return (
-    <div className="flex flex-wrap items-end gap-4">
-      <div className="flex flex-wrap gap-2">
-        {presets.map((preset) => (
-          <Link
-            key={preset.label}
-            href={enlacePreset(basePath, preset.rango)}
-            className="rounded-md border border-brand-rosa-claro bg-white px-3 py-2 text-sm text-brand-ciruela hover:bg-brand-rosa-claro/30"
-          >
-            {preset.label}
-          </Link>
-        ))}
-      </div>
-      <form
-        method="get"
-        action={basePath}
-        className="flex flex-wrap items-end gap-3"
-      >
-        <div>
-          <label htmlFor="desde" className="text-sm text-brand-ciruela">
-            Desde
-          </label>
-          <input
-            id="desde"
-            name="desde"
-            type="date"
-            defaultValue={desde}
-            className="block rounded-md border border-brand-rosa-claro bg-white px-3 py-2 text-sm"
-          />
+    <div className="flex flex-col gap-2">
+      {error && (
+        <p className="text-sm text-red-600">
+          {error}. Se muestra el mes actual en su lugar.
+        </p>
+      )}
+      <div className="flex flex-wrap items-end gap-4">
+        <div className="flex flex-wrap gap-2">
+          {presets.map((preset) => (
+            <Link
+              key={preset.label}
+              href={enlacePreset(basePath, preset.rango)}
+              className="rounded-md border border-brand-rosa-claro bg-white px-3 py-2 text-sm text-brand-ciruela hover:bg-brand-rosa-claro/30"
+            >
+              {preset.label}
+            </Link>
+          ))}
         </div>
-        <div>
-          <label htmlFor="hasta" className="text-sm text-brand-ciruela">
-            Hasta
-          </label>
-          <input
-            id="hasta"
-            name="hasta"
-            type="date"
-            defaultValue={hasta}
-            className="block rounded-md border border-brand-rosa-claro bg-white px-3 py-2 text-sm"
-          />
-        </div>
-        <Button
-          type="submit"
-          className="bg-brand-rosa text-brand-crema hover:bg-brand-rosa/90"
+        <form
+          method="get"
+          action={basePath}
+          className="flex flex-wrap items-end gap-3"
         >
-          Filtrar
-        </Button>
-      </form>
+          <div>
+            <label htmlFor="desde" className="text-sm text-brand-ciruela">
+              Desde
+            </label>
+            <input
+              id="desde"
+              name="desde"
+              type="date"
+              defaultValue={desde}
+              className="block rounded-md border border-brand-rosa-claro bg-white px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label htmlFor="hasta" className="text-sm text-brand-ciruela">
+              Hasta
+            </label>
+            <input
+              id="hasta"
+              name="hasta"
+              type="date"
+              defaultValue={hasta}
+              className="block rounded-md border border-brand-rosa-claro bg-white px-3 py-2 text-sm"
+            />
+          </div>
+          <Button
+            type="submit"
+            className="bg-brand-rosa text-brand-crema hover:bg-brand-rosa/90"
+          >
+            Filtrar
+          </Button>
+        </form>
+      </div>
     </div>
   );
 }

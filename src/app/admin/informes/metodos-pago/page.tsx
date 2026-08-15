@@ -8,7 +8,7 @@ export default async function InformeMetodosPagoPage({
   searchParams,
 }: PageProps<"/admin/informes/metodos-pago">) {
   const params = await searchParams;
-  const { desde, hasta } = resolverRango({
+  const { desde, hasta, error: errorRango } = resolverRango({
     desde: typeof params.desde === "string" ? params.desde : undefined,
     hasta: typeof params.hasta === "string" ? params.hasta : undefined,
   });
@@ -34,6 +34,7 @@ export default async function InformeMetodosPagoPage({
         basePath="/admin/informes/metodos-pago"
         desde={desde}
         hasta={hasta}
+        error={errorRango}
       />
       {error ? (
         <p className="text-sm text-red-600">

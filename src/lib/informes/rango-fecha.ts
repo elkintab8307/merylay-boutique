@@ -53,16 +53,28 @@ export function rangoEsteAnio(hoy: Date = new Date()): RangoFecha {
   return { desde: formatearFecha(anio, 1, 1), hasta: formatearFecha(anio, mes, dia) };
 }
 
+export type RangoFechaResuelto = RangoFecha & { error: string | null };
+
 export function resolverRango(searchParams: {
   desde?: string;
   hasta?: string;
-}): RangoFecha {
+}): RangoFechaResuelto {
+  // Sin parametros (primera visita a la pagina): usa el mes actual, sin
+  // error - no hubo ningun intento de filtrar que haya fallado.
+  if (searchParams.desde === undefined && searchParams.hasta === undefined) {
+    return { ...rangoMesActual(), error: null };
+  }
+
   const parsed = rangoFechaSchema.safeParse({
     desde: searchParams.desde,
     hasta: searchParams.hasta,
   });
   if (!parsed.success) {
-    return rangoMesActual();
+    return {
+      ...rangoMesActual(),
+      error:
+        parsed.error.issues[0]?.message ?? "El rango de fechas no es válido",
+    };
   }
-  return parsed.data;
+  return { ...parsed.data, error: null };
 }

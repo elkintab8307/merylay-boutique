@@ -8,7 +8,7 @@ export default async function InformeVentasPage({
   searchParams,
 }: PageProps<"/admin/informes/ventas">) {
   const params = await searchParams;
-  const { desde, hasta } = resolverRango({
+  const { desde, hasta, error: errorRango } = resolverRango({
     desde: typeof params.desde === "string" ? params.desde : undefined,
     hasta: typeof params.hasta === "string" ? params.hasta : undefined,
   });
@@ -41,6 +41,7 @@ export default async function InformeVentasPage({
         basePath="/admin/informes/ventas"
         desde={desde}
         hasta={hasta}
+        error={errorRango}
       />
       {error ? (
         <p className="text-sm text-red-600">

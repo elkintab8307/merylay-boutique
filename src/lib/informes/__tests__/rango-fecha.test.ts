@@ -69,30 +69,39 @@ describe("rangoEsteAnio", () => {
 });
 
 describe("resolverRango", () => {
-  it("usa el rango recibido cuando es valido", () => {
+  it("usa el rango recibido cuando es valido, sin error", () => {
     expect(
       resolverRango({ desde: "2026-01-01", hasta: "2026-01-31" }),
-    ).toEqual({ desde: "2026-01-01", hasta: "2026-01-31" });
+    ).toEqual({ desde: "2026-01-01", hasta: "2026-01-31", error: null });
   });
 
-  it("cae al mes actual cuando faltan los parametros", () => {
+  it("cae al mes actual sin error cuando faltan los parametros (primera visita)", () => {
     const resultado = resolverRango({});
     expect(resultado.desde).toMatch(/^\d{4}-\d{2}-01$/);
+    expect(resultado.error).toBeNull();
   });
 
-  it("cae al mes actual cuando hasta es anterior a desde", () => {
+  it("cae al mes actual CON error cuando hasta es anterior a desde", () => {
     const resultado = resolverRango({
       desde: "2026-02-01",
       hasta: "2026-01-01",
     });
     expect(resultado.desde).toMatch(/^\d{4}-\d{2}-01$/);
+    expect(resultado.error).toEqual(expect.any(String));
   });
 
-  it("cae al mes actual cuando las fechas estan malformadas", () => {
+  it("cae al mes actual CON error cuando las fechas estan malformadas", () => {
     const resultado = resolverRango({
       desde: "no-es-fecha",
       hasta: "2026-01-31",
     });
     expect(resultado.desde).toMatch(/^\d{4}-\d{2}-01$/);
+    expect(resultado.error).toEqual(expect.any(String));
+  });
+
+  it("cae al mes actual CON error cuando solo se recibe un parametro (rango incompleto)", () => {
+    const resultado = resolverRango({ desde: "2026-01-01" });
+    expect(resultado.desde).toMatch(/^\d{4}-\d{2}-01$/);
+    expect(resultado.error).toEqual(expect.any(String));
   });
 });
