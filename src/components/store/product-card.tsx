@@ -68,7 +68,7 @@ export function ProductCard({
       )}
       <div className="flex items-baseline gap-2">
         <span className="font-heading text-brand-rosa">{formatPrice(product.price)}</span>
-        {product.compareAtPrice && product.compareAtPrice > product.price && (
+        {product.compareAtPrice !== null && product.compareAtPrice > product.price && (
           <span className="text-xs text-brand-ciruela/50 line-through">
             {formatPrice(product.compareAtPrice)}
           </span>

@@ -174,7 +174,7 @@ export default async function ProductoPage({
             <span className="font-heading text-2xl text-brand-rosa">
               {formatPrice(producto.price)}
             </span>
-            {producto.compare_at_price && producto.compare_at_price > producto.price && (
+            {producto.compare_at_price !== null && producto.compare_at_price > producto.price && (
               <span className="text-brand-ciruela/50 line-through">
                 {formatPrice(producto.compare_at_price)}
               </span>
