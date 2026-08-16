@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/get-current-user";
@@ -88,6 +90,13 @@ export default async function EditarVentaPage({
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-12">
+      <Link
+        href={`/pos/venta/${venta.id}`}
+        className="mb-4 inline-flex items-center gap-1.5 text-sm text-brand-ciruela hover:text-brand-rosa"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Volver al recibo
+      </Link>
       <h1 className="mb-8 font-heading text-3xl text-brand-ciruela">Editar venta</h1>
       <EditarVentaForm
         saleId={venta.id}

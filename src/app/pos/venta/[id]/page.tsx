@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatPrice } from "@/lib/format";
@@ -53,6 +54,13 @@ export default async function ReciboVentaPage({
 
   return (
     <main className="mx-auto max-w-md px-6 py-12">
+      <Link
+        href="/pos"
+        className="mb-4 inline-flex items-center gap-1.5 text-sm text-brand-ciruela hover:text-brand-rosa"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Volver al POS
+      </Link>
       <div
         id="receipt-imprimible"
         className="flex flex-col gap-4 rounded-lg border border-brand-rosa-claro bg-white p-6 shadow-brand-sm"
