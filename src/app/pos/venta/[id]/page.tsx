@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatPrice } from "@/lib/format";
+import { getCurrentProfile } from "@/lib/auth/get-current-user";
 import { PrintButton } from "./print-button";
 
 export default async function ReciboVentaPage({
@@ -8,6 +10,9 @@ export default async function ReciboVentaPage({
 }: PageProps<"/pos/venta/[id]">) {
   const { id } = await params;
   const supabase = await createClient();
+  const currentUser = await getCurrentProfile();
+  const esAdmin =
+    currentUser?.profile.role === "admin" || currentUser?.profile.role === "superadmin";
 
   const { data: venta } = await supabase
     .from("pos_sales")
@@ -96,8 +101,16 @@ export default async function ReciboVentaPage({
           </div>
         </div>
       </div>
-      <div className="mt-6 flex justify-center">
+      <div className="mt-6 flex justify-center gap-3">
         <PrintButton />
+        {esAdmin && (
+          <Link
+            href={`/pos/venta/${venta.id}/editar`}
+            className="inline-flex items-center rounded-md border border-brand-rosa-claro px-4 py-2 text-sm text-brand-ciruela hover:bg-brand-rosa-claro/30"
+          >
+            Editar venta
+          </Link>
+        )}
       </div>
     </main>
   );
