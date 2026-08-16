@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { generarSkuVariante } from "@/lib/sku";
 
 export const varianteSchema = z
   .object({
@@ -30,14 +31,22 @@ export const productoSchema = z
   })
   .refine(
     (data) => {
-      const combinaciones = data.variantes.map(
-        (v) =>
-          `${(v.talla ?? "").trim().toLowerCase()}|${(v.color ?? "").trim().toLowerCase()}`,
+      // Se compara por el sufijo de SKU que generarSkuVariante realmente
+      // produciria (mismo normalizado que usan createProducto/updateProducto
+      // al insertar en product_variants, que tiene sku unique not null) en
+      // vez de la talla/color crudos: dos variantes con texto distinto
+      // ("S" y "S!") pueden normalizarse al mismo SKU y romper esa
+      // restriccion en la base de datos con un error confuso y el producto
+      // ya creado sin variantes. Comparar por el SKU real detecta ese caso
+      // aqui, antes de enviar el formulario.
+      const sufijos = data.variantes.map((v) =>
+        generarSkuVariante("", v.talla || null, v.color || null),
       );
-      return new Set(combinaciones).size === combinaciones.length;
+      return new Set(sufijos).size === sufijos.length;
     },
     {
-      message: "Ya existe una variante con esa talla y color.",
+      message:
+        "Dos variantes generan el mismo código interno — revisa que la talla y el color no sean iguales o equivalentes entre ellas.",
       path: ["variantes"],
     },
   );

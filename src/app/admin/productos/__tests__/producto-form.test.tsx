@@ -41,7 +41,9 @@ describe("ProductoForm", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText("Ya existe una variante con esa talla y color."),
+        screen.getByText(
+          "Dos variantes generan el mismo código interno — revisa que la talla y el color no sean iguales o equivalentes entre ellas.",
+        ),
       ).toBeInTheDocument();
     });
   });

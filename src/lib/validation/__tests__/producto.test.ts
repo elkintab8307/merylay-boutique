@@ -100,4 +100,15 @@ describe("productoSchema", () => {
     });
     expect(result.success).toBe(true);
   });
+
+  it("rechaza variantes con talla distinta que generan el mismo SKU normalizado", () => {
+    const result = productoSchema.safeParse({
+      ...base,
+      variantes: [
+        { talla: "S", color: "", priceOverride: null, stock: 3 },
+        { talla: "S!", color: "", priceOverride: null, stock: 5 },
+      ],
+    });
+    expect(result.success).toBe(false);
+  });
 });
