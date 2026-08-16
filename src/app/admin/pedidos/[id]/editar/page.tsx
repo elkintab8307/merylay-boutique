@@ -11,13 +11,16 @@ export default async function EditarPedidoPage({
   const supabase = await createClient();
   const { data: pedido } = await supabase
     .from("orders")
-    .select("id, order_number, payment_method")
+    .select("id, order_number, payment_method, wompi_transaction_id")
     .eq("id", id)
     .single();
 
   if (!pedido) {
     notFound();
   }
+
+  const pedidoEsWompiSinConfirmar =
+    pedido.payment_method === "wompi" && !pedido.wompi_transaction_id;
 
   const { data: items } = await supabase
     .from("order_items")
@@ -82,18 +85,31 @@ export default async function EditarPedidoPage({
       <h1 className="font-heading text-2xl text-brand-ciruela">
         Editar pedido {pedido.order_number}
       </h1>
-      {pedido.payment_method === "wompi" && (
+      {pedidoEsWompiSinConfirmar ? (
         <div className="rounded-lg border border-brand-oro bg-brand-oro/10 p-4 text-sm text-brand-ciruela">
-          <p className="font-semibold">Este pedido se pagó con Wompi</p>
+          <p className="font-semibold">Este pedido todavía no se puede editar</p>
           <p>
-            El cliente ya fue cobrado el total original. Editar los productos
-            no ajusta ese cobro automáticamente — si el nuevo total difiere
-            del que se cobró, resuélvelo por fuera del sistema (reembolso o
-            cobro adicional a través de Wompi).
+            Se pagó con Wompi y el pago todavía no se ha confirmado — el stock
+            de sus productos no se ha descontado todavía. Espera a que se
+            confirme el pago o cancela el pedido antes de editarlo.
           </p>
         </div>
+      ) : (
+        <>
+          {pedido.payment_method === "wompi" && (
+            <div className="rounded-lg border border-brand-oro bg-brand-oro/10 p-4 text-sm text-brand-ciruela">
+              <p className="font-semibold">Este pedido se pagó con Wompi</p>
+              <p>
+                El cliente ya fue cobrado el total original. Editar los productos
+                no ajusta ese cobro automáticamente — si el nuevo total difiere
+                del que se cobró, resuélvelo por fuera del sistema (reembolso o
+                cobro adicional a través de Wompi).
+              </p>
+            </div>
+          )}
+          <PedidoEditarForm orderId={pedido.id} itemsIniciales={itemsIniciales} />
+        </>
       )}
-      <PedidoEditarForm orderId={pedido.id} itemsIniciales={itemsIniciales} />
     </main>
   );
 }
