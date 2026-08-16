@@ -970,6 +970,28 @@ export type Database = {
       is_admin: { Args: never; Returns: boolean }
       is_staff_or_above: { Args: never; Returns: boolean }
       is_superadmin: { Args: never; Returns: boolean }
+      update_order_items: {
+        Args: { p_items: Json; p_order_id: string }
+        Returns: {
+          created_at: string
+          id: string
+          order_number: string
+          payment_method: string | null
+          shipping: number
+          shipping_address: Json | null
+          status: Database["public"]["Enums"]["order_status"]
+          subtotal: number
+          total: number
+          user_id: string
+          wompi_transaction_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       update_pos_sale: {
         Args: {
           p_discount?: number
