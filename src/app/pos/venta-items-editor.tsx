@@ -21,6 +21,8 @@ export function VentaItemsEditor({
   itemsIniciales = [],
   discountInicial = 0,
   paymentMethodInicial = "efectivo",
+  mostrarDescuento = true,
+  mostrarMetodoPago = true,
   textoBoton,
   textoBotonEnviando,
   onGuardar,
@@ -28,6 +30,8 @@ export function VentaItemsEditor({
   itemsIniciales?: LocalCartItem[];
   discountInicial?: number;
   paymentMethodInicial?: PaymentMethod;
+  mostrarDescuento?: boolean;
+  mostrarMetodoPago?: boolean;
   textoBoton: string;
   textoBotonEnviando: string;
   onGuardar: (
@@ -151,46 +155,52 @@ export function VentaItemsEditor({
           </div>
         )}
 
-        <div>
-          <label htmlFor="discount" className="text-sm text-brand-ciruela">
-            Descuento (pesos)
-          </label>
-          <Input
-            id="discount"
-            type="number"
-            min={0}
-            value={discount}
-            onChange={(e) => setDiscount(Math.max(0, Number(e.target.value) || 0))}
-          />
-        </div>
+        {mostrarDescuento && (
+          <div>
+            <label htmlFor="discount" className="text-sm text-brand-ciruela">
+              Descuento (pesos)
+            </label>
+            <Input
+              id="discount"
+              type="number"
+              min={0}
+              value={discount}
+              onChange={(e) => setDiscount(Math.max(0, Number(e.target.value) || 0))}
+            />
+          </div>
+        )}
 
-        <div>
-          <label htmlFor="paymentMethod" className="text-sm text-brand-ciruela">
-            Método de pago
-          </label>
-          <select
-            id="paymentMethod"
-            value={paymentMethod}
-            onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-            className="w-full rounded-md border border-brand-rosa-claro bg-white px-3 py-2 text-sm"
-          >
-            <option value="efectivo">Efectivo</option>
-            <option value="tarjeta">Tarjeta</option>
-            <option value="transferencia">Transferencia</option>
-            <option value="nequi">Nequi</option>
-            <option value="daviplata">Daviplata</option>
-          </select>
-        </div>
+        {mostrarMetodoPago && (
+          <div>
+            <label htmlFor="paymentMethod" className="text-sm text-brand-ciruela">
+              Método de pago
+            </label>
+            <select
+              id="paymentMethod"
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+              className="w-full rounded-md border border-brand-rosa-claro bg-white px-3 py-2 text-sm"
+            >
+              <option value="efectivo">Efectivo</option>
+              <option value="tarjeta">Tarjeta</option>
+              <option value="transferencia">Transferencia</option>
+              <option value="nequi">Nequi</option>
+              <option value="daviplata">Daviplata</option>
+            </select>
+          </div>
+        )}
 
         <div className="flex flex-col gap-1 border-t border-brand-rosa-claro pt-3 text-sm text-brand-ciruela">
           <div className="flex justify-between">
             <span>Subtotal</span>
             <span>{formatPrice(subtotal)}</span>
           </div>
-          <div className="flex justify-between">
-            <span>Descuento</span>
-            <span>-{formatPrice(discount)}</span>
-          </div>
+          {mostrarDescuento && (
+            <div className="flex justify-between">
+              <span>Descuento</span>
+              <span>-{formatPrice(discount)}</span>
+            </div>
+          )}
           <div className="flex justify-between font-heading text-lg text-brand-rosa">
             <span>Total</span>
             <span>{formatPrice(total)}</span>
