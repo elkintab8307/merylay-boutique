@@ -23,7 +23,8 @@ export function mergeCartItem(items: LocalCartItem[], newItem: LocalCartItem): L
     return [...items, { ...newItem, qty: Math.min(newItem.qty, newItem.stock) }];
   }
   const updated = [...items];
-  const combinedQty = Math.min(updated[index].qty + newItem.qty, newItem.stock);
+  const stockDisponible = Math.max(updated[index].stock, newItem.stock);
+  const combinedQty = Math.min(updated[index].qty + newItem.qty, stockDisponible);
   updated[index] = { ...updated[index], qty: combinedQty };
   return updated;
 }

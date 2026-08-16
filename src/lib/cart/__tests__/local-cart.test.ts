@@ -36,6 +36,14 @@ describe("mergeCartItem", () => {
     );
     expect(result).toHaveLength(2);
   });
+
+  it("usa el stock mas alto entre el item existente y el entrante al fusionar (evita que bajar el stock en vivo reduzca una cantidad ya reservada)", () => {
+    const result = mergeCartItem(
+      [{ ...baseItem, qty: 3, stock: 5 }],
+      { ...baseItem, qty: 1, stock: 2 },
+    );
+    expect(result[0].qty).toBe(4);
+  });
 });
 
 describe("updateItemQty", () => {
