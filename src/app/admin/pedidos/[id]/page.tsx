@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatPrice } from "@/lib/format";
 import { EstadoPedidoSelect } from "../estado-pedido-select";
@@ -54,7 +55,15 @@ export default async function AdminPedidoDetallePage({
         </p>
       </div>
 
-      <EstadoPedidoSelect orderId={pedido.id} estadoActual={pedido.status} />
+      <div className="flex flex-wrap items-center gap-3">
+        <EstadoPedidoSelect orderId={pedido.id} estadoActual={pedido.status} />
+        <Link
+          href={`/admin/pedidos/${pedido.id}/editar`}
+          className="inline-flex items-center rounded-md border border-brand-rosa-claro px-4 py-2 text-sm text-brand-ciruela hover:bg-brand-rosa-claro/30"
+        >
+          Editar pedido
+        </Link>
+      </div>
 
       <div className="flex flex-col divide-y divide-brand-rosa-claro rounded-lg border border-brand-rosa-claro bg-white p-4 shadow-brand-sm">
         {itemsError ? (
