@@ -19,7 +19,15 @@ export default async function PosPage() {
           Volver al panel
         </Link>
       )}
-      <h1 className="mb-8 font-heading text-3xl text-brand-ciruela">Punto de venta</h1>
+      <div className="mb-8 flex items-center justify-between">
+        <h1 className="font-heading text-3xl text-brand-ciruela">Punto de venta</h1>
+        <Link
+          href="/pos/ventas"
+          className="text-sm text-brand-ciruela hover:text-brand-rosa"
+        >
+          Ver historial de ventas
+        </Link>
+      </div>
       <PosTerminal />
     </main>
   );
