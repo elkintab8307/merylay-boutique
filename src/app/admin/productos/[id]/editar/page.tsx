@@ -30,11 +30,11 @@ export default async function EditarProductoPage({
     supabase.from("categories").select("id, name").order("name"),
     supabase
       .from("product_variants")
-      .select("talla, color, price_override, stock")
+      .select("id, talla, color, price_override, stock")
       .eq("product_id", id),
     supabase
       .from("product_images")
-      .select("id, url, is_primary")
+      .select("id, url, is_primary, variant_id")
       .eq("product_id", id)
       .order("sort_order"),
     supabase
@@ -66,6 +66,7 @@ export default async function EditarProductoPage({
           isActive: producto.is_active,
           isFeatured: producto.is_featured,
           variantes: (variantes ?? []).map((v) => ({
+            id: v.id,
             talla: v.talla ?? "",
             color: v.color ?? "",
             priceOverride: v.price_override,
