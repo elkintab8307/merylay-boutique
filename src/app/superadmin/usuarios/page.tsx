@@ -2,6 +2,8 @@ import { requireSuperadmin } from "@/lib/admin/require-superadmin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { UserRowActions } from "./user-row-actions";
+import { Table, TableHeader, TableRow, TableCell, TableHeaderCell } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 
 const ROL_LABELS: Record<string, string> = {
   superadmin: "SuperAdmin",
@@ -100,50 +102,39 @@ export default async function UsuariosPage() {
   return (
     <div className="flex flex-col gap-6">
       <h1 className="font-heading text-2xl text-brand-ciruela">Usuarios</h1>
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
-              <th className="py-2">Usuario</th>
-              <th className="py-2">Nombre</th>
-              <th className="py-2">Rol</th>
-              <th className="py-2">Estado</th>
-              <th className="py-2">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(profiles ?? []).map((profile) => (
-              <tr
-                key={profile.id}
-                className="border-b border-brand-rosa-claro/50"
-              >
-                <td className="py-2">{profile.username}</td>
-                <td className="py-2 text-brand-ciruela/70">
-                  {profile.full_name ?? "-"}
-                </td>
-                <td className="py-2">
-                  {ROL_LABELS[profile.role] ?? profile.role}
-                </td>
-                <td className="py-2">
-                  {bannedById.get(profile.id) ? (
-                    <span className="text-red-600">Bloqueado</span>
-                  ) : (
-                    <span className="text-green-700">Activo</span>
-                  )}
-                </td>
-                <td className="py-2">
-                  <UserRowActions
-                    userId={profile.id}
-                    role={profile.role}
-                    isBlocked={bannedById.get(profile.id) ?? false}
-                    isSelf={profile.id === currentUser.id}
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHeaderCell>Usuario</TableHeaderCell>
+            <TableHeaderCell>Nombre</TableHeaderCell>
+            <TableHeaderCell>Rol</TableHeaderCell>
+            <TableHeaderCell>Estado</TableHeaderCell>
+            <TableHeaderCell>Acciones</TableHeaderCell>
+          </TableRow>
+        </TableHeader>
+        <tbody>
+          {(profiles ?? []).map((profile) => (
+            <TableRow key={profile.id}>
+              <TableCell>{profile.username}</TableCell>
+              <TableCell className="text-brand-ciruela/70">{profile.full_name ?? "-"}</TableCell>
+              <TableCell>{ROL_LABELS[profile.role] ?? profile.role}</TableCell>
+              <TableCell>
+                <Badge variant={bannedById.get(profile.id) ? "danger" : "success"}>
+                  {bannedById.get(profile.id) ? "Bloqueado" : "Activo"}
+                </Badge>
+              </TableCell>
+              <TableCell>
+                <UserRowActions
+                  userId={profile.id}
+                  role={profile.role}
+                  isBlocked={bannedById.get(profile.id) ?? false}
+                  isSelf={profile.id === currentUser.id}
+                />
+              </TableCell>
+            </TableRow>
+          ))}
+        </tbody>
+      </Table>
     </div>
   );
 }

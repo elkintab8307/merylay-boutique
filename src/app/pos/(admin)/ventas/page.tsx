@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { formatPrice } from "@/lib/format";
+import { Table, TableHeader, TableRow, TableCell, TableHeaderCell } from "@/components/ui/table";
 
 const LIMITE = 50;
 
@@ -26,37 +27,30 @@ export default async function HistorialVentasPage() {
         Historial de ventas
       </h1>
       {ventas && ventas.length > 0 ? (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
-                <th className="py-2">Fecha</th>
-                <th className="py-2">Número</th>
-                <th className="py-2">Método de pago</th>
-                <th className="py-2">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ventas.map((venta) => (
-                <tr key={venta.id} className="border-b border-brand-rosa-claro/50">
-                  <td className="py-2">
-                    {new Date(venta.created_at).toLocaleString("es-CO")}
-                  </td>
-                  <td className="py-2">
-                    <Link
-                      href={`/pos/venta/${venta.id}`}
-                      className="text-brand-rosa hover:underline"
-                    >
-                      {venta.sale_number}
-                    </Link>
-                  </td>
-                  <td className="py-2">{venta.payment_method}</td>
-                  <td className="py-2">{formatPrice(venta.total)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHeaderCell>Fecha</TableHeaderCell>
+              <TableHeaderCell>Número</TableHeaderCell>
+              <TableHeaderCell>Método de pago</TableHeaderCell>
+              <TableHeaderCell>Total</TableHeaderCell>
+            </TableRow>
+          </TableHeader>
+          <tbody>
+            {ventas.map((venta) => (
+              <TableRow key={venta.id}>
+                <TableCell>{new Date(venta.created_at).toLocaleString("es-CO")}</TableCell>
+                <TableCell>
+                  <Link href={`/pos/venta/${venta.id}`} className="text-brand-rosa hover:underline">
+                    {venta.sale_number}
+                  </Link>
+                </TableCell>
+                <TableCell>{venta.payment_method}</TableCell>
+                <TableCell>{formatPrice(venta.total)}</TableCell>
+              </TableRow>
+            ))}
+          </tbody>
+        </Table>
       ) : (
         <p className="text-brand-ciruela/70">Todavía no hay ventas registradas.</p>
       )}
