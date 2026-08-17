@@ -177,10 +177,17 @@ export async function updateProducto(
     return { error: "No se pudo actualizar el producto." };
   }
 
-  const { data: variantesExistentes } = await supabase
+  const { data: variantesExistentes, error: variantesExistentesError } = await supabase
     .from("product_variants")
     .select("id")
     .eq("product_id", id);
+
+  if (variantesExistentesError) {
+    return {
+      error: "El producto se actualizo, pero no se pudieron leer las variantes existentes.",
+    };
+  }
+
   const idsExistentes = (variantesExistentes ?? []).map((v) => v.id);
 
   const diff = diffVariantes(parsed.data.variantes, idsExistentes);
