@@ -2,6 +2,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatPrice } from "@/lib/format";
 import { ESTADO_PEDIDO_LABELS, estadoPedidoSchema } from "@/lib/validation/pedido";
+import { Table, TableHeader, TableRow, TableCell, TableHeaderCell } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 
 type ShippingAddress = { fullName?: string };
 
@@ -33,46 +35,52 @@ export default async function AdminPedidosPage({
           No se pudieron cargar los pedidos.
         </p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
-                <th className="py-2">Pedido</th>
-                <th className="py-2">Cliente</th>
-                <th className="py-2">Estado</th>
-                <th className="py-2">Total</th>
-                <th className="py-2">Fecha</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(pedidos ?? []).map((pedido) => {
-                const direccion = pedido.shipping_address as ShippingAddress | null;
-                return (
-                  <tr key={pedido.id} className="border-b border-brand-rosa-claro/50">
-                    <td className="py-2">
-                      <Link
-                        href={`/admin/pedidos/${pedido.id}`}
-                        className="text-brand-rosa hover:underline"
-                      >
-                        {pedido.order_number}
-                      </Link>
-                    </td>
-                    <td className="py-2 text-brand-ciruela/70">
-                      {direccion?.fullName ?? "-"}
-                    </td>
-                    <td className="py-2">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHeaderCell>Pedido</TableHeaderCell>
+              <TableHeaderCell>Cliente</TableHeaderCell>
+              <TableHeaderCell>Estado</TableHeaderCell>
+              <TableHeaderCell>Total</TableHeaderCell>
+              <TableHeaderCell>Fecha</TableHeaderCell>
+            </TableRow>
+          </TableHeader>
+          <tbody>
+            {(pedidos ?? []).map((pedido) => {
+              const direccion = pedido.shipping_address as ShippingAddress | null;
+              const estadoVariant =
+                pedido.status === "entregado" || pedido.status === "pagado"
+                  ? ("success" as const)
+                  : pedido.status === "cancelado"
+                    ? ("danger" as const)
+                    : ("warning" as const);
+              return (
+                <TableRow key={pedido.id}>
+                  <TableCell>
+                    <Link
+                      href={`/admin/pedidos/${pedido.id}`}
+                      className="text-brand-rosa hover:underline"
+                    >
+                      {pedido.order_number}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-brand-ciruela/70">
+                    {direccion?.fullName ?? "-"}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={estadoVariant}>
                       {ESTADO_PEDIDO_LABELS[pedido.status] ?? pedido.status}
-                    </td>
-                    <td className="py-2">{formatPrice(pedido.total)}</td>
-                    <td className="py-2 text-brand-ciruela/70">
-                      {new Date(pedido.created_at).toLocaleDateString("es-CO")}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{formatPrice(pedido.total)}</TableCell>
+                  <TableCell className="text-brand-ciruela/70">
+                    {new Date(pedido.created_at).toLocaleDateString("es-CO")}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </tbody>
+        </Table>
       )}
     </div>
   );

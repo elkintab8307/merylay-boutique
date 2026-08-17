@@ -3,6 +3,7 @@ import { resolverRango } from "@/lib/informes/rango-fecha";
 import { formatPrice } from "@/lib/format";
 import { RangoFechaFiltro } from "../rango-fecha-filtro";
 import { GraficaGanancia } from "./grafica-ganancia";
+import { Table, TableHeader, TableRow, TableCell, TableHeaderCell } from "@/components/ui/table";
 
 export default async function InformeGananciaPage({
   searchParams,
@@ -84,33 +85,28 @@ export default async function InformeGananciaPage({
             </div>
           </div>
           {datos.length > 0 && <GraficaGanancia datos={datos} />}
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
-                  <th className="py-2">Fecha</th>
-                  <th className="py-2">Ventas</th>
-                  <th className="py-2">Costo de productos</th>
-                  <th className="py-2">Gastos</th>
-                  <th className="py-2">Ganancia</th>
-                </tr>
-              </thead>
-              <tbody>
-                {datos.map((fila) => (
-                  <tr
-                    key={fila.fecha}
-                    className="border-b border-brand-rosa-claro/50"
-                  >
-                    <td className="py-2">{fila.fecha}</td>
-                    <td className="py-2">{formatPrice(fila.ventas)}</td>
-                    <td className="py-2">{formatPrice(fila.costo_productos)}</td>
-                    <td className="py-2">{formatPrice(fila.gastos)}</td>
-                    <td className="py-2">{formatPrice(fila.ganancia)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHeaderCell>Fecha</TableHeaderCell>
+                <TableHeaderCell>Ventas</TableHeaderCell>
+                <TableHeaderCell>Costo de productos</TableHeaderCell>
+                <TableHeaderCell>Gastos</TableHeaderCell>
+                <TableHeaderCell>Ganancia</TableHeaderCell>
+              </TableRow>
+            </TableHeader>
+            <tbody>
+              {datos.map((fila) => (
+                <TableRow key={fila.fecha}>
+                  <TableCell>{fila.fecha}</TableCell>
+                  <TableCell>{formatPrice(fila.ventas)}</TableCell>
+                  <TableCell>{formatPrice(fila.costo_productos)}</TableCell>
+                  <TableCell>{formatPrice(fila.gastos)}</TableCell>
+                  <TableCell>{formatPrice(fila.ganancia)}</TableCell>
+                </TableRow>
+              ))}
+            </tbody>
+          </Table>
         </>
       )}
     </div>

@@ -2,6 +2,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { ToggleResenaButton } from "./toggle-resena-button";
+import { Table, TableHeader, TableRow, TableCell, TableHeaderCell } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 
 export default async function ResenasPage() {
   const supabase = await createClient();
@@ -20,25 +22,29 @@ export default async function ResenasPage() {
           </Button>
         </Link>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
-              <th className="py-2">Clienta</th>
-              <th className="py-2">Calificación</th>
-              <th className="py-2">Orden</th>
-              <th className="py-2">Activa</th>
-              <th className="py-2">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {resenas?.map((resena) => (
-              <tr key={resena.id} className="border-b border-brand-rosa-claro/50">
-                <td className="py-2">{resena.customer_name}</td>
-                <td className="py-2">{resena.rating} / 5</td>
-                <td className="py-2">{resena.sort_order}</td>
-                <td className="py-2">{resena.is_active ? "Sí" : "No"}</td>
-                <td className="flex gap-3 py-2">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHeaderCell>Clienta</TableHeaderCell>
+            <TableHeaderCell>Calificación</TableHeaderCell>
+            <TableHeaderCell>Orden</TableHeaderCell>
+            <TableHeaderCell>Estado</TableHeaderCell>
+            <TableHeaderCell>Acciones</TableHeaderCell>
+          </TableRow>
+        </TableHeader>
+        <tbody>
+          {resenas?.map((resena) => (
+            <TableRow key={resena.id}>
+              <TableCell>{resena.customer_name}</TableCell>
+              <TableCell>{resena.rating} / 5</TableCell>
+              <TableCell>{resena.sort_order}</TableCell>
+              <TableCell>
+                <Badge variant={resena.is_active ? "success" : "neutral"}>
+                  {resena.is_active ? "Activa" : "Inactiva"}
+                </Badge>
+              </TableCell>
+              <TableCell>
+                <div className="flex items-center gap-3">
                   <Link
                     href={`/admin/resenas/${resena.id}/editar`}
                     className="text-brand-rosa hover:underline"
@@ -46,12 +52,12 @@ export default async function ResenasPage() {
                     Editar
                   </Link>
                   <ToggleResenaButton id={resena.id} isActive={resena.is_active} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </tbody>
+      </Table>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { obtenerUmbralStockBajo } from "@/lib/admin/low-stock";
+import { Table, TableHeader, TableRow, TableCell, TableHeaderCell } from "@/components/ui/table";
 
 export default async function InformeStockBajoPage() {
   const supabase = await createClient();
@@ -66,35 +67,31 @@ export default async function InformeStockBajoPage() {
           No se pudo cargar el informe de stock bajo.
         </p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
-                <th className="py-2">Producto</th>
-                <th className="py-2">SKU</th>
-                <th className="py-2">Stock</th>
-              </tr>
-            </thead>
-            <tbody>
-              {productosSinVariante.map((p) => (
-                <tr key={p.id} className="border-b border-brand-rosa-claro/50">
-                  <td className="py-2">{p.name}</td>
-                  <td className="py-2">{p.sku}</td>
-                  <td className="py-2">{p.stock}</td>
-                </tr>
-              ))}
-              {(variantes ?? []).map((v) => (
-                <tr key={v.id} className="border-b border-brand-rosa-claro/50">
-                  <td className="py-2">
-                    {nombrePorProductoId.get(v.product_id) ?? "-"} — {v.name}
-                  </td>
-                  <td className="py-2">{v.sku}</td>
-                  <td className="py-2">{v.stock}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHeaderCell>Producto</TableHeaderCell>
+              <TableHeaderCell>SKU</TableHeaderCell>
+              <TableHeaderCell>Stock</TableHeaderCell>
+            </TableRow>
+          </TableHeader>
+          <tbody>
+            {productosSinVariante.map((p) => (
+              <TableRow key={p.id}>
+                <TableCell>{p.name}</TableCell>
+                <TableCell>{p.sku}</TableCell>
+                <TableCell>{p.stock}</TableCell>
+              </TableRow>
+            ))}
+            {(variantes ?? []).map((v) => (
+              <TableRow key={v.id}>
+                <TableCell>{nombrePorProductoId.get(v.product_id) ?? "-"} — {v.name}</TableCell>
+                <TableCell>{v.sku}</TableCell>
+                <TableCell>{v.stock}</TableCell>
+              </TableRow>
+            ))}
+          </tbody>
+        </Table>
       )}
     </div>
   );

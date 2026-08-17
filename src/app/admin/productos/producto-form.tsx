@@ -15,6 +15,7 @@ import {
 } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ImageUploadButton } from "@/components/admin/image-upload-button";
 
 type CategoriaOption = { id: string; name: string };
 type ProductImage = { id: string; url: string; is_primary: boolean; variant_id: string | null };
@@ -118,22 +119,19 @@ export function ProductoForm({
     return true;
   };
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
+  const handleImageChange = (files: File[]) => {
     if (!validarTamanoTotal(files, variantImageFiles)) {
       setImageFiles([]);
-      e.target.value = "";
       return;
     }
+    setImageSizeError(null);
     setImageFiles(files);
   };
 
-  const handleVariantImageChange = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
+  const handleVariantImageChange = (index: number, files: File[]) => {
     const siguiente = variantImageFiles.map((f, i) => (i === index ? files : f));
     if (!validarTamanoTotal(imageFiles, siguiente)) {
       setVariantImageFiles(variantImageFiles.map((f, i) => (i === index ? [] : f)));
-      e.target.value = "";
       return;
     }
     setVariantImageFiles(siguiente);
@@ -426,12 +424,11 @@ export function ProductoForm({
                     ))}
                   </div>
                 )}
-                <input
+                <ImageUploadButton
                   id={`variant-images-${index}`}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={(e) => handleVariantImageChange(index, e)}
+                  files={variantImageFiles[index] ?? []}
+                  onChange={(files) => handleVariantImageChange(index, files)}
+                  label={`Imágenes de la variante ${index + 1}`}
                 />
               </div>
             </div>
@@ -484,7 +481,11 @@ export function ProductoForm({
             ))}
           </div>
         )}
-        <input type="file" accept="image/*" multiple onChange={handleImageChange} />
+        <ImageUploadButton
+          id="general-images"
+          files={imageFiles}
+          onChange={handleImageChange}
+        />
         {imageSizeError && <p className="text-sm text-red-600">{imageSizeError}</p>}
       </div>
 

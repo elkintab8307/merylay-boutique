@@ -3,6 +3,7 @@ import { resolverRango } from "@/lib/informes/rango-fecha";
 import { formatPrice } from "@/lib/format";
 import { RangoFechaFiltro } from "../rango-fecha-filtro";
 import { GraficaVentas } from "./grafica-ventas";
+import { Table, TableHeader, TableRow, TableCell, TableHeaderCell } from "@/components/ui/table";
 
 export default async function InformeVentasPage({
   searchParams,
@@ -70,33 +71,26 @@ export default async function InformeVentasPage({
             </div>
           </div>
           {datos.length > 0 && <GraficaVentas datos={datos} />}
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
-                  <th className="py-2">Fecha</th>
-                  <th className="py-2">Tienda</th>
-                  <th className="py-2">POS</th>
-                  <th className="py-2">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {datos.map((fila) => (
-                  <tr
-                    key={fila.fecha}
-                    className="border-b border-brand-rosa-claro/50"
-                  >
-                    <td className="py-2">{fila.fecha}</td>
-                    <td className="py-2">{formatPrice(fila.tienda)}</td>
-                    <td className="py-2">{formatPrice(fila.pos)}</td>
-                    <td className="py-2">
-                      {formatPrice(fila.tienda + fila.pos)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHeaderCell>Fecha</TableHeaderCell>
+                <TableHeaderCell>Tienda</TableHeaderCell>
+                <TableHeaderCell>POS</TableHeaderCell>
+                <TableHeaderCell>Total</TableHeaderCell>
+              </TableRow>
+            </TableHeader>
+            <tbody>
+              {datos.map((fila) => (
+                <TableRow key={fila.fecha}>
+                  <TableCell>{fila.fecha}</TableCell>
+                  <TableCell>{formatPrice(fila.tienda)}</TableCell>
+                  <TableCell>{formatPrice(fila.pos)}</TableCell>
+                  <TableCell>{formatPrice(fila.tienda + fila.pos)}</TableCell>
+                </TableRow>
+              ))}
+            </tbody>
+          </Table>
         </>
       )}
     </div>

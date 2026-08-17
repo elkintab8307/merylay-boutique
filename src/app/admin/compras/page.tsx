@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatPrice } from "@/lib/format";
 import { Button } from "@/components/ui/button";
+import { Table, TableHeader, TableRow, TableCell, TableHeaderCell } from "@/components/ui/table";
 
 export default async function ComprasPage() {
   const supabase = await createClient();
@@ -42,28 +43,24 @@ export default async function ComprasPage() {
       {error ? (
         <p className="text-sm text-red-600">No se pudieron cargar las compras.</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
-                <th className="py-2">Fecha</th>
-                <th className="py-2">Proveedor</th>
-                <th className="py-2">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(compras ?? []).map((compra) => (
-                <tr key={compra.id} className="border-b border-brand-rosa-claro/50">
-                  <td className="py-2">{compra.purchase_date}</td>
-                  <td className="py-2">
-                    {proveedorNombreById.get(compra.supplier_id) ?? "-"}
-                  </td>
-                  <td className="py-2">{formatPrice(totalPorCompra.get(compra.id) ?? 0)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHeaderCell>Fecha</TableHeaderCell>
+              <TableHeaderCell>Proveedor</TableHeaderCell>
+              <TableHeaderCell>Total</TableHeaderCell>
+            </TableRow>
+          </TableHeader>
+          <tbody>
+            {(compras ?? []).map((compra) => (
+              <TableRow key={compra.id}>
+                <TableCell>{compra.purchase_date}</TableCell>
+                <TableCell>{proveedorNombreById.get(compra.supplier_id) ?? "-"}</TableCell>
+                <TableCell>{formatPrice(totalPorCompra.get(compra.id) ?? 0)}</TableCell>
+              </TableRow>
+            ))}
+          </tbody>
+        </Table>
       )}
     </div>
   );

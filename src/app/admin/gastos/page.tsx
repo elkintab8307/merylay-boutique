@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatPrice } from "@/lib/format";
 import { Button } from "@/components/ui/button";
+import { Table, TableHeader, TableRow, TableCell, TableHeaderCell } from "@/components/ui/table";
 import { EliminarGastoButton } from "./eliminar-gasto-button";
 
 export default async function GastosPage({
@@ -112,42 +113,38 @@ export default async function GastosPage({
             <p className="text-sm text-brand-ciruela/70">Total del periodo filtrado</p>
             <p className="font-heading text-2xl text-brand-rosa">{formatPrice(total)}</p>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
-                  <th className="py-2">Fecha</th>
-                  <th className="py-2">Categoría</th>
-                  <th className="py-2">Descripción</th>
-                  <th className="py-2">Monto</th>
-                  <th className="py-2">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(gastos ?? []).map((gasto) => (
-                  <tr key={gasto.id} className="border-b border-brand-rosa-claro/50">
-                    <td className="py-2">{gasto.expense_date}</td>
-                    <td className="py-2">
-                      {categoriaNombreById.get(gasto.category_id) ?? "-"}
-                    </td>
-                    <td className="py-2">{gasto.description}</td>
-                    <td className="py-2">{formatPrice(gasto.amount)}</td>
-                    <td className="py-2">
-                      <div className="flex items-center gap-3">
-                        <Link
-                          href={`/admin/gastos/${gasto.id}/editar`}
-                          className="text-brand-rosa hover:underline"
-                        >
-                          Editar
-                        </Link>
-                        <EliminarGastoButton id={gasto.id} />
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHeaderCell>Fecha</TableHeaderCell>
+                <TableHeaderCell>Categoría</TableHeaderCell>
+                <TableHeaderCell>Descripción</TableHeaderCell>
+                <TableHeaderCell>Monto</TableHeaderCell>
+                <TableHeaderCell>Acciones</TableHeaderCell>
+              </TableRow>
+            </TableHeader>
+            <tbody>
+              {(gastos ?? []).map((gasto) => (
+                <TableRow key={gasto.id}>
+                  <TableCell>{gasto.expense_date}</TableCell>
+                  <TableCell>{categoriaNombreById.get(gasto.category_id) ?? "-"}</TableCell>
+                  <TableCell>{gasto.description}</TableCell>
+                  <TableCell>{formatPrice(gasto.amount)}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <Link
+                        href={`/admin/gastos/${gasto.id}/editar`}
+                        className="text-brand-rosa hover:underline"
+                      >
+                        Editar
+                      </Link>
+                      <EliminarGastoButton id={gasto.id} />
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </tbody>
+          </Table>
         </>
       )}
     </div>

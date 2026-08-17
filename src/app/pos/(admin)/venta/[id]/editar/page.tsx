@@ -89,7 +89,7 @@ export default async function EditarVentaPage({
   });
 
   return (
-    <main className="mx-auto max-w-5xl px-6 py-12">
+    <div className="mx-auto max-w-5xl px-6 py-12">
       <Link
         href={`/pos/venta/${venta.id}`}
         className="mb-4 inline-flex items-center gap-1.5 text-sm text-brand-ciruela hover:text-brand-rosa"
@@ -104,6 +104,6 @@ export default async function EditarVentaPage({
         discountInicial={venta.discount}
         paymentMethodInicial={venta.payment_method}
       />
-    </main>
+    </div>
   );
 }
