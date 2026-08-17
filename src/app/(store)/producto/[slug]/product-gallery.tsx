@@ -33,12 +33,20 @@ export function ProductGallery({
     );
   }
 
+  // `selected` puede quedar temporalmente fuera de rango en el mismo render
+  // en que cambia `images` (p. ej. al cambiar de variante vía el selector de
+  // talla/color, sin pasar por un clic de miniatura): el ajuste de estado de
+  // arriba programa `setSelected(0)` pero este render sigue ejecutándose con
+  // el valor de estado aún desactualizado. Se recorta defensivamente contra
+  // el largo ACTUAL de `images` antes de indexar.
+  const activeIndex = selected < images.length ? selected : 0;
+
   return (
     <div className="flex flex-col gap-3">
       <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-brand-rosa-claro">
         <Image
-          src={images[selected].url}
-          alt={images[selected].alt ?? productName}
+          src={images[activeIndex].url}
+          alt={images[activeIndex].alt ?? productName}
           fill
           className="object-contain"
         />
@@ -57,7 +65,7 @@ export function ProductGallery({
                 onSelectVariant?.(image.variantId);
               }}
               className={`relative h-16 w-16 overflow-hidden rounded-md border ${
-                index === selected ? "border-brand-rosa" : "border-brand-rosa-claro"
+                index === activeIndex ? "border-brand-rosa" : "border-brand-rosa-claro"
               }`}
             >
               <Image
