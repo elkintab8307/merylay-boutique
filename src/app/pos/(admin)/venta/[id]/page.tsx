@@ -53,7 +53,7 @@ export default async function ReciboVentaPage({
   const variantById = new Map((variants ?? []).map((v) => [v.id, v]));
 
   return (
-    <main className="mx-auto max-w-md px-6 py-12">
+    <div className="mx-auto max-w-md px-6 py-12">
       <Link
         href="/pos"
         className="mb-4 inline-flex items-center gap-1.5 text-sm text-brand-ciruela hover:text-brand-rosa"
@@ -120,6 +120,6 @@ export default async function ReciboVentaPage({
           </Link>
         )}
       </div>
-    </main>
+    </div>
   );
 }
