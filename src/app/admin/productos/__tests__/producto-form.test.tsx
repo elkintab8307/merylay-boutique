@@ -47,4 +47,46 @@ describe("ProductoForm", () => {
       ).toBeInTheDocument();
     });
   });
+
+  it("envia las imagenes de cada variante en el indice correcto al guardar", async () => {
+    const { createProducto } = await import("../actions");
+    vi.mocked(createProducto).mockResolvedValue({});
+
+    render(
+      <ProductoForm
+        defaultValues={{
+          name: "Pijama de prueba",
+          slug: "pijama-de-prueba",
+          description: "",
+          categoryId: null,
+          price: 10000,
+          compareAtPrice: null,
+          costPrice: null,
+          stock: 5,
+          isActive: true,
+          isFeatured: false,
+          variantes: [
+            { talla: "M", color: "Rosa", priceOverride: null, stock: 1 },
+            { talla: "L", color: "Rosa", priceOverride: null, stock: 2 },
+          ],
+        }}
+        categoriasDisponibles={[]}
+      />,
+    );
+
+    const inputsDeVariante = screen.getAllByLabelText(/imágenes de esta variante/i);
+    const archivoVarianteL = new File(["contenido"], "variante-l.jpg", { type: "image/jpeg" });
+    fireEvent.change(inputsDeVariante[1], { target: { files: [archivoVarianteL] } });
+
+    fireEvent.click(screen.getByRole("button", { name: /guardar/i }));
+
+    await waitFor(() => {
+      expect(createProducto).toHaveBeenCalled();
+    });
+
+    const llamada = vi.mocked(createProducto).mock.calls[0];
+    const variantImageFilesArg = llamada[2];
+    expect(variantImageFilesArg[0]).toEqual([]);
+    expect(variantImageFilesArg[1]).toEqual([archivoVarianteL]);
+  });
 });

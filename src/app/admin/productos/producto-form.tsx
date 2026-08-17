@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { productoSchema, type ProductoInput } from "@/lib/validation/producto";
@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 type CategoriaOption = { id: string; name: string };
-type ProductImage = { id: string; url: string; is_primary: boolean };
+type ProductImage = { id: string; url: string; is_primary: boolean; variant_id: string | null };
 
 // Deja margen bajo el limite del servidor (bodySizeLimit en
 // next.config.ts): el body de la Server Action tambien lleva el resto
@@ -46,6 +46,9 @@ export function ProductoForm({
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imageSizeError, setImageSizeError] = useState<string | null>(null);
   const [existingImages, setExistingImages] = useState(imagenesExistentes);
+  const [variantImageFiles, setVariantImageFiles] = useState<File[][]>(
+    defaultValues.variantes.map(() => []),
+  );
 
   const {
     register,
@@ -63,12 +66,24 @@ export function ProductoForm({
     name: "variantes",
   });
 
+  const variantesWatched = useWatch({ control, name: "variantes" }) ?? [];
+
+  const handleAppendVariante = () => {
+    append({ talla: "", color: "", priceOverride: null, stock: 0 });
+    setVariantImageFiles((prev) => [...prev, []]);
+  };
+
+  const handleRemoveVariante = (index: number) => {
+    remove(index);
+    setVariantImageFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const onSubmit = async (data: ProductoInput) => {
     setServerError(null);
     try {
       const result = productoId
-        ? await updateProducto(productoId, data, imageFiles, [])
-        : await createProducto(data, imageFiles, []);
+        ? await updateProducto(productoId, data, imageFiles, variantImageFiles)
+        : await createProducto(data, imageFiles, variantImageFiles);
 
       if (result?.error) {
         setServerError(result.error);
@@ -88,21 +103,39 @@ export function ProductoForm({
     }
   };
 
+  const validarTamanoTotal = (general: File[], porVariante: File[][]) => {
+    const total =
+      [general, ...porVariante].flat().reduce((sum, file) => sum + file.size, 0) /
+      (1024 * 1024);
+
+    if (total > MAX_IMAGENES_MB) {
+      setImageSizeError(
+        `Las imágenes seleccionadas pesan ${total.toFixed(1)} MB en total — el máximo es ${MAX_IMAGENES_MB} MB. Elige menos imágenes o comprímelas antes de subirlas.`,
+      );
+      return false;
+    }
+    setImageSizeError(null);
+    return true;
+  };
+
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
-    const totalMb = files.reduce((sum, file) => sum + file.size, 0) / (1024 * 1024);
-
-    if (totalMb > MAX_IMAGENES_MB) {
-      setImageSizeError(
-        `Las imágenes seleccionadas pesan ${totalMb.toFixed(1)} MB en total — el máximo es ${MAX_IMAGENES_MB} MB. Elige menos imágenes o comprímelas antes de subirlas.`,
-      );
+    if (!validarTamanoTotal(files, variantImageFiles)) {
       setImageFiles([]);
       e.target.value = "";
       return;
     }
-
-    setImageSizeError(null);
     setImageFiles(files);
+  };
+
+  const handleVariantImageChange = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    const siguiente = variantImageFiles.map((f, i) => (i === index ? files : f));
+    if (!validarTamanoTotal(imageFiles, siguiente)) {
+      e.target.value = "";
+      return;
+    }
+    setVariantImageFiles(siguiente);
   };
 
   const handleDeleteImage = async (imageId: string) => {
@@ -294,51 +327,115 @@ export function ProductoForm({
           <Button
             type="button"
             variant="outline"
-            onClick={() =>
-              append({ talla: "", color: "", priceOverride: null, stock: 0 })
-            }
+            onClick={handleAppendVariante}
             className="border-brand-rosa text-brand-rosa hover:bg-brand-rosa/10"
           >
             Agregar variante
           </Button>
         </div>
-        {fields.map((field, index) => (
-          <div
-            key={field.id}
-            className="grid grid-cols-2 items-end gap-2 rounded-md border border-brand-rosa-claro p-3 sm:grid-cols-4"
-          >
-            <div>
-              <label className="text-xs text-brand-ciruela">Talla</label>
-              <Input {...register(`variantes.${index}.talla` as const)} />
-            </div>
-            <div>
-              <label className="text-xs text-brand-ciruela">Color</label>
-              <Input {...register(`variantes.${index}.color` as const)} />
-            </div>
-            <div>
-              <label className="text-xs text-brand-ciruela">Stock</label>
-              <Input
-                type="number"
-                {...register(`variantes.${index}.stock` as const, {
-                  valueAsNumber: true,
+        {fields.map((field, index) => {
+          const variantId = variantesWatched[index]?.id;
+          const imagenesDeVariante = variantId
+            ? existingImages.filter((img) => img.variant_id === variantId)
+            : [];
+
+          return (
+            <div
+              key={field.id}
+              className="flex flex-col gap-3 rounded-md border border-brand-rosa-claro p-3"
+            >
+              <input
+                type="hidden"
+                {...register(`variantes.${index}.id` as const, {
+                  setValueAs: (v) => (v === "" ? undefined : v),
                 })}
               />
+              <div className="grid grid-cols-2 items-end gap-2 sm:grid-cols-4">
+                <div>
+                  <label className="text-xs text-brand-ciruela">Talla</label>
+                  <Input {...register(`variantes.${index}.talla` as const)} />
+                </div>
+                <div>
+                  <label className="text-xs text-brand-ciruela">Color</label>
+                  <Input {...register(`variantes.${index}.color` as const)} />
+                </div>
+                <div>
+                  <label className="text-xs text-brand-ciruela">Stock</label>
+                  <Input
+                    type="number"
+                    {...register(`variantes.${index}.stock` as const, {
+                      valueAsNumber: true,
+                    })}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => handleRemoveVariante(index)}
+                  className="border-brand-rosa text-brand-rosa hover:bg-brand-rosa/10"
+                >
+                  Quitar
+                </Button>
+                {errors.variantes?.[index]?.talla && (
+                  <p className="col-span-4 text-sm text-red-600">
+                    {errors.variantes[index]?.talla?.message}
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-col gap-2">
+                <label
+                  htmlFor={`variant-images-${index}`}
+                  className="text-xs text-brand-ciruela"
+                >
+                  Imágenes de esta variante
+                </label>
+                {imagenesDeVariante.length > 0 && (
+                  <div className="flex flex-wrap gap-3">
+                    {imagenesDeVariante.map((image) => (
+                      <div key={image.id} className="flex flex-col items-center gap-1">
+                        <Image
+                          src={image.url}
+                          alt=""
+                          width={80}
+                          height={80}
+                          className="h-20 w-20 rounded-md border border-brand-rosa-claro object-cover"
+                        />
+                        <span className="text-xs text-brand-ciruela">
+                          {image.is_primary ? "Principal" : ""}
+                        </span>
+                        <div className="flex gap-2 text-xs">
+                          {!image.is_primary && (
+                            <button
+                              type="button"
+                              onClick={() => handleSetPrimary(image.id)}
+                              className="text-brand-rosa hover:underline"
+                            >
+                              Marcar principal
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteImage(image.id)}
+                            className="text-red-600 hover:underline"
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <input
+                  id={`variant-images-${index}`}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => handleVariantImageChange(index, e)}
+                />
+              </div>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => remove(index)}
-              className="border-brand-rosa text-brand-rosa hover:bg-brand-rosa/10"
-            >
-              Quitar
-            </Button>
-            {errors.variantes?.[index]?.talla && (
-              <p className="col-span-4 text-sm text-red-600">
-                {errors.variantes[index]?.talla?.message}
-              </p>
-            )}
-          </div>
-        ))}
+          );
+        })}
         {(errors.variantes?.root?.message ?? errors.variantes?.message) && (
           <p className="text-sm text-red-600">
             {errors.variantes?.root?.message ?? errors.variantes?.message}
@@ -347,10 +444,12 @@ export function ProductoForm({
       </div>
 
       <div className="flex flex-col gap-3">
-        <h2 className="font-heading text-lg text-brand-ciruela">Imágenes</h2>
-        {existingImages.length > 0 && (
+        <h2 className="font-heading text-lg text-brand-ciruela">Imágenes generales</h2>
+        {existingImages.filter((img) => img.variant_id === null).length > 0 && (
           <div className="flex flex-wrap gap-3">
-            {existingImages.map((image) => (
+            {existingImages
+              .filter((img) => img.variant_id === null)
+              .map((image) => (
               <div key={image.id} className="flex flex-col items-center gap-1">
                 <Image
                   src={image.url}
