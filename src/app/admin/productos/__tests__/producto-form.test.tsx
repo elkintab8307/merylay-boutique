@@ -74,7 +74,7 @@ describe("ProductoForm", () => {
       />,
     );
 
-    const inputsDeVariante = screen.getAllByLabelText(/imágenes de esta variante/i);
+    const inputsDeVariante = document.querySelectorAll('input[type="file"]');
     const archivoVarianteL = new File(["contenido"], "variante-l.jpg", { type: "image/jpeg" });
     fireEvent.change(inputsDeVariante[1], { target: { files: [archivoVarianteL] } });
 
