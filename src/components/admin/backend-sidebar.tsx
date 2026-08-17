@@ -25,7 +25,7 @@ function NavLinks({
 }: {
   sections: SidebarSection[];
   currentPath: string;
-  onNavigate?: (href: string) => React.ReactNode;
+  onNavigate?: (item: { href: string; label: string }, className: string) => React.ReactNode;
 }) {
   return (
     <nav className="flex flex-col gap-5">
@@ -43,15 +43,7 @@ function NavLinks({
                 : "text-brand-ciruela hover:bg-brand-rosa-claro/20",
             );
             if (onNavigate) {
-              return (
-                <div key={item.href}>
-                  {onNavigate(item.href) ?? (
-                    <Link href={item.href} className={linkClassName}>
-                      {item.label}
-                    </Link>
-                  )}
-                </div>
-              );
+              return <div key={item.href}>{onNavigate(item, linkClassName)}</div>;
             }
             return (
               <Link key={item.href} href={item.href} className={linkClassName}>
@@ -100,12 +92,9 @@ export function BackendSidebar({
               <NavLinks
                 sections={sections}
                 currentPath={pathname}
-                onNavigate={(href) => (
-                  <SheetClose
-                    render={<Link href={href} />}
-                    className="block rounded-md px-3 py-2 text-sm text-brand-ciruela hover:bg-brand-rosa-claro/20"
-                  >
-                    {sections.flatMap((s) => s.items).find((i) => i.href === href)?.label}
+                onNavigate={(item, className) => (
+                  <SheetClose render={<Link href={item.href} />} className={className}>
+                    {item.label}
                   </SheetClose>
                 )}
               />

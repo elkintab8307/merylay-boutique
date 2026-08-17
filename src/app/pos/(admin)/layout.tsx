@@ -16,8 +16,8 @@ export default function PosAdminLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen bg-brand-crema">
-      <BackendSidebar sections={SECTIONS} homeHref="/admin" />
+    <div className="flex min-h-screen flex-col md:flex-row bg-brand-crema">
+      <BackendSidebar sections={SECTIONS} homeHref="/pos" />
       <main className="flex-1 px-6 py-8">{children}</main>
     </div>
   );

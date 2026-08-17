@@ -60,7 +60,13 @@ export default async function ProductosPage() {
             >
               <div className="relative aspect-square w-full bg-brand-rosa-claro">
                 {imagenUrl ? (
-                  <Image src={imagenUrl} alt={producto.name} fill className="object-contain" />
+                  <Image
+                    src={imagenUrl}
+                    alt={producto.name}
+                    fill
+                    className="object-contain"
+                    sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                  />
                 ) : (
                   <div className="flex h-full items-center justify-center text-sm text-brand-ciruela/50">
                     Sin imagen

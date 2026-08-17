@@ -428,6 +428,7 @@ export function ProductoForm({
                   id={`variant-images-${index}`}
                   files={variantImageFiles[index] ?? []}
                   onChange={(files) => handleVariantImageChange(index, files)}
+                  label={`Imágenes de la variante ${index + 1}`}
                 />
               </div>
             </div>
