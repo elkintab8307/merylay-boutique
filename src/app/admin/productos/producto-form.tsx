@@ -132,6 +132,7 @@ export function ProductoForm({
     const files = Array.from(e.target.files ?? []);
     const siguiente = variantImageFiles.map((f, i) => (i === index ? files : f));
     if (!validarTamanoTotal(imageFiles, siguiente)) {
+      setVariantImageFiles(variantImageFiles.map((f, i) => (i === index ? [] : f)));
       e.target.value = "";
       return;
     }

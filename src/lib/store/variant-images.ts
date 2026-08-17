@@ -8,7 +8,10 @@ export function getImagesForVariant(
   images: ImagenProducto[],
   variantId: string | null,
 ): ImagenProducto[] {
-  const deVariante = variantId ? images.filter((img) => img.variantId === variantId) : [];
+  const deVarianteActual = variantId ? images.filter((img) => img.variantId === variantId) : [];
+  const deOtrasVariantes = images.filter(
+    (img) => img.variantId !== null && img.variantId !== variantId,
+  );
   const generales = images.filter((img) => img.variantId === null);
-  return [...deVariante, ...generales];
+  return [...deVarianteActual, ...deOtrasVariantes, ...generales];
 }

@@ -15,11 +15,11 @@ export async function uploadProductImages(
 
   const { data: existing } = await supabase
     .from("product_images")
-    .select("id")
+    .select("id, is_primary")
     .eq("product_id", productId);
 
   let sortOrder = existing?.length ?? 0;
-  const hasPrimaryAlready = sortOrder > 0;
+  const hasPrimaryAlready = (existing ?? []).some((img) => img.is_primary);
 
   for (const [index, file] of files.entries()) {
     const extension = file.name.split(".").pop() ?? "jpg";
