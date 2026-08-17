@@ -67,8 +67,8 @@ export function ProductoForm({
     setServerError(null);
     try {
       const result = productoId
-        ? await updateProducto(productoId, data, imageFiles)
-        : await createProducto(data, imageFiles);
+        ? await updateProducto(productoId, data, imageFiles, [])
+        : await createProducto(data, imageFiles, []);
 
       if (result?.error) {
         setServerError(result.error);

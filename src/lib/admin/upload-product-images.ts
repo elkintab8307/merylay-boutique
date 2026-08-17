@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 export async function uploadProductImages(
   productId: string,
   files: File[],
+  variantId: string | null = null,
 ): Promise<{ error?: string }> {
   if (files.length === 0) {
     return {};
@@ -38,6 +39,7 @@ export async function uploadProductImages(
 
     const { error: insertError } = await supabase.from("product_images").insert({
       product_id: productId,
+      variant_id: variantId,
       url: publicUrl,
       sort_order: sortOrder,
       is_primary: !hasPrimaryAlready && index === 0,

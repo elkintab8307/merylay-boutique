@@ -3,6 +3,7 @@ import { generarSkuVariante } from "@/lib/sku";
 
 export const varianteSchema = z
   .object({
+    id: z.string().uuid().optional(),
     talla: z.string().trim().optional(),
     color: z.string().trim().optional(),
     priceOverride: z.number().min(0).nullable(),

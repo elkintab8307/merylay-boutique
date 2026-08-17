@@ -7,6 +7,7 @@ import { productoSchema, type ProductoInput } from "@/lib/validation/producto";
 import { slugify } from "@/lib/slug";
 import { uploadProductImages } from "@/lib/admin/upload-product-images";
 import { generarSkuVariante } from "@/lib/sku";
+import { diffVariantes } from "@/lib/admin/variant-diff";
 
 async function uniqueSlug(baseSlug: string, ignoreId?: string) {
   const supabase = await createClient();
@@ -32,6 +33,7 @@ function nombreVariante(talla?: string, color?: string) {
 export async function createProducto(
   input: ProductoInput,
   imageFiles: File[],
+  variantImageFiles: File[][],
 ): Promise<{ error?: string }> {
   await requireAdmin();
 
@@ -79,28 +81,30 @@ export async function createProducto(
     return { error: "No se pudo crear el producto." };
   }
 
+  let variantIdPorIndice: (string | null)[] = [];
   if (parsed.data.variantes.length > 0) {
-    const { error: variantesError } = await supabase.from("product_variants").insert(
-      parsed.data.variantes.map((variante) => ({
-        product_id: producto.id,
-        name: nombreVariante(variante.talla, variante.color),
-        talla: variante.talla || null,
-        color: variante.color || null,
-        sku: generarSkuVariante(
-          skuGenerado,
-          variante.talla || null,
-          variante.color || null,
-        ),
-        price_override: variante.priceOverride,
-        stock: variante.stock,
-      })),
-    );
+    const { data: variantesCreadas, error: variantesError } = await supabase
+      .from("product_variants")
+      .insert(
+        parsed.data.variantes.map((variante) => ({
+          product_id: producto.id,
+          name: nombreVariante(variante.talla, variante.color),
+          talla: variante.talla || null,
+          color: variante.color || null,
+          sku: generarSkuVariante(skuGenerado, variante.talla || null, variante.color || null),
+          price_override: variante.priceOverride,
+          stock: variante.stock,
+        })),
+      )
+      .select("id");
 
-    if (variantesError) {
+    if (variantesError || !variantesCreadas) {
       return {
         error: "El producto se creo, pero hubo un error con las variantes.",
       };
     }
+
+    variantIdPorIndice = variantesCreadas.map((v) => v.id);
   }
 
   if (parsed.data.costPrice !== null) {
@@ -116,7 +120,17 @@ export async function createProducto(
   }
 
   if (imageFiles.length > 0) {
-    const uploadResult = await uploadProductImages(producto.id, imageFiles);
+    const uploadResult = await uploadProductImages(producto.id, imageFiles, null);
+    if (uploadResult.error) {
+      return { error: uploadResult.error };
+    }
+  }
+
+  for (const [index, files] of variantImageFiles.entries()) {
+    if (files.length === 0) continue;
+    const variantId = variantIdPorIndice[index];
+    if (!variantId) continue;
+    const uploadResult = await uploadProductImages(producto.id, files, variantId);
     if (uploadResult.error) {
       return { error: uploadResult.error };
     }
@@ -130,6 +144,7 @@ export async function updateProducto(
   id: string,
   input: ProductoInput,
   newImageFiles: File[],
+  variantImageFiles: File[][],
 ): Promise<{ error?: string }> {
   await requireAdmin();
 
@@ -162,44 +177,96 @@ export async function updateProducto(
     return { error: "No se pudo actualizar el producto." };
   }
 
-  // Nota: estrategia simple de "borrar y reinsertar" variantes. Es segura
-  // mientras no existan cart_items/order_items referenciando variant_id
-  // (eso ocurre a partir de la Fase 7); si en el futuro una variante ya
-  // vendida se elimina aqui, el DELETE fallara por la FK sin ON DELETE
-  // CASCADE en esas tablas — revisar entonces una estrategia de diff en vez
-  // de reemplazo total.
-  const { error: deleteVariantesError } = await supabase
+  const { data: variantesExistentes } = await supabase
     .from("product_variants")
-    .delete()
+    .select("id")
     .eq("product_id", id);
+  const idsExistentes = (variantesExistentes ?? []).map((v) => v.id);
 
-  if (deleteVariantesError) {
-    return {
-      error:
-        "El producto se actualizo, pero no se pudieron modificar las variantes porque una de ellas ya tiene compras registradas.",
-    };
+  const diff = diffVariantes(parsed.data.variantes, idsExistentes);
+
+  if (diff.borrarIds.length > 0) {
+    const { error: borrarError } = await supabase
+      .from("product_variants")
+      .delete()
+      .in("id", diff.borrarIds);
+
+    if (borrarError) {
+      return {
+        error:
+          "El producto se actualizo, pero no se pudieron quitar una o mas variantes porque ya tienen compras registradas.",
+      };
+    }
   }
 
-  if (parsed.data.variantes.length > 0) {
-    const { error: variantesError } = await supabase.from("product_variants").insert(
-      parsed.data.variantes.map((variante) => ({
+  const variantIdPorIndice: (string | null)[] = new Array(parsed.data.variantes.length).fill(
+    null,
+  );
+
+  const actualizarItems = diff.items.filter(
+    (item): item is Extract<(typeof diff.items)[number], { tipo: "actualizar" }> =>
+      item.tipo === "actualizar",
+  );
+  const crearItems = diff.items.filter(
+    (item): item is Extract<(typeof diff.items)[number], { tipo: "crear" }> =>
+      item.tipo === "crear",
+  );
+
+  if (actualizarItems.length > 0) {
+    const { error: actualizarError } = await supabase.from("product_variants").upsert(
+      actualizarItems.map((item) => ({
+        id: item.id,
         product_id: id,
-        name: nombreVariante(variante.talla, variante.color),
-        talla: variante.talla || null,
-        color: variante.color || null,
+        name: nombreVariante(item.variante.talla, item.variante.color),
+        talla: item.variante.talla || null,
+        color: item.variante.color || null,
         sku: generarSkuVariante(
           productoActualizado.sku,
-          variante.talla || null,
-          variante.color || null,
+          item.variante.talla || null,
+          item.variante.color || null,
         ),
-        price_override: variante.priceOverride,
-        stock: variante.stock,
+        price_override: item.variante.priceOverride,
+        stock: item.variante.stock,
       })),
+      { onConflict: "id" },
     );
 
-    if (variantesError) {
+    if (actualizarError) {
       return { error: "El producto se actualizo, pero hubo un error con las variantes." };
     }
+
+    for (const item of actualizarItems) {
+      variantIdPorIndice[item.index] = item.id;
+    }
+  }
+
+  if (crearItems.length > 0) {
+    const { data: variantesCreadas, error: crearError } = await supabase
+      .from("product_variants")
+      .insert(
+        crearItems.map((item) => ({
+          product_id: id,
+          name: nombreVariante(item.variante.talla, item.variante.color),
+          talla: item.variante.talla || null,
+          color: item.variante.color || null,
+          sku: generarSkuVariante(
+            productoActualizado.sku,
+            item.variante.talla || null,
+            item.variante.color || null,
+          ),
+          price_override: item.variante.priceOverride,
+          stock: item.variante.stock,
+        })),
+      )
+      .select("id");
+
+    if (crearError || !variantesCreadas) {
+      return { error: "El producto se actualizo, pero hubo un error con las variantes." };
+    }
+
+    crearItems.forEach((item, i) => {
+      variantIdPorIndice[item.index] = variantesCreadas[i].id;
+    });
   }
 
   if (parsed.data.costPrice !== null) {
@@ -215,7 +282,17 @@ export async function updateProducto(
   }
 
   if (newImageFiles.length > 0) {
-    const uploadResult = await uploadProductImages(id, newImageFiles);
+    const uploadResult = await uploadProductImages(id, newImageFiles, null);
+    if (uploadResult.error) {
+      return { error: uploadResult.error };
+    }
+  }
+
+  for (const [index, files] of variantImageFiles.entries()) {
+    if (files.length === 0) continue;
+    const variantId = variantIdPorIndice[index];
+    if (!variantId) continue;
+    const uploadResult = await uploadProductImages(id, files, variantId);
     if (uploadResult.error) {
       return { error: uploadResult.error };
     }
