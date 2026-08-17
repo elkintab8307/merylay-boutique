@@ -50,9 +50,6 @@ export function ProductGallery({
           fill
           className="object-contain"
         />
-        <span className="pointer-events-none absolute inset-x-0 bottom-3 text-center font-script text-2xl text-brand-crema drop-shadow-[0_1px_3px_rgba(110,42,68,0.6)]">
-          MeryLay
-        </span>
       </div>
       {images.length > 1 && (
         <div className="flex gap-2">

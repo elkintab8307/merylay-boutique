@@ -32,17 +32,12 @@ export function ProductCard({
     >
       <div className="relative aspect-square w-full overflow-hidden rounded-md bg-brand-rosa-claro">
         {product.imageUrl ? (
-          <>
-            <Image
-              src={product.imageUrl}
-              alt={product.name}
-              fill
-              className="object-contain"
-            />
-            <span className="pointer-events-none absolute inset-x-0 bottom-1 text-center font-script text-base text-brand-crema drop-shadow-[0_1px_3px_rgba(110,42,68,0.6)]">
-              MeryLay
-            </span>
-          </>
+          <Image
+            src={product.imageUrl}
+            alt={product.name}
+            fill
+            className="object-contain"
+          />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-brand-ciruela/50">
             Sin imagen
