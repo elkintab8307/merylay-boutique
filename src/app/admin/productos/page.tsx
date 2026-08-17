@@ -1,19 +1,37 @@
+import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { formatPrice } from "@/lib/format";
+import { obtenerUmbralStockBajo } from "@/lib/admin/low-stock";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { ToggleProductoButton } from "./toggle-producto-button";
 
 export default async function ProductosPage() {
   const supabase = await createClient();
-  const [{ data: productos }, { data: categorias }] = await Promise.all([
+  const [{ data: productos }, { data: categorias }, umbralStockBajo] = await Promise.all([
     supabase
       .from("products")
       .select("id, name, sku, price, stock, is_active, category_id")
       .order("created_at", { ascending: false }),
     supabase.from("categories").select("id, name"),
+    obtenerUmbralStockBajo(),
   ]);
 
   const categoriaPorId = new Map((categorias ?? []).map((c) => [c.id, c.name]));
+
+  const idsProductos = (productos ?? []).map((p) => p.id);
+  const { data: imagenesPrincipales } =
+    idsProductos.length > 0
+      ? await supabase
+          .from("product_images")
+          .select("product_id, url")
+          .in("product_id", idsProductos)
+          .eq("is_primary", true)
+      : { data: [] as { product_id: string; url: string }[] };
+  const imagenPorProducto = new Map(
+    (imagenesPrincipales ?? []).map((img) => [img.product_id, img.url]),
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -25,33 +43,48 @@ export default async function ProductosPage() {
           </Button>
         </Link>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
-              <th className="py-2">Nombre</th>
-              <th className="py-2">SKU</th>
-              <th className="py-2">Categoría</th>
-              <th className="py-2">Precio</th>
-              <th className="py-2">Stock</th>
-              <th className="py-2">Activo</th>
-              <th className="py-2">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {productos?.map((producto) => (
-              <tr key={producto.id} className="border-b border-brand-rosa-claro/50">
-                <td className="py-2">{producto.name}</td>
-                <td className="py-2 text-brand-ciruela/70">{producto.sku}</td>
-                <td className="py-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {(productos ?? []).map((producto) => {
+          const imagenUrl = imagenPorProducto.get(producto.id) ?? null;
+          const stockBadge =
+            producto.stock === 0
+              ? { variant: "danger" as const, label: "Agotado" }
+              : producto.stock <= umbralStockBajo
+                ? { variant: "warning" as const, label: `${producto.stock} unidades` }
+                : { variant: "neutral" as const, label: `${producto.stock} unidades` };
+
+          return (
+            <div
+              key={producto.id}
+              className="flex flex-col overflow-hidden rounded-lg border border-brand-rosa-claro bg-white shadow-brand-sm"
+            >
+              <div className="relative aspect-square w-full bg-brand-rosa-claro">
+                {imagenUrl ? (
+                  <Image src={imagenUrl} alt={producto.name} fill className="object-contain" />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-sm text-brand-ciruela/50">
+                    Sin imagen
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-1 flex-col gap-2 p-4">
+                <p className="font-heading text-brand-ciruela">{producto.name}</p>
+                <p className="text-xs text-brand-ciruela/60">
+                  {producto.sku}
                   {producto.category_id
-                    ? (categoriaPorId.get(producto.category_id) ?? "—")
-                    : "—"}
-                </td>
-                <td className="py-2">${producto.price}</td>
-                <td className="py-2">{producto.stock}</td>
-                <td className="py-2">{producto.is_active ? "Sí" : "No"}</td>
-                <td className="flex gap-3 py-2">
+                    ? ` · ${categoriaPorId.get(producto.category_id) ?? "—"}`
+                    : ""}
+                </p>
+                <p className="font-heading text-lg text-brand-rosa">
+                  {formatPrice(producto.price)}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={stockBadge.variant}>{stockBadge.label}</Badge>
+                  <Badge variant={producto.is_active ? "success" : "neutral"}>
+                    {producto.is_active ? "Activo" : "Inactivo"}
+                  </Badge>
+                </div>
+                <div className="mt-auto flex items-center gap-3 pt-2 text-sm">
                   <Link
                     href={`/admin/productos/${producto.id}/editar`}
                     className="text-brand-rosa hover:underline"
@@ -59,11 +92,11 @@ export default async function ProductosPage() {
                     Editar
                   </Link>
                   <ToggleProductoButton id={producto.id} isActive={producto.is_active} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
