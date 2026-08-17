@@ -19,6 +19,10 @@ export function ProductVariantSelector({
   variants,
   baseStock,
   currentUserId,
+  talla,
+  color,
+  onTallaChange,
+  onColorChange,
 }: {
   productId: string;
   productSlug: string;
@@ -28,10 +32,12 @@ export function ProductVariantSelector({
   variants: VariantOption[];
   baseStock: number;
   currentUserId: string | null;
+  talla: string | null;
+  color: string | null;
+  onTallaChange: (talla: string | null) => void;
+  onColorChange: (color: string | null) => void;
 }) {
   const { tallas, colores } = useMemo(() => getVariantOptions(variants), [variants]);
-  const [talla, setTalla] = useState<string | null>(variants[0]?.talla ?? null);
-  const [color, setColor] = useState<string | null>(variants[0]?.color ?? null);
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -77,7 +83,7 @@ export function ProductVariantSelector({
           <label className="text-sm text-brand-ciruela">Talla</label>
           <select
             value={talla ?? ""}
-            onChange={(e) => setTalla(e.target.value || null)}
+            onChange={(e) => onTallaChange(e.target.value || null)}
             className="w-full rounded-md border border-brand-rosa-claro bg-white px-3 py-2 text-sm"
           >
             {tallas.map((t) => (
@@ -93,7 +99,7 @@ export function ProductVariantSelector({
           <label className="text-sm text-brand-ciruela">Color</label>
           <select
             value={color ?? ""}
-            onChange={(e) => setColor(e.target.value || null)}
+            onChange={(e) => onColorChange(e.target.value || null)}
             className="w-full rounded-md border border-brand-rosa-claro bg-white px-3 py-2 text-sm"
           >
             {colores.map((c) => (
