@@ -3,7 +3,7 @@ import { diffVariantes } from "../variant-diff";
 
 describe("diffVariantes", () => {
   it("marca como 'crear' todas las variantes sin id", () => {
-    const resultado = diffVariantes(
+    const resultado = diffVariantes<{ id?: string; talla: string; color: string }>(
       [{ talla: "M", color: "Rosa" }, { talla: "L", color: "Rosa" }],
       [],
     );
