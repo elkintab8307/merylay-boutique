@@ -3,6 +3,7 @@ import { resolverRango } from "@/lib/informes/rango-fecha";
 import { formatPrice } from "@/lib/format";
 import { RangoFechaFiltro } from "../rango-fecha-filtro";
 import { GraficaCompras } from "./grafica-compras";
+import { Table, TableHeader, TableRow, TableCell, TableHeaderCell } from "@/components/ui/table";
 
 export default async function InformeComprasPage({
   searchParams,
@@ -75,29 +76,22 @@ export default async function InformeComprasPage({
           {datosGrafica.length > 0 && (
             <GraficaCompras datos={datosGrafica} series={series} />
           )}
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
-                  <th className="py-2">Proveedor</th>
-                  <th className="py-2">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from(totalPorProveedor.entries()).map(
-                  ([proveedor, monto]) => (
-                    <tr
-                      key={proveedor}
-                      className="border-b border-brand-rosa-claro/50"
-                    >
-                      <td className="py-2">{proveedor}</td>
-                      <td className="py-2">{formatPrice(monto)}</td>
-                    </tr>
-                  ),
-                )}
-              </tbody>
-            </table>
-          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHeaderCell>Proveedor</TableHeaderCell>
+                <TableHeaderCell>Total</TableHeaderCell>
+              </TableRow>
+            </TableHeader>
+            <tbody>
+              {Array.from(totalPorProveedor.entries()).map(([proveedor, monto]) => (
+                <TableRow key={proveedor}>
+                  <TableCell>{proveedor}</TableCell>
+                  <TableCell>{formatPrice(monto)}</TableCell>
+                </TableRow>
+              ))}
+            </tbody>
+          </Table>
         </>
       )}
     </div>

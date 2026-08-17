@@ -3,6 +3,7 @@ import { resolverRango } from "@/lib/informes/rango-fecha";
 import { formatPrice } from "@/lib/format";
 import { RangoFechaFiltro } from "../rango-fecha-filtro";
 import { GraficaProductos } from "./grafica-productos";
+import { Table, TableHeader, TableRow, TableCell, TableHeaderCell } from "@/components/ui/table";
 
 const LIMITE = 10;
 
@@ -46,29 +47,24 @@ export default async function InformeProductosPage({
       ) : (
         <>
           {datos.length > 0 && <GraficaProductos datos={datos} />}
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-brand-rosa-claro text-left text-brand-ciruela">
-                  <th className="py-2">Producto</th>
-                  <th className="py-2">Unidades</th>
-                  <th className="py-2">Ingreso</th>
-                </tr>
-              </thead>
-              <tbody>
-                {datos.map((fila) => (
-                  <tr
-                    key={fila.productId}
-                    className="border-b border-brand-rosa-claro/50"
-                  >
-                    <td className="py-2">{fila.nombre}</td>
-                    <td className="py-2">{fila.qty}</td>
-                    <td className="py-2">{formatPrice(fila.ingreso)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHeaderCell>Producto</TableHeaderCell>
+                <TableHeaderCell>Unidades</TableHeaderCell>
+                <TableHeaderCell>Ingreso</TableHeaderCell>
+              </TableRow>
+            </TableHeader>
+            <tbody>
+              {datos.map((fila) => (
+                <TableRow key={fila.productId}>
+                  <TableCell>{fila.nombre}</TableCell>
+                  <TableCell>{fila.qty}</TableCell>
+                  <TableCell>{formatPrice(fila.ingreso)}</TableCell>
+                </TableRow>
+              ))}
+            </tbody>
+          </Table>
         </>
       )}
     </div>
