@@ -19,6 +19,11 @@ import { Input } from "@/components/ui/input";
 type CategoriaOption = { id: string; name: string };
 type ProductImage = { id: string; url: string; is_primary: boolean };
 
+// Deja margen bajo el limite del servidor (bodySizeLimit en
+// next.config.ts): el body de la Server Action tambien lleva el resto
+// del formulario mas la codificacion del envio, no solo las imagenes.
+const MAX_IMAGENES_MB = 15;
+
 export function ProductoForm({
   productoId,
   skuActual,
@@ -39,6 +44,7 @@ export function ProductoForm({
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [imageSizeError, setImageSizeError] = useState<string | null>(null);
   const [existingImages, setExistingImages] = useState(imagenesExistentes);
 
   const {
@@ -59,17 +65,44 @@ export function ProductoForm({
 
   const onSubmit = async (data: ProductoInput) => {
     setServerError(null);
-    const result = productoId
-      ? await updateProducto(productoId, data, imageFiles)
-      : await createProducto(data, imageFiles);
+    try {
+      const result = productoId
+        ? await updateProducto(productoId, data, imageFiles)
+        : await createProducto(data, imageFiles);
 
-    if (result?.error) {
-      setServerError(result.error);
+      if (result?.error) {
+        setServerError(result.error);
+        return;
+      }
+
+      router.push("/admin/productos");
+      router.refresh();
+    } catch {
+      // Cubre fallos que no llegan a devolver {error}: por ejemplo el
+      // body de la Server Action superando bodySizeLimit (next.config.ts)
+      // o un corte de conexion — sin esto el formulario se quedaba
+      // "guardando" sin ningun aviso.
+      setServerError(
+        "No se pudo guardar el producto. Si subiste varias imágenes, intenta con menos a la vez o revisa tu conexión.",
+      );
+    }
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    const totalMb = files.reduce((sum, file) => sum + file.size, 0) / (1024 * 1024);
+
+    if (totalMb > MAX_IMAGENES_MB) {
+      setImageSizeError(
+        `Las imágenes seleccionadas pesan ${totalMb.toFixed(1)} MB en total — el máximo es ${MAX_IMAGENES_MB} MB. Elige menos imágenes o comprímelas antes de subirlas.`,
+      );
+      setImageFiles([]);
+      e.target.value = "";
       return;
     }
 
-    router.push("/admin/productos");
-    router.refresh();
+    setImageSizeError(null);
+    setImageFiles(files);
   };
 
   const handleDeleteImage = async (imageId: string) => {
@@ -351,12 +384,8 @@ export function ProductoForm({
             ))}
           </div>
         )}
-        <input
-          type="file"
-          accept="image/*"
-          multiple
-          onChange={(e) => setImageFiles(Array.from(e.target.files ?? []))}
-        />
+        <input type="file" accept="image/*" multiple onChange={handleImageChange} />
+        {imageSizeError && <p className="text-sm text-red-600">{imageSizeError}</p>}
       </div>
 
       {serverError && <p className="text-sm text-red-600">{serverError}</p>}
