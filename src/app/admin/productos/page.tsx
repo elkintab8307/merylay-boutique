@@ -43,7 +43,7 @@ export default async function ProductosPage() {
           </Button>
         </Link>
       </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="flex flex-col gap-3 sm:grid sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
         {(productos ?? []).map((producto) => {
           const imagenUrl = imagenPorProducto.get(producto.id) ?? null;
           const stockBadge =
@@ -56,24 +56,24 @@ export default async function ProductosPage() {
           return (
             <div
               key={producto.id}
-              className="flex flex-col overflow-hidden rounded-lg border border-brand-rosa-claro bg-white shadow-brand-sm"
+              className="flex gap-3 rounded-lg border border-brand-rosa-claro bg-white p-3 shadow-brand-sm sm:flex-col sm:gap-0 sm:overflow-hidden sm:p-0"
             >
-              <div className="relative aspect-square w-full bg-brand-rosa-claro">
+              <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-md bg-brand-rosa-claro sm:aspect-square sm:h-auto sm:w-full sm:rounded-none">
                 {imagenUrl ? (
                   <Image
                     src={imagenUrl}
                     alt={producto.name}
                     fill
                     className="object-contain"
-                    sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                    sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 80px"
                   />
                 ) : (
-                  <div className="flex h-full items-center justify-center text-sm text-brand-ciruela/50">
+                  <div className="flex h-full items-center justify-center text-center text-[10px] text-brand-ciruela/50 sm:text-sm">
                     Sin imagen
                   </div>
                 )}
               </div>
-              <div className="flex flex-1 flex-col gap-2 p-4">
+              <div className="flex flex-1 flex-col gap-2 sm:p-4">
                 <p className="font-heading text-brand-ciruela">{producto.name}</p>
                 <p className="text-xs text-brand-ciruela/60">
                   {producto.sku}
