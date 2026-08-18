@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Menu, MessageCircle, Camera, Music2, ThumbsUp } from "lucide-react";
+import { Menu, Music2 } from "lucide-react";
 import {
   Sheet,
   SheetClose,
@@ -177,9 +177,9 @@ export function SiteMenuSheet({
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label="WhatsApp"
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-[#25D366] text-white"
+                  className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full"
                 >
-                  <MessageCircle className="h-5 w-5" />
+                  <Image src="/brand/whatsapp.png" alt="" width={40} height={40} />
                 </a>
               )}
               {redes.instagram && (
@@ -188,9 +188,9 @@ export function SiteMenuSheet({
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label="Instagram"
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-rosa text-brand-crema"
+                  className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full"
                 >
-                  <Camera className="h-5 w-5" />
+                  <Image src="/brand/instagram.png" alt="" width={40} height={40} />
                 </a>
               )}
               {redes.tiktok && (
@@ -210,9 +210,9 @@ export function SiteMenuSheet({
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label="Facebook"
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-oro text-brand-crema"
+                  className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full"
                 >
-                  <ThumbsUp className="h-5 w-5" />
+                  <Image src="/brand/facebook.webp" alt="" width={40} height={40} />
                 </a>
               )}
             </div>
