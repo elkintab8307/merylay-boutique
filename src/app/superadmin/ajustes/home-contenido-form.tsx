@@ -16,17 +16,20 @@ import { ImageUploadButton } from "@/components/admin/image-upload-button";
 export function HomeContenidoForm({
   defaultValues,
   heroImageActual,
+  heroMobileImageActual,
   banner1ImageActual,
   banner2ImageActual,
 }: {
   defaultValues: HomeContenidoInput;
   heroImageActual: string | null;
+  heroMobileImageActual: string | null;
   banner1ImageActual: string | null;
   banner2ImageActual: string | null;
 }) {
   const [serverError, setServerError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [heroImageFile, setHeroImageFile] = useState<File | null>(null);
+  const [heroMobileImageFile, setHeroMobileImageFile] = useState<File | null>(null);
   const [banner1ImageFile, setBanner1ImageFile] = useState<File | null>(null);
   const [banner2ImageFile, setBanner2ImageFile] = useState<File | null>(null);
 
@@ -46,9 +49,11 @@ export function HomeContenidoForm({
       const result = await guardarContenidoHome(
         data,
         heroImageFile,
+        heroMobileImageFile,
         banner1ImageFile,
         banner2ImageFile,
         heroImageActual,
+        heroMobileImageActual,
         banner1ImageActual,
         banner2ImageActual,
       );
@@ -70,22 +75,52 @@ export function HomeContenidoForm({
         <h3 className="font-heading text-base text-brand-ciruela">
           Hero de la tienda
         </h3>
-        {heroImageActual && (
-          <Image
-            src={heroImageActual}
-            alt=""
-            width={400}
-            height={224}
-            className="h-28 w-full rounded-md object-cover"
+        <div>
+          <label className="text-sm text-brand-ciruela">
+            Imagen para PC (horizontal, ideal 1920×960 o similar)
+          </label>
+          {heroImageActual && (
+            <Image
+              src={heroImageActual}
+              alt=""
+              width={400}
+              height={224}
+              className="mb-2 h-28 w-full rounded-md object-cover"
+            />
+          )}
+          <ImageUploadButton
+            id="hero-imagen"
+            multiple={false}
+            label="Elegir imagen de PC"
+            files={heroImageFile ? [heroImageFile] : []}
+            onChange={(files) => setHeroImageFile(files[0] ?? null)}
           />
-        )}
-        <ImageUploadButton
-          id="hero-imagen"
-          multiple={false}
-          label="Elegir imagen"
-          files={heroImageFile ? [heroImageFile] : []}
-          onChange={(files) => setHeroImageFile(files[0] ?? null)}
-        />
+        </div>
+        <div>
+          <label className="text-sm text-brand-ciruela">
+            Imagen para móvil (vertical, ideal 1024×1536 o similar)
+          </label>
+          {heroMobileImageActual && (
+            <Image
+              src={heroMobileImageActual}
+              alt=""
+              width={200}
+              height={300}
+              className="mb-2 h-40 w-32 rounded-md object-cover"
+            />
+          )}
+          <ImageUploadButton
+            id="hero-imagen-movil"
+            multiple={false}
+            label="Elegir imagen para móvil"
+            files={heroMobileImageFile ? [heroMobileImageFile] : []}
+            onChange={(files) => setHeroMobileImageFile(files[0] ?? null)}
+          />
+        </div>
+        <p className="text-xs text-brand-ciruela/60">
+          El título, subtítulo y botón de abajo son opcionales: déjalos vacíos
+          si tus imágenes ya incluyen su propio texto y diseño.
+        </p>
         <div>
           <label htmlFor="heroTitulo" className="text-sm text-brand-ciruela">
             Título
@@ -145,6 +180,10 @@ export function HomeContenidoForm({
           files={banner1ImageFile ? [banner1ImageFile] : []}
           onChange={(files) => setBanner1ImageFile(files[0] ?? null)}
         />
+        <p className="text-xs text-brand-ciruela/60">
+          El título es opcional: déjalo vacío si la imagen ya incluye su
+          propio texto y diseño.
+        </p>
         <div>
           <label htmlFor="banner1Titulo" className="text-sm text-brand-ciruela">
             Título
@@ -182,6 +221,10 @@ export function HomeContenidoForm({
           files={banner2ImageFile ? [banner2ImageFile] : []}
           onChange={(files) => setBanner2ImageFile(files[0] ?? null)}
         />
+        <p className="text-xs text-brand-ciruela/60">
+          El título es opcional: déjalo vacío si la imagen ya incluye su
+          propio texto y diseño.
+        </p>
         <div>
           <label htmlFor="banner2Titulo" className="text-sm text-brand-ciruela">
             Título

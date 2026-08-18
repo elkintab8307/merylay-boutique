@@ -48,9 +48,11 @@ export async function guardarAjustes(
 export async function guardarContenidoHome(
   input: HomeContenidoInput,
   heroImageFile: File | null,
+  heroMobileImageFile: File | null,
   banner1ImageFile: File | null,
   banner2ImageFile: File | null,
   heroImageActual: string | null,
+  heroMobileImageActual: string | null,
   banner1ImageActual: string | null,
   banner2ImageActual: string | null,
 ): Promise<{ error?: string }> {
@@ -68,6 +70,13 @@ export async function guardarContenidoHome(
     heroImageUrl = uploadResult.url ?? heroImageActual;
   }
 
+  let heroMobileImageUrl = heroMobileImageActual;
+  if (heroMobileImageFile) {
+    const uploadResult = await subirImagenBanner(heroMobileImageFile, "hero-movil");
+    if (uploadResult.error) return { error: uploadResult.error };
+    heroMobileImageUrl = uploadResult.url ?? heroMobileImageActual;
+  }
+
   let banner1ImageUrl = banner1ImageActual;
   if (banner1ImageFile) {
     const uploadResult = await subirImagenBanner(banner1ImageFile, "banner1");
@@ -83,14 +92,14 @@ export async function guardarContenidoHome(
   }
 
   const banners: BannerContenido[] = [
-    parsed.data.banner1.titulo
+    parsed.data.banner1.titulo || banner1ImageUrl
       ? {
           imageUrl: banner1ImageUrl,
           titulo: parsed.data.banner1.titulo,
           link: parsed.data.banner1.link,
         }
       : null,
-    parsed.data.banner2.titulo
+    parsed.data.banner2.titulo || banner2ImageUrl
       ? {
           imageUrl: banner2ImageUrl,
           titulo: parsed.data.banner2.titulo,
@@ -104,7 +113,11 @@ export async function guardarContenidoHome(
     [
       {
         key: "home_hero",
-        value: { imageUrl: heroImageUrl, ...parsed.data.hero },
+        value: {
+          imageUrl: heroImageUrl,
+          imageUrlMobile: heroMobileImageUrl,
+          ...parsed.data.hero,
+        },
       },
       { key: "home_banners", value: banners },
     ],

@@ -104,6 +104,7 @@ export default async function AjustesPage() {
         <HomeContenidoForm
           defaultValues={homeDefaultValues}
           heroImageActual={heroStored?.imageUrl ?? null}
+          heroMobileImageActual={heroStored?.imageUrlMobile ?? null}
           banner1ImageActual={bannersStored[0]?.imageUrl ?? null}
           banner2ImageActual={bannersStored[1]?.imageUrl ?? null}
         />

@@ -2,10 +2,11 @@ import { z } from "zod";
 
 const heroSchema = z.object({
   imageUrl: z.string().nullable(),
-  titulo: z.string().trim().min(1, "Ingresa un título"),
+  imageUrlMobile: z.string().nullable().default(null),
+  titulo: z.string().trim(),
   subtitulo: z.string().trim(),
-  textoBoton: z.string().trim().min(1, "Ingresa el texto del botón"),
-  linkBoton: z.string().trim().min(1, "Ingresa un link"),
+  textoBoton: z.string().trim(),
+  linkBoton: z.string().trim(),
 });
 
 const bannerSchema = z.object({
@@ -20,12 +21,21 @@ export type BannerContenido = z.infer<typeof bannerSchema>;
 export const heroStoredSchema = heroSchema;
 export const bannersStoredSchema = z.array(bannerSchema);
 
-const heroInputSchema = z.object({
-  titulo: z.string().trim().min(1, "Ingresa un título"),
-  subtitulo: z.string().trim(),
-  textoBoton: z.string().trim().min(1, "Ingresa el texto del botón"),
-  linkBoton: z.string().trim().min(1, "Ingresa un link"),
-});
+const heroInputSchema = z
+  .object({
+    titulo: z.string().trim(),
+    subtitulo: z.string().trim(),
+    textoBoton: z.string().trim(),
+    linkBoton: z.string().trim(),
+  })
+  .refine((data) => !data.titulo || data.textoBoton.length > 0, {
+    message: "Ingresa el texto del botón",
+    path: ["textoBoton"],
+  })
+  .refine((data) => !data.titulo || data.linkBoton.length > 0, {
+    message: "Ingresa un link para el botón",
+    path: ["linkBoton"],
+  });
 
 const bannerInputSchema = z
   .object({
