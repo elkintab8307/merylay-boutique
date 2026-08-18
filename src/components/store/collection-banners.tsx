@@ -11,10 +11,16 @@ export function CollectionBanners({ banners }: { banners: BannerContenido[] }) {
         <Link
           key={index}
           href={banner.link}
-          className="relative flex h-56 items-end overflow-hidden rounded-xl shadow-brand-sm transition hover:shadow-brand-md"
+          className="relative flex aspect-[3/2] items-end overflow-hidden rounded-xl shadow-brand-sm transition hover:shadow-brand-md"
         >
           {banner.imageUrl ? (
-            <Image src={banner.imageUrl} alt="" fill className="object-cover" />
+            <Image
+              src={banner.imageUrl}
+              alt=""
+              fill
+              sizes="(min-width: 640px) 50vw, 100vw"
+              className="object-cover"
+            />
           ) : (
             <div className="absolute inset-0 bg-gradient-to-br from-brand-rosa-medio to-brand-oro" />
           )}
