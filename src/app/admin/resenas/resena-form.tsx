@@ -9,6 +9,7 @@ import { resenaSchema, type ResenaInput } from "@/lib/validation/resena";
 import { createResena, updateResena } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ImageUploadButton } from "@/components/admin/image-upload-button";
 
 export function ResenaForm({
   resenaId,
@@ -117,10 +118,12 @@ export function ResenaForm({
             className="h-28 w-full max-w-xs rounded-md object-cover"
           />
         )}
-        <input
-          type="file"
-          accept="image/*"
-          onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+        <ImageUploadButton
+          id="resena-imagen"
+          multiple={false}
+          label="Elegir imagen"
+          files={imageFile ? [imageFile] : []}
+          onChange={(files) => setImageFile(files[0] ?? null)}
         />
       </div>
       <label className="flex items-center gap-2 text-sm text-brand-ciruela">

@@ -10,6 +10,7 @@ import { slugify } from "@/lib/slug";
 import { createCategoria, updateCategoria } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ImageUploadButton } from "@/components/admin/image-upload-button";
 
 type CategoriaOption = { id: string; name: string };
 
@@ -137,10 +138,12 @@ export function CategoriaForm({
             className="h-28 w-full max-w-xs rounded-md object-cover"
           />
         )}
-        <input
-          type="file"
-          accept="image/*"
-          onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+        <ImageUploadButton
+          id="categoria-imagen"
+          multiple={false}
+          label="Elegir imagen"
+          files={imageFile ? [imageFile] : []}
+          onChange={(files) => setImageFile(files[0] ?? null)}
         />
       </div>
       <label className="flex items-center gap-2 text-sm text-brand-ciruela">
