@@ -20,10 +20,17 @@ export function HeroSection({
   const imageUrl = hero?.imageUrl ?? null;
 
   return (
-    <section className="relative flex min-h-[380px] items-center rounded-2xl">
+    <section className="relative flex aspect-[4/3] items-center rounded-2xl sm:aspect-[2/1] lg:aspect-[3/1]">
       <div className="absolute inset-0 overflow-hidden rounded-2xl">
         {imageUrl ? (
-          <Image src={imageUrl} alt={titulo} fill priority className="object-cover" />
+          <Image
+            src={imageUrl}
+            alt={titulo}
+            fill
+            priority
+            sizes="100vw"
+            className="object-cover"
+          />
         ) : (
           <div className="absolute inset-0 bg-gradient-to-br from-brand-rosa-claro via-brand-crema to-brand-rosa-medio" />
         )}
@@ -32,7 +39,7 @@ export function HeroSection({
         )}
       </div>
       <div
-        className={`relative z-10 flex flex-col gap-4 px-8 py-16 sm:px-16 ${
+        className={`relative z-10 flex flex-col gap-4 px-6 py-10 sm:px-16 sm:py-16 ${
           imageUrl ? "text-brand-crema" : "text-brand-ciruela"
         }`}
       >

@@ -9,11 +9,13 @@ export function ImageUploadButton({
   files,
   onChange,
   label = "Agregar imágenes",
+  multiple = true,
 }: {
   id: string;
   files: File[];
   onChange: (files: File[]) => void;
   label?: string;
+  multiple?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [prevFiles, setPrevFiles] = useState(files);
@@ -62,7 +64,7 @@ export function ImageUploadButton({
         id={id}
         type="file"
         accept="image/*"
-        multiple
+        multiple={multiple}
         className="sr-only"
         onChange={(e) => {
           onChange(Array.from(e.target.files ?? []));

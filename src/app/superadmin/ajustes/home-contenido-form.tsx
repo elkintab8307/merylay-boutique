@@ -11,6 +11,7 @@ import {
 import { guardarContenidoHome } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ImageUploadButton } from "@/components/admin/image-upload-button";
 
 export function HomeContenidoForm({
   defaultValues,
@@ -78,10 +79,12 @@ export function HomeContenidoForm({
             className="h-28 w-full rounded-md object-cover"
           />
         )}
-        <input
-          type="file"
-          accept="image/*"
-          onChange={(e) => setHeroImageFile(e.target.files?.[0] ?? null)}
+        <ImageUploadButton
+          id="hero-imagen"
+          multiple={false}
+          label="Elegir imagen"
+          files={heroImageFile ? [heroImageFile] : []}
+          onChange={(files) => setHeroImageFile(files[0] ?? null)}
         />
         <div>
           <label htmlFor="heroTitulo" className="text-sm text-brand-ciruela">
@@ -135,10 +138,12 @@ export function HomeContenidoForm({
             className="h-28 w-full rounded-md object-cover"
           />
         )}
-        <input
-          type="file"
-          accept="image/*"
-          onChange={(e) => setBanner1ImageFile(e.target.files?.[0] ?? null)}
+        <ImageUploadButton
+          id="banner1-imagen"
+          multiple={false}
+          label="Elegir imagen"
+          files={banner1ImageFile ? [banner1ImageFile] : []}
+          onChange={(files) => setBanner1ImageFile(files[0] ?? null)}
         />
         <div>
           <label htmlFor="banner1Titulo" className="text-sm text-brand-ciruela">
@@ -170,10 +175,12 @@ export function HomeContenidoForm({
             className="h-28 w-full rounded-md object-cover"
           />
         )}
-        <input
-          type="file"
-          accept="image/*"
-          onChange={(e) => setBanner2ImageFile(e.target.files?.[0] ?? null)}
+        <ImageUploadButton
+          id="banner2-imagen"
+          multiple={false}
+          label="Elegir imagen"
+          files={banner2ImageFile ? [banner2ImageFile] : []}
+          onChange={(files) => setBanner2ImageFile(files[0] ?? null)}
         />
         <div>
           <label htmlFor="banner2Titulo" className="text-sm text-brand-ciruela">
