@@ -51,11 +51,17 @@ export default async function CategoriaPage({
   return (
     <main className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-12">
       <Breadcrumbs items={[{ label: "Inicio", href: "/" }, { label: categoria.name }]} />
-      <CategoryBanner
-        name={categoria.name}
-        description={categoria.description}
-        imageUrl={categoria.image_url}
-      />
+      <CategoryBanner imageUrl={categoria.image_url} />
+      <div className="flex flex-col gap-2">
+        <h1 className="font-heading text-3xl font-semibold text-brand-ciruela sm:text-4xl">
+          {categoria.name}
+        </h1>
+        {categoria.description && (
+          <p className="max-w-xl text-sm text-brand-ciruela/80 sm:text-base">
+            {categoria.description}
+          </p>
+        )}
+      </div>
 
       <div className="flex flex-col gap-8 md:flex-row">
         <CatalogFilterSidebar
