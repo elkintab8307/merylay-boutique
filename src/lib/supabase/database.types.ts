@@ -640,7 +640,6 @@ export type Database = {
       products: {
         Row: {
           category_id: string | null
-          compare_at_price: number | null
           created_at: string
           description: string | null
           id: string
@@ -648,6 +647,7 @@ export type Database = {
           is_featured: boolean
           name: string
           price: number
+          promo_price: number | null
           sku: string
           slug: string
           stock: number
@@ -655,7 +655,6 @@ export type Database = {
         }
         Insert: {
           category_id?: string | null
-          compare_at_price?: number | null
           created_at?: string
           description?: string | null
           id?: string
@@ -663,6 +662,7 @@ export type Database = {
           is_featured?: boolean
           name: string
           price: number
+          promo_price?: number | null
           sku: string
           slug: string
           stock?: number
@@ -670,7 +670,6 @@ export type Database = {
         }
         Update: {
           category_id?: string | null
-          compare_at_price?: number | null
           created_at?: string
           description?: string | null
           id?: string
@@ -678,6 +677,7 @@ export type Database = {
           is_featured?: boolean
           name?: string
           price?: number
+          promo_price?: number | null
           sku?: string
           slug?: string
           stock?: number

@@ -224,17 +224,20 @@ export function ProductoForm({
             )}
           </div>
           <div>
-            <label htmlFor="compareAtPrice" className="text-sm text-brand-ciruela">
-              Precio de comparación
+            <label htmlFor="promoPrice" className="text-sm text-brand-ciruela">
+              Precio Promoción
             </label>
             <Input
-              id="compareAtPrice"
+              id="promoPrice"
               type="number"
               step="0.01"
-              {...register("compareAtPrice", {
+              {...register("promoPrice", {
                 setValueAs: (v) => (v === "" ? null : Number(v)),
               })}
             />
+            <p className="text-xs text-brand-ciruela/60">
+              Déjalo en 0 para quitar la promoción.
+            </p>
           </div>
           <div>
             <label htmlFor="costPrice" className="text-sm text-brand-ciruela">

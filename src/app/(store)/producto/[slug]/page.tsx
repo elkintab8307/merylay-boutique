@@ -64,7 +64,7 @@ export default async function ProductoPage({
   const { data: relacionadosBase } = producto.category_id
     ? await supabase
         .from("products")
-        .select("id, name, slug, price, compare_at_price")
+        .select("id, name, slug, price, promo_price")
         .eq("category_id", producto.category_id)
         .eq("is_active", true)
         .neq("id", producto.id)
@@ -76,7 +76,7 @@ export default async function ProductoPage({
           name: string;
           slug: string;
           price: number;
-          compare_at_price: number | null;
+          promo_price: number | null;
         }[],
       };
 
@@ -129,7 +129,7 @@ export default async function ProductoPage({
     slug: p.slug,
     name: p.name,
     price: p.price,
-    compareAtPrice: p.compare_at_price,
+    promoPrice: p.promo_price,
     imageUrl: imagenPorRelacionado.get(p.id) ?? null,
     tallas: tallasPorRelacionado.get(p.id) ?? [],
   }));
@@ -161,7 +161,7 @@ export default async function ProductoPage({
         productName={producto.name}
         description={producto.description}
         price={producto.price}
-        compareAtPrice={producto.compare_at_price}
+        promoPrice={producto.promo_price}
         images={imagenesGaleria}
         variants={variantesMapeadas}
         baseStock={producto.stock}

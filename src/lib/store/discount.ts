@@ -1,9 +1,16 @@
+export function precioEfectivo(price: number, promoPrice: number | null): number {
+  if (promoPrice === null || promoPrice <= 0 || promoPrice >= price) {
+    return price;
+  }
+  return promoPrice;
+}
+
 export function calcularDescuento(
-  precio: number,
-  compareAtPrice: number | null,
+  price: number,
+  promoPrice: number | null,
 ): number | null {
-  if (compareAtPrice === null || compareAtPrice <= precio) {
+  if (promoPrice === null || promoPrice <= 0 || promoPrice >= price) {
     return null;
   }
-  return Math.round((1 - precio / compareAtPrice) * 100);
+  return Math.round((1 - promoPrice / price) * 100);
 }
