@@ -23,6 +23,7 @@ export function EditarVentaForm({
       itemsIniciales={itemsIniciales}
       discountInicial={discountInicial}
       paymentMethodInicial={paymentMethodInicial}
+      permitirCredito={false}
       textoBoton="Guardar cambios"
       textoBotonEnviando="Guardando..."
       onGuardar={(items, paymentMethod, discount) =>

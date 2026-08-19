@@ -29,6 +29,8 @@ export default async function EditarVentaPage({
     notFound();
   }
 
+  const ventaEsCredito = venta.payment_method === "credito";
+
   const { data: items } = await supabase
     .from("pos_sale_items")
     .select("qty, unit_price, product_id, variant_id")
@@ -98,12 +100,27 @@ export default async function EditarVentaPage({
         Volver al recibo
       </Link>
       <h1 className="mb-8 font-heading text-3xl text-brand-ciruela">Editar venta</h1>
-      <EditarVentaForm
-        saleId={venta.id}
-        itemsIniciales={itemsIniciales}
-        discountInicial={venta.discount}
-        paymentMethodInicial={venta.payment_method}
-      />
+      {ventaEsCredito ? (
+        <div className="rounded-lg border border-brand-oro bg-brand-oro/10 p-4 text-sm text-brand-ciruela">
+          <p className="font-semibold">Esta venta no se puede editar</p>
+          <p>
+            Es un crédito — para no dañar los abonos ya registrados, no se
+            pueden cambiar sus productos ni su total. Gestiona los abonos
+            desde{" "}
+            <Link href={`/pos/creditos/${venta.id}`} className="underline">
+              Créditos
+            </Link>
+            .
+          </p>
+        </div>
+      ) : (
+        <EditarVentaForm
+          saleId={venta.id}
+          itemsIniciales={itemsIniciales}
+          discountInicial={venta.discount}
+          paymentMethodInicial={venta.payment_method}
+        />
+      )}
     </div>
   );
 }
