@@ -609,28 +609,34 @@ export type Database = {
       }
       profiles: {
         Row: {
+          address: string | null
           created_at: string
           full_name: string | null
           id: string
           phone: string | null
           role: Database["public"]["Enums"]["user_role"]
           username: string
+          whatsapp: string | null
         }
         Insert: {
+          address?: string | null
           created_at?: string
           full_name?: string | null
           id: string
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           username: string
+          whatsapp?: string | null
         }
         Update: {
+          address?: string | null
           created_at?: string
           full_name?: string | null
           id?: string
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           username?: string
+          whatsapp?: string | null
         }
         Relationships: []
       }
@@ -735,6 +741,7 @@ export type Database = {
           is_active: boolean
           rating: number
           sort_order: number
+          user_id: string | null
         }
         Insert: {
           body: string
@@ -745,6 +752,7 @@ export type Database = {
           is_active?: boolean
           rating: number
           sort_order?: number
+          user_id?: string | null
         }
         Update: {
           body?: string
@@ -755,8 +763,17 @@ export type Database = {
           is_active?: boolean
           rating?: number
           sort_order?: number
+          user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "reviews_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sku_counters: {
         Row: {
