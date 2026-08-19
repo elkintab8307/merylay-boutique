@@ -57,8 +57,26 @@ export function RegistroForm() {
         )}
       </div>
       <div>
+        <label htmlFor="whatsapp" className="text-sm text-brand-ciruela">
+          WhatsApp
+        </label>
+        <Input id="whatsapp" type="tel" {...register("whatsapp")} />
+        {errors.whatsapp && (
+          <p className="text-sm text-red-600">{errors.whatsapp.message}</p>
+        )}
+      </div>
+      <div>
+        <label htmlFor="address" className="text-sm text-brand-ciruela">
+          Dirección
+        </label>
+        <Input id="address" {...register("address")} />
+        {errors.address && (
+          <p className="text-sm text-red-600">{errors.address.message}</p>
+        )}
+      </div>
+      <div>
         <label htmlFor="email" className="text-sm text-brand-ciruela">
-          Correo electrónico
+          Correo electrónico (opcional)
         </label>
         <Input id="email" type="email" {...register("email")} />
         {errors.email && (
