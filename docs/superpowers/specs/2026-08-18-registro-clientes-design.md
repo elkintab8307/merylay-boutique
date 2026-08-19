@@ -68,9 +68,16 @@ alter table public.profiles
 alter table public.reviews
   add column user_id uuid references public.profiles(id) on delete cascade;
 
-create unique index reviews_user_id_unique
-  on public.reviews (user_id)
-  where user_id is not null;
+-- Restriccion unica NORMAL (no parcial): en Postgres los valores NULL
+-- nunca se consideran duplicados entre si bajo una unique constraint, asi
+-- que esto ya permite multiples resenas del admin con user_id = null,
+-- mientras limita a una fila por cliente real. Se usa una constraint (no
+-- un indice parcial) para que supabase-js pueda hacer
+-- upsert(..., { onConflict: "user_id" }) — un indice parcial exige que la
+-- clausula ON CONFLICT repita el mismo predicado WHERE, algo que la
+-- libreria no permite especificar.
+alter table public.reviews
+  add constraint reviews_user_id_unique unique (user_id);
 
 -- RLS: el cliente puede insertar/editar/leer SU PROPIA resena (ademas de
 -- los permisos de admin ya existentes, que no se tocan). auth.uid() va
@@ -94,10 +101,10 @@ create policy "reviews_select_own"
 ```
 
 Notas:
-- El índice único parcial (`where user_id is not null`) permite múltiples
-  filas con `user_id = null` (las reseñas del admin, sin dueño) pero como
-  mucho una fila por cliente real — la restricción de "una reseña por
-  cliente" queda garantizada en la base de datos, no solo en la app.
+- La restricción única normal permite múltiples filas con `user_id = null`
+  (las reseñas del admin, sin dueño) pero como mucho una fila por cliente
+  real — la restricción de "una reseña por cliente" queda garantizada en
+  la base de datos, no solo en la app.
 - `reviews_select_own` es necesaria porque una reseña recién creada por el
   cliente tiene `is_active = false`; sin esta política el cliente no podría
   ver su propia reseña pendiente de aprobación en "Mi cuenta".
