@@ -7,6 +7,7 @@ import {
   Receipt,
   ShoppingCart,
   TrendingUp,
+  Wallet,
 } from "lucide-react";
 
 const INFORMES = [
@@ -33,6 +34,12 @@ const INFORMES = [
     titulo: "Métodos de pago",
     descripcion: "Ingreso por método, ambos canales.",
     Icono: CreditCard,
+  },
+  {
+    href: "/admin/informes/creditos",
+    titulo: "Créditos",
+    descripcion: "Cartera pendiente, vencida y cobrada en abonos.",
+    Icono: Wallet,
   },
   {
     href: "/admin/informes/gastos",
