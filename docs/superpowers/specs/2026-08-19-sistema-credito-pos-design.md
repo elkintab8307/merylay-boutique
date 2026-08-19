@@ -13,7 +13,8 @@ Este sistema agrega:
 
 1. Una opción de venta a crédito en el POS: se especifica cliente, teléfono,
    número de cuotas y (opcionalmente) un abono inicial.
-2. Una sección administrativa (`/admin/creditos`) con el listado de créditos
+2. Una sección administrativa (`/pos/creditos`, accesible a staff — mismo
+   patrón que "Ventas POS") con el listado de créditos
    otorgados, su estado (al día / vencido / pagado) y un detalle por crédito
    donde se registran los abonos hasta saldar la deuda.
 3. Integración con Informes: los créditos no cuentan como ingreso al momento
@@ -258,15 +259,31 @@ grant execute on function public.registrar_abono_credito(uuid, numeric, payment_
 
 ## 5. Panel administrativo
 
-### 5.1 Navegación
+### 5.1 Navegación y ubicación
 
-En `src/app/admin/admin-nav.tsx`, dentro de la sección "Ventas", se agrega:
+`/admin/**` requiere rol `admin`/`superadmin` por middleware (regla de
+CLAUDE.md §4) — pero ya se acordó que **staff también puede registrar
+abonos** (mismo nivel que puede operar el POS). Por eso esta sección vive
+bajo `/pos/**`, no bajo `/admin/**`, replicando exactamente el patrón ya
+usado por "Ventas POS" (`src/app/pos/(admin)/ventas/page.tsx`, accesible a
+staff sin ningún `requireAdmin()`, protegido únicamente por RLS):
+
+- `/pos/creditos` (listado)
+- `/pos/creditos/[id]` (detalle + registrar abono)
+
+Ambas páginas van dentro del route group `src/app/pos/(admin)/`, junto a
+`ventas/` y `venta/[id]/`, y heredan el mismo `layout.tsx` (sidebar POS).
+El nombre `(admin)` es solo organizativo (route group, no aparece en la
+URL) — no es un gate de rol.
+
+En `src/app/admin/admin-nav.tsx`, dentro de la sección "Ventas", se agrega
+un enlace cruzado (igual que ya existe para "Ventas POS"):
 
 ```ts
-{ href: "/admin/creditos", label: "Créditos" },
+{ href: "/pos/creditos", label: "Créditos" },
 ```
 
-### 5.2 Listado (`/admin/creditos`)
+### 5.2 Listado (`/pos/creditos`)
 
 Server Component. Consulta `pos_sales` donde `payment_method = 'credito'`,
 con el saldo calculado (subconsulta contra `credit_payments`) y el estado
@@ -281,9 +298,9 @@ Columnas: cliente (nombre + teléfono), fecha de venta, total, saldo
 pendiente, estado (badge de color: verde=pagado, ámbar=al día,
 rojo=vencido). Filtro por estado vía query param (`?estado=vencido`, etc.,
 mismo patrón que otros listados admin del proyecto). Cada fila enlaza a
-`/admin/creditos/[id]`.
+`/pos/creditos/[id]`.
 
-### 5.3 Detalle (`/admin/creditos/[id]`)
+### 5.3 Detalle (`/pos/creditos/[id]`)
 
 Server Component que muestra:
 - Datos del cliente y de la venta (reutiliza la vista de items ya usada en
@@ -304,7 +321,7 @@ se agrega la misma guarda ya usada para Wompi pendiente (migración 029):
 si `payment_method = 'credito'`, la página no renderiza
 `<EditarVentaForm>` y en su lugar muestra un aviso ("Esta venta es un
 crédito y no se puede editar; gestiona los abonos desde Créditos.") con
-enlace a `/admin/creditos/[id]`. El Server Action de guardado también
+enlace a `/pos/creditos/[id]`. El Server Action de guardado también
 rechaza la operación server-side (defensa en profundidad, mismo criterio
 que el bloqueo Wompi).
 
