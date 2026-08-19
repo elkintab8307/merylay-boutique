@@ -248,7 +248,7 @@ begin
 
     update public.credit_installments
     set paid_amount = paid_amount + v_aplicado,
-        status = case when paid_amount + v_aplicado >= amount then 'pagada' else 'parcial' end
+        status = (case when paid_amount + v_aplicado >= amount then 'pagada' else 'parcial' end)::public.credit_installment_status
     where id = v_cuota.id;
 
     v_restante := v_restante - v_aplicado;
@@ -395,15 +395,26 @@ begin
   end loop;
 
   if p_payment_method = 'credito' then
+    if v_total <= 0 then
+      raise exception 'El total de la venta a credito debe ser mayor a cero.';
+    end if;
+
     v_saldo_financiar := v_total - p_credit_abono_inicial;
 
     if v_saldo_financiar <= 0 then
       -- El abono inicial cubre el 100% del total: una sola cuota
-      -- simbolica (check (amount > 0) impide generar cuotas de $0), que el
-      -- reparto FIFO de abajo marca 'pagada' de inmediato.
+      -- simbolica IGUAL AL TOTAL BRUTO (no neta del abono; check
+      -- (amount > 0) impide generar cuotas de $0), que el reparto FIFO
+      -- de abajo marca 'pagada' de inmediato.
       insert into public.credit_installments (sale_id, numero, due_date, amount)
       values (v_sale_id, 1, current_date + 30, v_total);
     else
+      -- Las cuotas ya nacen NETAS del abono inicial (representan solo el
+      -- saldo a financiar, spec S4.2) -- por eso el abono inicial NO se
+      -- reparte otra vez contra ellas mas abajo: aplicarlo aqui ademas de
+      -- haberlo restado ya del saldo a financiar contaria esa plata dos
+      -- veces (bug real encontrado y corregido durante la Task 2 de
+      -- ejecucion; ver ledger).
       v_cuota_monto := trunc(v_saldo_financiar / p_credit_num_cuotas, 2);
       v_cuota_residuo := v_saldo_financiar - (v_cuota_monto * p_credit_num_cuotas);
 
@@ -422,7 +433,13 @@ begin
       insert into public.credit_payments (sale_id, amount, payment_method, staff_id)
       values (v_sale_id, p_credit_abono_inicial, p_credit_abono_metodo, v_staff_id);
 
-      perform public.aplicar_abono_fifo(v_sale_id, p_credit_abono_inicial);
+      -- Solo se reparte FIFO contra las cuotas cuando estas SI incluyen
+      -- el abono inicial (rama "cubre el 100%" de arriba). En la rama
+      -- financiada, las cuotas ya nacieron netas del abono -- aplicarlo
+      -- aqui tambien duplicaria el descuento (ver comentario arriba).
+      if v_saldo_financiar <= 0 then
+        perform public.aplicar_abono_fifo(v_sale_id, p_credit_abono_inicial);
+      end if;
     end if;
   end if;
 
