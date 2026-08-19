@@ -70,6 +70,7 @@ export async function guardarResena(
       rating: parsed.data.rating,
       body: parsed.data.body,
       is_active: false,
+      sort_order: 100,
     },
     { onConflict: "user_id" },
   );

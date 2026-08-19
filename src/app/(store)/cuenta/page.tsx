@@ -19,7 +19,7 @@ export default async function CuentaPage() {
     await Promise.all([
       supabase
         .from("profiles")
-        .select("full_name, whatsapp, address")
+        .select("full_name, whatsapp, address, username")
         .eq("id", user.id)
         .single(),
       supabase.from("orders").select("status, total").eq("user_id", user.id),
@@ -63,6 +63,11 @@ export default async function CuentaPage() {
 
       <section className="flex flex-col gap-4">
         <h2 className="font-heading text-xl text-brand-ciruela">Mis datos</h2>
+        {profile?.username && (
+          <p className="text-sm text-brand-ciruela/70">
+            Tu usuario para iniciar sesión: <strong>{profile.username}</strong>
+          </p>
+        )}
         <PerfilForm
           defaultValues={{
             fullName: profile?.full_name ?? "",
@@ -78,7 +83,7 @@ export default async function CuentaPage() {
         </h2>
         <ResenaClienteForm
           defaultValues={{
-            rating: resena?.rating ?? 5,
+            rating: resena?.rating ?? 0,
             body: resena?.body ?? "",
           }}
           yaTieneResena={Boolean(resena)}

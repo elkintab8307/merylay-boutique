@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isEmail } from "../identifier";
+import { isEmail, normalizeUsername } from "../identifier";
 
 describe("isEmail", () => {
   it("reconoce un email valido", () => {
@@ -16,5 +16,20 @@ describe("isEmail", () => {
 
   it("rechaza un email sin dominio", () => {
     expect(isEmail("cliente@")).toBe(false);
+  });
+});
+
+describe("normalizeUsername", () => {
+  it("quita espacios y simbolos, deja solo digitos de un whatsapp", () => {
+    expect(normalizeUsername("300 123 4567")).toBe("3001234567");
+    expect(normalizeUsername("+57 300 123 4567")).toBe("573001234567");
+  });
+
+  it("produce el mismo resultado sin importar el formato de espaciado", () => {
+    expect(normalizeUsername("300-123-4567")).toBe(normalizeUsername("3001234567"));
+  });
+
+  it("pasa a minusculas", () => {
+    expect(normalizeUsername("Usuario123")).toBe("suario123");
   });
 });

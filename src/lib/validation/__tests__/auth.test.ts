@@ -36,8 +36,9 @@ describe("registroSchema", () => {
   });
 
   it("acepta datos validos sin email (email opcional)", () => {
-    const { email: _email, ...sinEmail } = base;
-    expect(registroSchema.safeParse(sinEmail).success).toBe(true);
+    expect(
+      registroSchema.safeParse({ ...base, email: undefined }).success,
+    ).toBe(true);
   });
 
   it("acepta email vacio como equivalente a no dar email", () => {

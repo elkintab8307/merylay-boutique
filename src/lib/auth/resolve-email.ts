@@ -1,6 +1,6 @@
 "use server";
 
-import { isEmail } from "./identifier";
+import { isEmail, normalizeUsername } from "./identifier";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function resolveEmail(identifier: string): Promise<string | null> {
@@ -13,7 +13,7 @@ export async function resolveEmail(identifier: string): Promise<string | null> {
   const { data: profile } = await admin
     .from("profiles")
     .select("id")
-    .eq("username", trimmed.toLowerCase())
+    .eq("username", normalizeUsername(trimmed))
     .maybeSingle();
 
   if (!profile) {
