@@ -1,0 +1,134 @@
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
+import { formatPrice } from "@/lib/format";
+import { calcularEstadoCredito, type EstadoCredito } from "@/lib/pos/estado-credito";
+import { rangoHoy } from "@/lib/informes/rango-fecha";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableHeader, TableRow, TableCell, TableHeaderCell } from "@/components/ui/table";
+
+const ESTADO_LABEL: Record<EstadoCredito, string> = {
+  pagado: "Pagado",
+  al_dia: "Al día",
+  vencido: "Vencido",
+};
+
+const ESTADO_VARIANT: Record<EstadoCredito, "success" | "warning" | "danger"> = {
+  pagado: "success",
+  al_dia: "warning",
+  vencido: "danger",
+};
+
+export default async function CreditosPage({
+  searchParams,
+}: PageProps<"/pos/creditos">) {
+  const { estado } = await searchParams;
+  const supabase = await createClient();
+  const hoy = rangoHoy().desde;
+
+  const { data: ventas } = await supabase
+    .from("pos_sales")
+    .select("id, created_at, total, credit_customer_name, credit_customer_phone")
+    .eq("payment_method", "credito")
+    .order("created_at", { ascending: false });
+
+  const saleIds = (ventas ?? []).map((v) => v.id);
+
+  const [{ data: pagos }, { data: cuotas }] = await Promise.all([
+    saleIds.length > 0
+      ? supabase.from("credit_payments").select("sale_id, amount").in("sale_id", saleIds)
+      : Promise.resolve({ data: [] as { sale_id: string; amount: number }[] }),
+    saleIds.length > 0
+      ? supabase
+          .from("credit_installments")
+          .select("sale_id, status, due_date")
+          .in("sale_id", saleIds)
+      : Promise.resolve(
+          {
+            data: [] as {
+              sale_id: string;
+              status: "pendiente" | "parcial" | "pagada";
+              due_date: string;
+            }[],
+          },
+        ),
+  ]);
+
+  const pagadoPorVenta = new Map<string, number>();
+  for (const pago of pagos ?? []) {
+    pagadoPorVenta.set(pago.sale_id, (pagadoPorVenta.get(pago.sale_id) ?? 0) + pago.amount);
+  }
+
+  const cuotasPorVenta = new Map<string, { status: "pendiente" | "parcial" | "pagada"; dueDate: string }[]>();
+  for (const cuota of cuotas ?? []) {
+    const lista = cuotasPorVenta.get(cuota.sale_id) ?? [];
+    lista.push({ status: cuota.status, dueDate: cuota.due_date });
+    cuotasPorVenta.set(cuota.sale_id, lista);
+  }
+
+  const filas = (ventas ?? []).map((venta) => {
+    const saldo = venta.total - (pagadoPorVenta.get(venta.id) ?? 0);
+    const estadoCredito = calcularEstadoCredito(saldo, cuotasPorVenta.get(venta.id) ?? [], hoy);
+    return { ...venta, saldo, estadoCredito };
+  });
+
+  const filtroEstado = typeof estado === "string" ? estado : "";
+  const filasFiltradas = filtroEstado
+    ? filas.filter((f) => f.estadoCredito === filtroEstado)
+    : filas;
+
+  return (
+    <div className="mx-auto max-w-5xl px-6 py-12">
+      <h1 className="mb-8 font-heading text-3xl text-brand-ciruela">Créditos</h1>
+      <div className="mb-4 flex gap-2">
+        {(["", "al_dia", "vencido", "pagado"] as const).map((valor) => (
+          <Link
+            key={valor || "todos"}
+            href={valor ? `/pos/creditos?estado=${valor}` : "/pos/creditos"}
+            className={`rounded-md border px-3 py-1.5 text-sm ${
+              filtroEstado === valor
+                ? "border-brand-rosa bg-brand-rosa text-brand-crema"
+                : "border-brand-rosa-claro text-brand-ciruela"
+            }`}
+          >
+            {valor ? ESTADO_LABEL[valor as EstadoCredito] : "Todos"}
+          </Link>
+        ))}
+      </div>
+      {filasFiltradas.length === 0 ? (
+        <p className="text-brand-ciruela/70">No hay créditos para mostrar.</p>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHeaderCell>Cliente</TableHeaderCell>
+              <TableHeaderCell>Fecha</TableHeaderCell>
+              <TableHeaderCell>Total</TableHeaderCell>
+              <TableHeaderCell>Saldo</TableHeaderCell>
+              <TableHeaderCell>Estado</TableHeaderCell>
+            </TableRow>
+          </TableHeader>
+          <tbody>
+            {filasFiltradas.map((venta) => (
+              <TableRow key={venta.id}>
+                <TableCell>
+                  <Link href={`/pos/creditos/${venta.id}`} className="text-brand-rosa hover:underline">
+                    {venta.credit_customer_name}
+                  </Link>
+                  <p className="text-xs text-brand-ciruela/60">{venta.credit_customer_phone}</p>
+                </TableCell>
+                <TableCell>{new Date(venta.created_at).toLocaleDateString("es-CO")}</TableCell>
+                <TableCell>{formatPrice(venta.total)}</TableCell>
+                <TableCell>{formatPrice(venta.saldo)}</TableCell>
+                <TableCell>
+                  <Badge variant={ESTADO_VARIANT[venta.estadoCredito]}>
+                    {ESTADO_LABEL[venta.estadoCredito]}
+                  </Badge>
+                </TableCell>
+              </TableRow>
+            ))}
+          </tbody>
+        </Table>
+      )}
+    </div>
+  );
+}
