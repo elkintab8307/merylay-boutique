@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatPrice } from "@/lib/format";
+import { calcularDescuento, precioEfectivo } from "@/lib/store/discount";
 import { obtenerUmbralStockBajo } from "@/lib/admin/low-stock";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +13,7 @@ export default async function ProductosPage() {
   const [{ data: productos }, { data: categorias }, umbralStockBajo] = await Promise.all([
     supabase
       .from("products")
-      .select("id, name, sku, price, stock, is_active, category_id")
+      .select("id, name, sku, price, promo_price, stock, is_active, category_id")
       .order("created_at", { ascending: false }),
     supabase.from("categories").select("id, name"),
     obtenerUmbralStockBajo(),
@@ -52,6 +53,8 @@ export default async function ProductosPage() {
               : producto.stock <= umbralStockBajo
                 ? { variant: "warning" as const, label: `${producto.stock} unidades` }
                 : { variant: "neutral" as const, label: `${producto.stock} unidades` };
+          const descuento = calcularDescuento(producto.price, producto.promo_price);
+          const precioMostrado = precioEfectivo(producto.price, producto.promo_price);
 
           return (
             <div
@@ -81,14 +84,24 @@ export default async function ProductosPage() {
                     ? ` · ${categoriaPorId.get(producto.category_id) ?? "—"}`
                     : ""}
                 </p>
-                <p className="font-heading text-lg text-brand-rosa">
-                  {formatPrice(producto.price)}
-                </p>
+                <div className="flex items-baseline gap-2">
+                  <p className="font-heading text-lg text-brand-rosa">
+                    {formatPrice(precioMostrado)}
+                  </p>
+                  {descuento !== null && (
+                    <p className="text-xs text-brand-ciruela/50 line-through">
+                      {formatPrice(producto.price)}
+                    </p>
+                  )}
+                </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant={stockBadge.variant}>{stockBadge.label}</Badge>
                   <Badge variant={producto.is_active ? "success" : "neutral"}>
                     {producto.is_active ? "Activo" : "Inactivo"}
                   </Badge>
+                  {descuento !== null && (
+                    <Badge variant="warning">Promoción -{descuento}%</Badge>
+                  )}
                 </div>
                 <div className="mt-auto flex items-center gap-3 pt-2 text-sm">
                   <Link
