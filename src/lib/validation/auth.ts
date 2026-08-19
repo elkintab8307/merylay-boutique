@@ -10,7 +10,13 @@ export type LoginInput = z.infer<typeof loginSchema>;
 export const registroSchema = z
   .object({
     fullName: z.string().trim().min(2, "Ingresa tu nombre completo"),
-    email: z.email("Ingresa un correo electrónico válido").trim(),
+    whatsapp: z.string().trim().min(7, "Ingresa un número de WhatsApp válido"),
+    address: z.string().trim().min(5, "Ingresa una dirección válida"),
+    email: z
+      .email("Ingresa un correo electrónico válido")
+      .trim()
+      .optional()
+      .or(z.literal("")),
     password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
     confirmPassword: z.string(),
   })
