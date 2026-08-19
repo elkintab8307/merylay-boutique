@@ -113,6 +113,16 @@ export function SiteMenuSheet({
               <SheetClose
                 render={
                   <Link
+                    href="/cuenta"
+                    className="rounded-md px-3 py-2 text-brand-ciruela hover:bg-brand-rosa-claro/30"
+                  />
+                }
+              >
+                Mi cuenta
+              </SheetClose>
+              <SheetClose
+                render={
+                  <Link
                     href="/cuenta/pedidos"
                     className="rounded-md px-3 py-2 text-brand-ciruela hover:bg-brand-rosa-claro/30"
                   />
