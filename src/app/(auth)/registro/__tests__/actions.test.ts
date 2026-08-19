@@ -161,4 +161,51 @@ describe("registro", () => {
       expect.any(Error),
     );
   });
+
+  it("con email, registro pendiente de confirmacion (sin sesion): tambien envia el correo de bienvenida", async () => {
+    // Con confirmacion de email activada, `signUp` no devuelve sesion. La
+    // cuenta igualmente se creo, asi que la bienvenida debe salir.
+    const signUp = vi.fn().mockResolvedValue({
+      data: { user: { id: "user-1" }, session: null },
+      error: null,
+    });
+    vi.mocked(createClient).mockResolvedValue({
+      auth: { signUp },
+    } as never);
+
+    const { registro } = await import("../actions");
+    const resultado = await registro({ ...datosBase, email: "maria@example.com" });
+
+    expect(resultado.message).toEqual(expect.any(String));
+    expect(resultado.success).toBeUndefined();
+    expect(enviarCorreo).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "maria@example.com" }),
+    );
+  });
+
+  it("con email, otro error de signUp (no relacionado con 'already registered'): NO envia correo", async () => {
+    const signUp = vi.fn().mockResolvedValue({
+      data: { user: null, session: null },
+      error: { message: "Database connection failed" },
+    });
+    vi.mocked(createClient).mockResolvedValue({
+      auth: { signUp },
+    } as never);
+
+    const { registro } = await import("../actions");
+    const resultado = await registro({ ...datosBase, email: "maria@example.com" });
+
+    expect(resultado.error).toBe("No pudimos crear tu cuenta. Intenta de nuevo.");
+    expect(enviarCorreo).not.toHaveBeenCalled();
+  });
+
+  it("datos invalidos: no llama a signUp/createUser ni envia correo", async () => {
+    const { registro } = await import("../actions");
+    const resultado = await registro({ ...datosBase, confirmPassword: "otra123" });
+
+    expect(resultado.error).toEqual(expect.any(String));
+    expect(createClient).not.toHaveBeenCalled();
+    expect(createAdminClient).not.toHaveBeenCalled();
+    expect(enviarCorreo).not.toHaveBeenCalled();
+  });
 });
