@@ -76,6 +76,16 @@ export function SiteMenuSheet({
             <span>Todos los productos</span>
             <span className="text-brand-ciruela/50">{totalProductos}</span>
           </SheetClose>
+          <SheetClose
+            render={
+              <Link
+                href="/promociones"
+                className="flex items-center justify-between rounded-md px-3 py-2 text-brand-ciruela hover:bg-brand-rosa-claro/30"
+              />
+            }
+          >
+            <span>Promociones</span>
+          </SheetClose>
           {categorias.map((categoria) => (
             <SheetClose
               key={categoria.id}
