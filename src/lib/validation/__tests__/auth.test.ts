@@ -69,6 +69,12 @@ describe("registroSchema", () => {
     );
   });
 
+  it("rechaza whatsapp sin suficientes digitos (solo letras)", () => {
+    expect(
+      registroSchema.safeParse({ ...base, whatsapp: "abcdefg" }).success,
+    ).toBe(false);
+  });
+
   it("rechaza direccion muy corta", () => {
     expect(registroSchema.safeParse({ ...base, address: "Av" }).success).toBe(
       false,
