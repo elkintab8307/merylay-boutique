@@ -24,16 +24,28 @@ describe("loginSchema", () => {
 describe("registroSchema", () => {
   const base = {
     fullName: "Maria Perez",
+    whatsapp: "3001234567",
+    address: "Calle 10 # 20-30",
     email: "maria@example.com",
     password: "secreta1",
     confirmPassword: "secreta1",
   };
 
-  it("acepta datos validos", () => {
+  it("acepta datos validos con email", () => {
     expect(registroSchema.safeParse(base).success).toBe(true);
   });
 
-  it("rechaza email invalido", () => {
+  it("acepta datos validos sin email (email opcional)", () => {
+    expect(
+      registroSchema.safeParse({ ...base, email: undefined }).success,
+    ).toBe(true);
+  });
+
+  it("acepta email vacio como equivalente a no dar email", () => {
+    expect(registroSchema.safeParse({ ...base, email: "" }).success).toBe(true);
+  });
+
+  it("rechaza email invalido cuando se proporciona", () => {
     expect(
       registroSchema.safeParse({ ...base, email: "no-es-email" }).success,
     ).toBe(false);
@@ -48,6 +60,24 @@ describe("registroSchema", () => {
 
   it("rechaza nombre muy corto", () => {
     expect(registroSchema.safeParse({ ...base, fullName: "A" }).success).toBe(
+      false,
+    );
+  });
+
+  it("rechaza whatsapp muy corto", () => {
+    expect(registroSchema.safeParse({ ...base, whatsapp: "123" }).success).toBe(
+      false,
+    );
+  });
+
+  it("rechaza whatsapp sin suficientes digitos (solo letras)", () => {
+    expect(
+      registroSchema.safeParse({ ...base, whatsapp: "abcdefg" }).success,
+    ).toBe(false);
+  });
+
+  it("rechaza direccion muy corta", () => {
+    expect(registroSchema.safeParse({ ...base, address: "Av" }).success).toBe(
       false,
     );
   });

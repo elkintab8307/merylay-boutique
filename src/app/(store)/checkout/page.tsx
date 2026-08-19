@@ -13,6 +13,12 @@ export default async function CheckoutPage() {
     redirect("/login?redirectTo=/checkout");
   }
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("full_name, whatsapp, address")
+    .eq("id", user.id)
+    .single();
+
   const { data: cart } = await supabase
     .from("carts")
     .select("id")
@@ -62,7 +68,13 @@ export default async function CheckoutPage() {
           <span>{formatPrice(subtotal)}</span>
         </div>
       </div>
-      <CheckoutForm />
+      <CheckoutForm
+        defaultValues={{
+          fullName: profile?.full_name ?? undefined,
+          phone: profile?.whatsapp ?? undefined,
+          address: profile?.address ?? undefined,
+        }}
+      />
     </main>
   );
 }

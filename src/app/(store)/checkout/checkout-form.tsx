@@ -19,7 +19,11 @@ type DatosWompi = {
   signature: string;
 };
 
-export function CheckoutForm() {
+export function CheckoutForm({
+  defaultValues,
+}: {
+  defaultValues?: Partial<Pick<CheckoutInput, "fullName" | "phone" | "address">>;
+}) {
   const [serverError, setServerError] = useState<string | null>(null);
   const [datosWompi, setDatosWompi] = useState<DatosWompi | null>(null);
 
@@ -30,7 +34,7 @@ export function CheckoutForm() {
     formState: { errors, isSubmitting },
   } = useForm<CheckoutInput>({
     resolver: zodResolver(checkoutSchema),
-    defaultValues: { paymentMethod: "transferencia" },
+    defaultValues: { paymentMethod: "transferencia", ...defaultValues },
   });
 
   const metodoSeleccionado = watch("paymentMethod");

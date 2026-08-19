@@ -55,7 +55,7 @@ export function LoginForm() {
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
       <div>
         <label htmlFor="identifier" className="text-sm text-brand-ciruela">
-          Usuario o correo electrónico
+          Usuario, correo electrónico o WhatsApp
         </label>
         <Input id="identifier" {...register("identifier")} />
         {errors.identifier && (
