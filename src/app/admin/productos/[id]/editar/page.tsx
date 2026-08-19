@@ -60,7 +60,7 @@ export default async function EditarProductoPage({
           description: producto.description ?? "",
           categoryId: producto.category_id,
           price: producto.price,
-          compareAtPrice: producto.compare_at_price,
+          promoPrice: producto.promo_price,
           costPrice: costo?.cost_price ?? null,
           stock: producto.stock,
           isActive: producto.is_active,

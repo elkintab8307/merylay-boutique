@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Truck, ShieldCheck, RefreshCw } from "lucide-react";
 import { formatPrice } from "@/lib/format";
+import { calcularDescuento, precioEfectivo } from "@/lib/store/discount";
 import { ProductGallery } from "./product-gallery";
 import { ProductVariantSelector } from "./product-variant-selector";
 import { FavoriteButton } from "@/components/store/favorite-button";
@@ -15,7 +16,7 @@ export function ProductDetailInteractive({
   productName,
   description,
   price,
-  compareAtPrice,
+  promoPrice,
   images,
   variants,
   baseStock,
@@ -28,7 +29,7 @@ export function ProductDetailInteractive({
   productName: string;
   description: string | null;
   price: number;
-  compareAtPrice: number | null;
+  promoPrice: number | null;
   images: ImagenProducto[];
   variants: VariantOption[];
   baseStock: number;
@@ -42,6 +43,8 @@ export function ProductDetailInteractive({
   const variantSeleccionada =
     variants.length > 0 ? findMatchingVariant(variants, talla, color) : null;
   const imagenesGaleria = getImagesForVariant(images, variantSeleccionada?.id ?? null);
+  const descuento = calcularDescuento(price, promoPrice);
+  const precioMostrado = precioEfectivo(price, promoPrice);
 
   const handleSelectVariant = (variantId: string | null) => {
     if (!variantId) return;
@@ -70,17 +73,17 @@ export function ProductDetailInteractive({
             product={{
               slug: productSlug,
               name: productName,
-              price,
+              price: precioMostrado,
               imageUrl: imagenPrincipal,
             }}
           />
         </div>
         <div className="flex items-baseline gap-3">
-          <span className="font-heading text-2xl text-brand-rosa">{formatPrice(price)}</span>
-          {compareAtPrice !== null && compareAtPrice > price && (
-            <span className="text-brand-ciruela/50 line-through">
-              {formatPrice(compareAtPrice)}
-            </span>
+          <span className="font-heading text-2xl text-brand-rosa">
+            {formatPrice(precioMostrado)}
+          </span>
+          {descuento !== null && (
+            <span className="text-brand-ciruela/50 line-through">{formatPrice(price)}</span>
           )}
         </div>
         {description && <p className="text-brand-ciruela/80">{description}</p>}
@@ -89,7 +92,7 @@ export function ProductDetailInteractive({
           productSlug={productSlug}
           productName={productName}
           imageUrl={imagenPrincipal}
-          basePrice={price}
+          basePrice={precioMostrado}
           variants={variants}
           baseStock={baseStock}
           currentUserId={currentUserId}

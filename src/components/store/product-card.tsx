@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { formatPrice } from "@/lib/format";
-import { calcularDescuento } from "@/lib/store/discount";
+import { calcularDescuento, precioEfectivo } from "@/lib/store/discount";
 import { FavoriteButton } from "@/components/store/favorite-button";
 
 export type ProductCardData = {
@@ -9,7 +9,7 @@ export type ProductCardData = {
   slug: string;
   name: string;
   price: number;
-  compareAtPrice: number | null;
+  promoPrice: number | null;
   imageUrl: string | null;
   tallas: string[];
 };
@@ -23,7 +23,8 @@ export function ProductCard({
   currentUserId: string | null;
   initialFavorite: boolean;
 }) {
-  const descuento = calcularDescuento(product.price, product.compareAtPrice);
+  const descuento = calcularDescuento(product.price, product.promoPrice);
+  const precioMostrado = precioEfectivo(product.price, product.promoPrice);
 
   return (
     <Link
@@ -56,7 +57,7 @@ export function ProductCard({
             product={{
               slug: product.slug,
               name: product.name,
-              price: product.price,
+              price: precioMostrado,
               imageUrl: product.imageUrl,
             }}
           />
@@ -67,10 +68,10 @@ export function ProductCard({
         <span className="text-xs text-brand-ciruela/60">{product.tallas.join(" · ")}</span>
       )}
       <div className="flex items-baseline gap-2">
-        <span className="font-heading text-brand-rosa">{formatPrice(product.price)}</span>
-        {product.compareAtPrice !== null && product.compareAtPrice > product.price && (
+        <span className="font-heading text-brand-rosa">{formatPrice(precioMostrado)}</span>
+        {descuento !== null && (
           <span className="text-xs text-brand-ciruela/50 line-through">
-            {formatPrice(product.compareAtPrice)}
+            {formatPrice(product.price)}
           </span>
         )}
       </div>

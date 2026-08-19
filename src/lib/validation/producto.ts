@@ -23,7 +23,7 @@ export const productoSchema = z
     description: z.string().trim().optional(),
     categoryId: z.string().uuid().nullable(),
     price: z.number().min(0, "El precio no puede ser negativo"),
-    compareAtPrice: z.number().min(0).nullable(),
+    promoPrice: z.number().min(0).nullable(),
     costPrice: z.number().min(0, "El costo no puede ser negativo").nullable(),
     stock: z.number().int().min(0),
     isActive: z.boolean(),

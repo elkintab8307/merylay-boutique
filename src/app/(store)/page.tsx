@@ -19,7 +19,7 @@ export default async function HomePage() {
   ] = await Promise.all([
     supabase
       .from("products")
-      .select("id, name, slug, price, compare_at_price")
+      .select("id, name, slug, price, promo_price")
       .eq("is_active", true)
       .eq("is_featured", true)
       .order("created_at", { ascending: false })
@@ -46,7 +46,7 @@ export default async function HomePage() {
   if (productosBase.length === 0) {
     const { data: recientes } = await supabase
       .from("products")
-      .select("id, name, slug, price, compare_at_price")
+      .select("id, name, slug, price, promo_price")
       .eq("is_active", true)
       .order("created_at", { ascending: false })
       .limit(8);
@@ -98,7 +98,7 @@ export default async function HomePage() {
     slug: p.slug,
     name: p.name,
     price: p.price,
-    compareAtPrice: p.compare_at_price,
+    promoPrice: p.promo_price,
     imageUrl: imagenPorProducto.get(p.id) ?? null,
     tallas: tallasPorProducto.get(p.id) ?? [],
   }));

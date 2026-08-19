@@ -40,7 +40,7 @@ export async function fetchCatalogProducts(
 
   let query = supabase
     .from("products")
-    .select("id, name, slug, price, compare_at_price")
+    .select("id, name, slug, price, promo_price")
     .eq("is_active", true);
 
   if (categoryId) {
@@ -64,7 +64,7 @@ export async function fetchCatalogProducts(
 
   const productosEnPromocion = soloPromociones
     ? (productosBase ?? []).filter(
-        (p) => calcularDescuento(p.price, p.compare_at_price) !== null,
+        (p) => calcularDescuento(p.price, p.promo_price) !== null,
       )
     : (productosBase ?? []);
 
@@ -141,7 +141,7 @@ export async function fetchCatalogProducts(
     slug: p.slug,
     name: p.name,
     price: p.price,
-    compareAtPrice: p.compare_at_price,
+    promoPrice: p.promo_price,
     imageUrl: imagenPorProducto.get(p.id) ?? null,
     tallas: tallasPorProducto.get(p.id) ?? [],
   }));

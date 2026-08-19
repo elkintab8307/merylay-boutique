@@ -43,7 +43,7 @@ describe("productoSchema", () => {
     description: "",
     categoryId: null,
     price: 89900,
-    compareAtPrice: null,
+    promoPrice: null,
     costPrice: null,
     stock: 10,
     isActive: true,
