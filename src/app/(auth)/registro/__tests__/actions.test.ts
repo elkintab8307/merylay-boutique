@@ -1,152 +1,162 @@
 // @vitest-environment node
 //
-// Entorno "node": esta Server Action solo ejercita logica de servidor
-// (validacion + cliente de Supabase + disparo del correo), no necesita el DOM
-// de jsdom.
+// Server Action real (usa cookies() de next/headers via createClient()),
+// igual patron que admin/pedidos/__tests__/actions.test.ts.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { enviarCorreo } from "@/lib/email/resend";
-import { BienvenidaEmail } from "@/lib/email/templates/bienvenida-email";
-import type { RegistroInput } from "@/lib/validation/auth";
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
 }));
 
-// Mockeado para que las pruebas nunca disparen una llamada de red real a
-// Resend (que ocurriria si `RESEND_API_KEY` esta presente en el entorno de
-// pruebas) y para poder verificar a quien/con que asunto se envia el correo.
-// Mismo patron que `api/webhooks/wompi/__tests__/route.test.ts`.
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: vi.fn(),
+}));
+
 vi.mock("@/lib/email/resend", () => ({
   enviarCorreo: vi.fn(),
 }));
 
-const DATOS_REGISTRO: RegistroInput = {
-  fullName: "Mery Lay",
-  email: "cliente@example.com",
-  password: "secreta123",
-  confirmPassword: "secreta123",
+const datosBase = {
+  fullName: "Maria Perez",
+  whatsapp: "3001234567",
+  address: "Calle 10 # 20-30",
+  password: "secreta1",
+  confirmPassword: "secreta1",
 };
-
-function crearSupabaseMock(
-  resultado: { data: { session: unknown }; error: { message: string } | null },
-) {
-  const signUp = vi.fn(() => Promise.resolve(resultado));
-  return { auth: { signUp } };
-}
 
 describe("registro", () => {
   beforeEach(() => {
     vi.mocked(createClient).mockReset();
+    vi.mocked(createAdminClient).mockReset();
     vi.mocked(enviarCorreo).mockReset();
     vi.mocked(enviarCorreo).mockResolvedValue({ id: "email-test-id" });
+    vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("registro con sesion inmediata: envia el correo de bienvenida a la direccion registrada", async () => {
-    const supabase = crearSupabaseMock({
-      data: { session: { access_token: "token" } },
+  it("con email real: usa auth.signUp y envia el correo de bienvenida", async () => {
+    const signUp = vi.fn().mockResolvedValue({
+      data: { user: { id: "user-1" }, session: { access_token: "t" } },
       error: null,
     });
-    vi.mocked(createClient).mockResolvedValue(supabase as never);
+    vi.mocked(createClient).mockResolvedValue({
+      auth: { signUp },
+    } as never);
 
     const { registro } = await import("../actions");
-    const resultado = await registro(DATOS_REGISTRO);
+    const resultado = await registro({ ...datosBase, email: "maria@example.com" });
 
     expect(resultado).toEqual({ success: true });
-    expect(enviarCorreo).toHaveBeenCalledTimes(1);
-    expect(enviarCorreo).toHaveBeenCalledWith(
+    expect(signUp).toHaveBeenCalledWith(
       expect.objectContaining({
-        to: "cliente@example.com",
-        subject: expect.stringContaining("Bienvenida"),
+        email: "maria@example.com",
+        password: "secreta1",
+        options: {
+          data: {
+            full_name: "Maria Perez",
+            address: "Calle 10 # 20-30",
+            whatsapp: "3001234567",
+          },
+        },
       }),
     );
-    const [argumentos] = vi.mocked(enviarCorreo).mock.calls[0];
-    expect(argumentos.react.type).toBe(BienvenidaEmail);
-    expect(argumentos.react.props).toEqual(
-      expect.objectContaining({ nombre: "Mery Lay" }),
-    );
-  });
-
-  it("registro pendiente de confirmacion por correo (sin sesion): tambien envia el correo de bienvenida", async () => {
-    // Con confirmacion de email activada, `signUp` no devuelve sesion. La
-    // cuenta igualmente se creo, asi que la bienvenida debe salir.
-    const supabase = crearSupabaseMock({ data: { session: null }, error: null });
-    vi.mocked(createClient).mockResolvedValue(supabase as never);
-
-    const { registro } = await import("../actions");
-    const resultado = await registro(DATOS_REGISTRO);
-
-    expect(resultado.message).toEqual(expect.any(String));
-    expect(resultado.success).toBeUndefined();
-    expect(enviarCorreo).toHaveBeenCalledTimes(1);
+    expect(createAdminClient).not.toHaveBeenCalled();
     expect(enviarCorreo).toHaveBeenCalledWith(
-      expect.objectContaining({ to: "cliente@example.com" }),
+      expect.objectContaining({ to: "maria@example.com" }),
     );
   });
 
-  it("correo ya registrado: NO envia correo de bienvenida (la cuenta no se creo en esta llamada)", async () => {
-    // Sin este chequeo, quien intente registrarse con un correo existente
-    // recibiria una bienvenida por una cuenta que no acaba de crear —
-    // ademas de confirmarle a un tercero que esa direccion ya tiene cuenta.
-    const supabase = crearSupabaseMock({
-      data: { session: null },
-      error: { message: "User already registered" },
-    });
-    vi.mocked(createClient).mockResolvedValue(supabase as never);
-
-    const { registro } = await import("../actions");
-    const resultado = await registro(DATOS_REGISTRO);
-
-    expect(resultado.error).toEqual(expect.any(String));
-    expect(enviarCorreo).not.toHaveBeenCalled();
-  });
-
-  it("otro error de signUp: NO envia correo de bienvenida", async () => {
-    const supabase = crearSupabaseMock({
-      data: { session: null },
-      error: { message: "Database connection failed" },
-    });
-    vi.mocked(createClient).mockResolvedValue(supabase as never);
-
-    const { registro } = await import("../actions");
-    const resultado = await registro(DATOS_REGISTRO);
-
-    expect(resultado.error).toEqual(expect.any(String));
-    expect(enviarCorreo).not.toHaveBeenCalled();
-  });
-
-  it("datos invalidos: no llama a signUp ni envia correo", async () => {
-    const supabase = crearSupabaseMock({ data: { session: null }, error: null });
-    vi.mocked(createClient).mockResolvedValue(supabase as never);
-
-    const { registro } = await import("../actions");
-    const resultado = await registro({ ...DATOS_REGISTRO, confirmPassword: "otra123" });
-
-    expect(resultado.error).toEqual(expect.any(String));
-    expect(supabase.auth.signUp).not.toHaveBeenCalled();
-    expect(enviarCorreo).not.toHaveBeenCalled();
-  });
-
-  it("un fallo inesperado al enviar el correo no convierte un registro exitoso en un error para el usuario", async () => {
-    // `enviarCorreo` no lanza por dentro, pero el flujo no debe depender de
-    // eso: la cuenta YA quedo creada cuando se dispara el correo.
-    const supabase = crearSupabaseMock({
-      data: { session: { access_token: "token" } },
+  it("sin email: crea el usuario con el admin client y lo deja con sesion iniciada, sin enviar correo", async () => {
+    const createUser = vi.fn().mockResolvedValue({
+      data: { user: { id: "user-2" } },
       error: null,
     });
-    vi.mocked(createClient).mockResolvedValue(supabase as never);
-    vi.mocked(enviarCorreo).mockRejectedValue(new Error("fallo inesperado de red"));
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(createAdminClient).mockReturnValue({
+      auth: { admin: { createUser } },
+    } as never);
+
+    const signInWithPassword = vi.fn().mockResolvedValue({
+      data: { user: { id: "user-2" }, session: { access_token: "t" } },
+      error: null,
+    });
+    vi.mocked(createClient).mockResolvedValue({
+      auth: { signInWithPassword },
+    } as never);
 
     const { registro } = await import("../actions");
-    const resultado = await registro(DATOS_REGISTRO);
+    const resultado = await registro(datosBase);
 
     expect(resultado).toEqual({ success: true });
-    expect(errorSpy).toHaveBeenCalledWith(
+    expect(createUser).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: "3001234567@merylay.local",
+        password: "secreta1",
+        email_confirm: true,
+        user_metadata: {
+          full_name: "Maria Perez",
+          address: "Calle 10 # 20-30",
+          whatsapp: "3001234567",
+        },
+      }),
+    );
+    expect(signInWithPassword).toHaveBeenCalledWith({
+      email: "3001234567@merylay.local",
+      password: "secreta1",
+    });
+    expect(enviarCorreo).not.toHaveBeenCalled();
+  });
+
+  it("sin email, whatsapp ya registrado: retorna error legible", async () => {
+    const createUser = vi.fn().mockResolvedValue({
+      data: { user: null },
+      error: { message: "User already registered" },
+    });
+    vi.mocked(createAdminClient).mockReturnValue({
+      auth: { admin: { createUser } },
+    } as never);
+
+    const { registro } = await import("../actions");
+    const resultado = await registro(datosBase);
+
+    expect(resultado.error).toBe("Ya existe una cuenta con ese WhatsApp.");
+  });
+
+  it("con email ya registrado: retorna error legible", async () => {
+    const signUp = vi.fn().mockResolvedValue({
+      data: { user: null, session: null },
+      error: { message: "User already registered" },
+    });
+    vi.mocked(createClient).mockResolvedValue({
+      auth: { signUp },
+    } as never);
+
+    const { registro } = await import("../actions");
+    const resultado = await registro({ ...datosBase, email: "maria@example.com" });
+
+    expect(resultado.error).toBe("Ya existe una cuenta con ese correo electrónico.");
+  });
+
+  it("un fallo al preparar el correo de bienvenida no rompe el registro", async () => {
+    const signUp = vi.fn().mockResolvedValue({
+      data: { user: { id: "user-1" }, session: { access_token: "t" } },
+      error: null,
+    });
+    vi.mocked(createClient).mockResolvedValue({
+      auth: { signUp },
+    } as never);
+    vi.mocked(enviarCorreo).mockRejectedValue(new Error("fallo de red"));
+
+    const { registro } = await import("../actions");
+    const resultado = await registro({ ...datosBase, email: "maria@example.com" });
+
+    expect(resultado).toEqual({ success: true });
+    expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining("[email]"),
       expect.any(Error),
     );
