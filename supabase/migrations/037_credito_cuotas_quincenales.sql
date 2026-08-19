@@ -1,40 +1,9 @@
--- Correcciones de la revision final de todo el sistema de credito (Tarea
--- de revision posterior a las 10 tareas del plan). Ver
--- .superpowers/sdd/2026-08-19-sistema-credito-pos-plan/progress.md para la
--- adjudicacion completa de cada hallazgo. Items cubiertos aqui:
---
---   3. RLS de credit_installments/credit_payments: de "for all" a
---      "for select". Los escritos siempre pasan por create_pos_sale y
---      registrar_abono_credito (ambas SECURITY DEFINER, no gateadas por
---      RLS); "for all" permitia a cualquier cuenta staff escribir directo
---      via REST saltandose esas validaciones.
---   4. create_pos_sale: limite superior de 60 cuotas (antes solo exigia
---      >= 1).
---   5. create_pos_sale: guarda contra trunc(saldo/cuotas, 2) = 0.00, que
---      antes fallaba con el error crudo del check (amount > 0) en vez de
---      un mensaje de negocio.
---   6. create_pos_sale (due_date de cuotas) e informe_creditos_resumen
---      (monto_vencido): current_date (zona horaria de la sesion/UTC)
---      reemplazado por (now() at time zone 'America/Bogota')::date, igual
---      que el resto de los informes desde 019_informes_zona_horaria.sql.
---
--- registrar_abono_credito y aplicar_abono_fifo no cambian en esta
--- migracion. update_pos_sale, informe_ventas_serie, informe_metodos_pago e
--- informe_ganancia_serie tampoco.
-
--- --- Item 3: RLS mas estricta -------------------------------------------
-
-drop policy if exists "credit_installments_staff_access" on public.credit_installments;
-create policy "credit_installments_staff_access"
-  on public.credit_installments for select
-  using (public.is_staff_or_above());
-
-drop policy if exists "credit_payments_staff_access" on public.credit_payments;
-create policy "credit_payments_staff_access"
-  on public.credit_payments for select
-  using (public.is_staff_or_above());
-
--- --- Items 4, 5 y 6 (create_pos_sale) ------------------------------------
+-- Cambia la periodicidad de las cuotas de credito de mensual (30 dias)
+-- a quincenal (15 dias). Unico cambio respecto a la version anterior de
+-- create_pos_sale (036_sistema_credito_final_review_fixes.sql): el
+-- offset de dias al calcular due_date, en las dos ramas donde se genera
+-- el calendario de cuotas. Nada mas cambia (montos, FIFO, validaciones,
+-- bloqueo de edicion, informes).
 
 create or replace function public.create_pos_sale(
   p_items jsonb,
@@ -184,6 +153,9 @@ begin
       insert into public.credit_installments (sale_id, numero, due_date, amount)
       values (v_sale_id, 1, (now() at time zone 'America/Bogota')::date + 15, v_total);
     else
+      -- Las cuotas ya nacen NETAS del abono inicial (representan solo el
+      -- saldo a financiar, spec S4.2) -- por eso el abono inicial NO se
+      -- reparte otra vez contra ellas mas abajo.
       v_cuota_monto := trunc(v_saldo_financiar / p_credit_num_cuotas, 2);
       if v_cuota_monto <= 0 then
         raise exception 'El saldo a financiar es muy bajo para dividirlo en % cuotas.', p_credit_num_cuotas;
@@ -195,6 +167,7 @@ begin
         values (
           v_sale_id,
           v_i,
+          -- Quincenal: cuota 1 vence a los 15 dias, cuota 2 a los 30, etc.
           (now() at time zone 'America/Bogota')::date + (15 * v_i),
           case when v_i = p_credit_num_cuotas then v_cuota_monto + v_cuota_residuo else v_cuota_monto end
         );
@@ -217,44 +190,5 @@ begin
 
   select * into v_sale from public.pos_sales where id = v_sale_id;
   return v_sale;
-end;
-$$;
-
--- --- Item 6 (informe_creditos_resumen) -----------------------------------
-
-create or replace function public.informe_creditos_resumen(p_desde date, p_hasta date)
-returns table (cartera_pendiente numeric, monto_vencido numeric, cobrado_en_periodo numeric)
-language plpgsql
-security definer
-stable
-set search_path = public
-as $$
-begin
-  if not public.is_admin() then
-    raise exception 'No autorizado.';
-  end if;
-
-  return query
-  with saldos as (
-    select s.id, s.total - coalesce(sum(cp.amount), 0) as saldo
-    from public.pos_sales s
-    left join public.credit_payments cp on cp.sale_id = s.id
-    where s.payment_method = 'credito'
-    group by s.id, s.total
-  ),
-  vencido as (
-    select coalesce(sum(ci.amount - ci.paid_amount), 0) as monto
-    from public.credit_installments ci
-    where ci.status <> 'pagada' and ci.due_date < (now() at time zone 'America/Bogota')::date
-  ),
-  cobrado as (
-    select coalesce(sum(cp.amount), 0) as monto
-    from public.credit_payments cp
-    where (cp.created_at at time zone 'America/Bogota')::date between p_desde and p_hasta
-  )
-  select
-    coalesce((select sum(saldo) from saldos where saldo > 0), 0) as cartera_pendiente,
-    (select monto from vencido) as monto_vencido,
-    (select monto from cobrado) as cobrado_en_periodo;
 end;
 $$;

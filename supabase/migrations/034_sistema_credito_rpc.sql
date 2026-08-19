@@ -201,7 +201,7 @@ begin
       -- simbolica (check (amount > 0) impide generar cuotas de $0), que el
       -- reparto FIFO de abajo marca 'pagada' de inmediato.
       insert into public.credit_installments (sale_id, numero, due_date, amount)
-      values (v_sale_id, 1, (now() at time zone 'America/Bogota')::date + 30, v_total);
+      values (v_sale_id, 1, (now() at time zone 'America/Bogota')::date + 15, v_total);
     else
       v_cuota_monto := trunc(v_saldo_financiar / p_credit_num_cuotas, 2);
       if v_cuota_monto <= 0 then
@@ -214,7 +214,7 @@ begin
         values (
           v_sale_id,
           v_i,
-          (now() at time zone 'America/Bogota')::date + (30 * v_i),
+          (now() at time zone 'America/Bogota')::date + (15 * v_i),
           case when v_i = p_credit_num_cuotas then v_cuota_monto + v_cuota_residuo else v_cuota_monto end
         );
       end loop;
