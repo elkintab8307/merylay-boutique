@@ -43,6 +43,18 @@ revoke execute on function public.aplicar_abono_fifo(uuid, numeric) from public,
 
 -- create_pos_sale extendido: 5 parametros nuevos, todos con default, para
 -- no romper las llamadas existentes (venta normal, sin credito).
+--
+-- IMPORTANTE: Postgres identifica una funcion por su lista de tipos de
+-- parametros, no por nombre ni por los defaults -- un "create or replace"
+-- con una firma de mas parametros NO reemplaza la funcion original de 3
+-- parametros (de 011_pos_sale_rpc.sql), crea un OVERLOAD adicional. Con
+-- ambas firmas vivas, cualquier llamada con exactamente 3 parametros (el
+-- flujo normal de venta sin credito, como en src/app/pos/sale-action.ts)
+-- queda ambigua para Postgres y falla con "is not unique". Hay que borrar
+-- la firma vieja de 3 parametros para que solo quede esta, que ya cubre
+-- ese mismo caso via los defaults.
+drop function if exists public.create_pos_sale(jsonb, public.payment_method, numeric);
+
 create or replace function public.create_pos_sale(
   p_items jsonb,
   p_payment_method public.payment_method,
@@ -178,6 +190,10 @@ begin
   end loop;
 
   if p_payment_method = 'credito' then
+    if v_total <= 0 then
+      raise exception 'El total de la venta a credito debe ser mayor a cero.';
+    end if;
+
     v_saldo_financiar := v_total - p_credit_abono_inicial;
 
     if v_saldo_financiar <= 0 then
@@ -205,7 +221,13 @@ begin
       insert into public.credit_payments (sale_id, amount, payment_method, staff_id)
       values (v_sale_id, p_credit_abono_inicial, p_credit_abono_metodo, v_staff_id);
 
-      perform public.aplicar_abono_fifo(v_sale_id, p_credit_abono_inicial);
+      -- Solo se reparte FIFO contra las cuotas cuando estas SI incluyen
+      -- el abono inicial (rama "cubre el 100%" de arriba). En la rama
+      -- financiada, las cuotas ya nacieron netas del abono -- aplicarlo
+      -- aqui tambien duplicaria el descuento.
+      if v_saldo_financiar <= 0 then
+        perform public.aplicar_abono_fifo(v_sale_id, p_credit_abono_inicial);
+      end if;
     end if;
   end if;
 
