@@ -15,21 +15,21 @@ import { ImageUploadButton } from "@/components/admin/image-upload-button";
 
 export function HomeContenidoForm({
   defaultValues,
-  heroImageActual,
-  heroMobileImageActual,
+  heroImagenesDesktopActuales,
+  heroImagenesMobileActuales,
   banner1ImageActual,
   banner2ImageActual,
 }: {
   defaultValues: HomeContenidoInput;
-  heroImageActual: string | null;
-  heroMobileImageActual: string | null;
+  heroImagenesDesktopActuales: string[];
+  heroImagenesMobileActuales: string[];
   banner1ImageActual: string | null;
   banner2ImageActual: string | null;
 }) {
   const [serverError, setServerError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [heroImageFile, setHeroImageFile] = useState<File | null>(null);
-  const [heroMobileImageFile, setHeroMobileImageFile] = useState<File | null>(null);
+  const [heroDesktopFiles, setHeroDesktopFiles] = useState<File[]>([]);
+  const [heroMobileFiles, setHeroMobileFiles] = useState<File[]>([]);
   const [banner1ImageFile, setBanner1ImageFile] = useState<File | null>(null);
   const [banner2ImageFile, setBanner2ImageFile] = useState<File | null>(null);
 
@@ -48,12 +48,12 @@ export function HomeContenidoForm({
     try {
       const result = await guardarContenidoHome(
         data,
-        heroImageFile,
-        heroMobileImageFile,
+        heroDesktopFiles,
+        heroMobileFiles,
         banner1ImageFile,
         banner2ImageFile,
-        heroImageActual,
-        heroMobileImageActual,
+        heroImagenesDesktopActuales,
+        heroImagenesMobileActuales,
         banner1ImageActual,
         banner2ImageActual,
       );
@@ -77,86 +77,61 @@ export function HomeContenidoForm({
         </h3>
         <div>
           <label className="text-sm text-brand-ciruela">
-            Imagen para PC (horizontal, ideal 1920×960 o similar)
+            Imágenes para PC (horizontal, hasta 3 — se muestran en carrusel)
           </label>
-          {heroImageActual && (
-            <Image
-              src={heroImageActual}
-              alt=""
-              width={400}
-              height={224}
-              className="mb-2 h-28 w-full rounded-md object-cover"
-            />
+          {heroImagenesDesktopActuales.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-2">
+              {heroImagenesDesktopActuales.map((url) => (
+                <Image
+                  key={url}
+                  src={url}
+                  alt=""
+                  width={120}
+                  height={67}
+                  className="h-16 w-28 rounded-md object-cover"
+                />
+              ))}
+            </div>
           )}
           <ImageUploadButton
-            id="hero-imagen"
-            multiple={false}
-            label="Elegir imagen de PC"
-            files={heroImageFile ? [heroImageFile] : []}
-            onChange={(files) => setHeroImageFile(files[0] ?? null)}
+            id="hero-imagenes-pc"
+            multiple
+            label="Elegir hasta 3 imágenes de PC"
+            files={heroDesktopFiles}
+            onChange={(files) => setHeroDesktopFiles(files.slice(0, 3))}
           />
+          <p className="mt-1 text-xs text-brand-ciruela/60">
+            Si eliges imágenes nuevas, reemplazan por completo las actuales.
+          </p>
         </div>
         <div>
           <label className="text-sm text-brand-ciruela">
-            Imagen para móvil (vertical, ideal 1024×1536 o similar)
+            Imágenes para móvil (vertical, hasta 3)
           </label>
-          {heroMobileImageActual && (
-            <Image
-              src={heroMobileImageActual}
-              alt=""
-              width={200}
-              height={300}
-              className="mb-2 h-40 w-32 rounded-md object-cover"
-            />
+          {heroImagenesMobileActuales.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-2">
+              {heroImagenesMobileActuales.map((url) => (
+                <Image
+                  key={url}
+                  src={url}
+                  alt=""
+                  width={80}
+                  height={120}
+                  className="h-24 w-16 rounded-md object-cover"
+                />
+              ))}
+            </div>
           )}
           <ImageUploadButton
-            id="hero-imagen-movil"
-            multiple={false}
-            label="Elegir imagen para móvil"
-            files={heroMobileImageFile ? [heroMobileImageFile] : []}
-            onChange={(files) => setHeroMobileImageFile(files[0] ?? null)}
+            id="hero-imagenes-movil"
+            multiple
+            label="Elegir hasta 3 imágenes para móvil"
+            files={heroMobileFiles}
+            onChange={(files) => setHeroMobileFiles(files.slice(0, 3))}
           />
-        </div>
-        <p className="text-xs text-brand-ciruela/60">
-          El título, subtítulo y botón de abajo son opcionales: déjalos vacíos
-          si tus imágenes ya incluyen su propio texto y diseño.
-        </p>
-        <div>
-          <label htmlFor="heroTitulo" className="text-sm text-brand-ciruela">
-            Título
-          </label>
-          <Input id="heroTitulo" {...register("hero.titulo")} />
-          {errors.hero?.titulo && (
-            <p className="text-sm text-red-600">{errors.hero.titulo.message}</p>
-          )}
-        </div>
-        <div>
-          <label htmlFor="heroSubtitulo" className="text-sm text-brand-ciruela">
-            Subtítulo
-          </label>
-          <Input id="heroSubtitulo" {...register("hero.subtitulo")} />
-        </div>
-        <div>
-          <label htmlFor="heroTextoBoton" className="text-sm text-brand-ciruela">
-            Texto del botón
-          </label>
-          <Input id="heroTextoBoton" {...register("hero.textoBoton")} />
-          {errors.hero?.textoBoton && (
-            <p className="text-sm text-red-600">
-              {errors.hero.textoBoton.message}
-            </p>
-          )}
-        </div>
-        <div>
-          <label htmlFor="heroLinkBoton" className="text-sm text-brand-ciruela">
-            Link del botón (ej. /categoria/pijamas)
-          </label>
-          <Input id="heroLinkBoton" {...register("hero.linkBoton")} />
-          {errors.hero?.linkBoton && (
-            <p className="text-sm text-red-600">
-              {errors.hero.linkBoton.message}
-            </p>
-          )}
+          <p className="mt-1 text-xs text-brand-ciruela/60">
+            Si eliges imágenes nuevas, reemplazan por completo las actuales.
+          </p>
         </div>
       </div>
 

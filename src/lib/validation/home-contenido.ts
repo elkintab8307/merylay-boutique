@@ -1,12 +1,13 @@
 import { z } from "zod";
 
 const heroSchema = z.object({
-  imageUrl: z.string().nullable(),
-  imageUrlMobile: z.string().nullable().default(null),
-  titulo: z.string().trim(),
-  subtitulo: z.string().trim(),
-  textoBoton: z.string().trim(),
-  linkBoton: z.string().trim(),
+  imagenesDesktop: z.array(z.string()).max(3),
+  imagenesMobile: z.array(z.string()).max(3),
+});
+
+const heroLegacySchema = z.object({
+  imageUrl: z.string().nullable().optional(),
+  imageUrlMobile: z.string().nullable().optional(),
 });
 
 const bannerSchema = z.object({
@@ -21,21 +22,28 @@ export type BannerContenido = z.infer<typeof bannerSchema>;
 export const heroStoredSchema = heroSchema;
 export const bannersStoredSchema = z.array(bannerSchema);
 
-const heroInputSchema = z
-  .object({
-    titulo: z.string().trim(),
-    subtitulo: z.string().trim(),
-    textoBoton: z.string().trim(),
-    linkBoton: z.string().trim(),
-  })
-  .refine((data) => !data.titulo || data.textoBoton.length > 0, {
-    message: "Ingresa el texto del botón",
-    path: ["textoBoton"],
-  })
-  .refine((data) => !data.titulo || data.linkBoton.length > 0, {
-    message: "Ingresa un link para el botón",
-    path: ["linkBoton"],
-  });
+/**
+ * El hero paso de {imageUrl, imageUrlMobile, titulo, ...} a
+ * {imagenesDesktop[], imagenesMobile[]}. Un valor guardado con la forma
+ * anterior no matchea el nuevo schema, asi que se migra en el momento de
+ * leerlo (sin tocar la base de datos) para no perder la imagen ya subida.
+ */
+export function parseHeroStored(value: unknown): HeroContenido | null {
+  const parsed = heroStoredSchema.safeParse(value);
+  if (parsed.success) {
+    return parsed.data;
+  }
+
+  const legacy = heroLegacySchema.safeParse(value);
+  if (legacy.success && (legacy.data.imageUrl || legacy.data.imageUrlMobile)) {
+    return {
+      imagenesDesktop: legacy.data.imageUrl ? [legacy.data.imageUrl] : [],
+      imagenesMobile: legacy.data.imageUrlMobile ? [legacy.data.imageUrlMobile] : [],
+    };
+  }
+
+  return null;
+}
 
 const bannerInputSchema = z
   .object({
@@ -48,7 +56,6 @@ const bannerInputSchema = z
   });
 
 export const homeContenidoSchema = z.object({
-  hero: heroInputSchema,
   banner1: bannerInputSchema,
   banner2: bannerInputSchema,
 });

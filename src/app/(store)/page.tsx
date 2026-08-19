@@ -5,7 +5,7 @@ import { BenefitsBar } from "@/components/store/benefits-bar";
 import { FeaturedCategories } from "@/components/store/featured-categories";
 import { CollectionBanners } from "@/components/store/collection-banners";
 import { ReviewsSection, type ReviewItem } from "@/components/store/reviews-section";
-import { heroStoredSchema, bannersStoredSchema } from "@/lib/validation/home-contenido";
+import { parseHeroStored, bannersStoredSchema } from "@/lib/validation/home-contenido";
 
 export default async function HomePage() {
   const supabase = await createClient();
@@ -104,8 +104,7 @@ export default async function HomePage() {
   }));
 
   const settingsByKey = new Map((settingsRows ?? []).map((r) => [r.key, r.value]));
-  const heroParsed = heroStoredSchema.safeParse(settingsByKey.get("home_hero"));
-  const hero = heroParsed.success ? heroParsed.data : null;
+  const hero = parseHeroStored(settingsByKey.get("home_hero"));
   const bannersParsed = bannersStoredSchema.safeParse(settingsByKey.get("home_banners"));
   const banners = bannersParsed.success ? bannersParsed.data : [];
 
@@ -119,7 +118,7 @@ export default async function HomePage() {
 
   return (
     <main className="mx-auto flex max-w-6xl flex-col gap-16 px-6 py-10">
-      <HeroSection hero={hero} primerCategoriaSlug={categorias?.[0]?.slug ?? null} />
+      <HeroSection hero={hero} />
       <BenefitsBar />
       <FeaturedCategories
         categorias={(categorias ?? [])
