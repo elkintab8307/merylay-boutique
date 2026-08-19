@@ -6,6 +6,7 @@ const SECTIONS: SidebarSection[] = [
     items: [
       { href: "/pos", label: "Terminal" },
       { href: "/pos/ventas", label: "Ventas POS" },
+      { href: "/pos/creditos", label: "Créditos" },
     ],
   },
 ];

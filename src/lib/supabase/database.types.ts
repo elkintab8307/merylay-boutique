@@ -139,6 +139,86 @@ export type Database = {
           },
         ]
       }
+      credit_installments: {
+        Row: {
+          amount: number
+          due_date: string
+          id: string
+          numero: number
+          paid_amount: number
+          sale_id: string
+          status: Database["public"]["Enums"]["credit_installment_status"]
+        }
+        Insert: {
+          amount: number
+          due_date: string
+          id?: string
+          numero: number
+          paid_amount?: number
+          sale_id: string
+          status?: Database["public"]["Enums"]["credit_installment_status"]
+        }
+        Update: {
+          amount?: number
+          due_date?: string
+          id?: string
+          numero?: number
+          paid_amount?: number
+          sale_id?: string
+          status?: Database["public"]["Enums"]["credit_installment_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_installments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      credit_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          payment_method: Database["public"]["Enums"]["payment_method"]
+          sale_id: string
+          staff_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          payment_method: Database["public"]["Enums"]["payment_method"]
+          sale_id: string
+          staff_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          payment_method?: Database["public"]["Enums"]["payment_method"]
+          sale_id?: string
+          staff_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_payments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_payments_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       expense_categories: {
         Row: {
           created_at: string
@@ -401,6 +481,8 @@ export type Database = {
       pos_sales: {
         Row: {
           created_at: string
+          credit_customer_name: string | null
+          credit_customer_phone: string | null
           discount: number
           id: string
           payment_method: Database["public"]["Enums"]["payment_method"]
@@ -411,6 +493,8 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          credit_customer_name?: string | null
+          credit_customer_phone?: string | null
           discount?: number
           id?: string
           payment_method: Database["public"]["Enums"]["payment_method"]
@@ -421,6 +505,8 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          credit_customer_name?: string | null
+          credit_customer_phone?: string | null
           discount?: number
           id?: string
           payment_method?: Database["public"]["Enums"]["payment_method"]
@@ -837,6 +923,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      aplicar_abono_fifo: {
+        Args: { p_monto: number; p_sale_id: string }
+        Returns: undefined
+      }
       confirm_order_payment_wompi: {
         Args: { p_order_id: string; p_wompi_transaction_id: string }
         Returns: {
@@ -905,12 +995,19 @@ export type Database = {
       }
       create_pos_sale: {
         Args: {
+          p_credit_abono_inicial?: number
+          p_credit_abono_metodo?: Database["public"]["Enums"]["payment_method"]
+          p_credit_customer_name?: string
+          p_credit_customer_phone?: string
+          p_credit_num_cuotas?: number
           p_discount?: number
           p_items: Json
           p_payment_method: Database["public"]["Enums"]["payment_method"]
         }
         Returns: {
           created_at: string
+          credit_customer_name: string | null
+          credit_customer_phone: string | null
           discount: number
           id: string
           payment_method: Database["public"]["Enums"]["payment_method"]
@@ -949,6 +1046,14 @@ export type Database = {
           fecha: string
           monto: number
           proveedor: string
+        }[]
+      }
+      informe_creditos_resumen: {
+        Args: { p_desde: string; p_hasta: string }
+        Returns: {
+          cartera_pendiente: number
+          cobrado_en_periodo: number
+          monto_vencido: number
         }[]
       }
       informe_ganancia_serie: {
@@ -997,6 +1102,27 @@ export type Database = {
       is_admin: { Args: never; Returns: boolean }
       is_staff_or_above: { Args: never; Returns: boolean }
       is_superadmin: { Args: never; Returns: boolean }
+      registrar_abono_credito: {
+        Args: {
+          p_amount: number
+          p_payment_method: Database["public"]["Enums"]["payment_method"]
+          p_sale_id: string
+        }
+        Returns: {
+          amount: number
+          created_at: string
+          id: string
+          payment_method: Database["public"]["Enums"]["payment_method"]
+          sale_id: string
+          staff_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "credit_payments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       update_order_items: {
         Args: { p_items: Json; p_order_id: string }
         Returns: {
@@ -1028,6 +1154,8 @@ export type Database = {
         }
         Returns: {
           created_at: string
+          credit_customer_name: string | null
+          credit_customer_phone: string | null
           discount: number
           id: string
           payment_method: Database["public"]["Enums"]["payment_method"]
@@ -1045,6 +1173,7 @@ export type Database = {
       }
     }
     Enums: {
+      credit_installment_status: "pendiente" | "parcial" | "pagada"
       order_status:
         | "pendiente"
         | "pagado"
@@ -1057,6 +1186,7 @@ export type Database = {
         | "transferencia"
         | "nequi"
         | "daviplata"
+        | "credito"
       user_role: "superadmin" | "admin" | "staff" | "customer"
     }
     CompositeTypes: {
@@ -1185,6 +1315,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      credit_installment_status: ["pendiente", "parcial", "pagada"],
       order_status: [
         "pendiente",
         "pagado",
@@ -1198,6 +1329,7 @@ export const Constants = {
         "transferencia",
         "nequi",
         "daviplata",
+        "credito",
       ],
       user_role: ["superadmin", "admin", "staff", "customer"],
     },

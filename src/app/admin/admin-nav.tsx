@@ -20,6 +20,7 @@ export async function AdminNav() {
         { href: "/admin/pedidos", label: "Pedidos" },
         { href: "/pos", label: "POS" },
         { href: "/pos/ventas", label: "Ventas POS" },
+        { href: "/pos/creditos", label: "Créditos" },
       ],
     },
     {

@@ -14,8 +14,11 @@ import {
 import { searchProducts, type PosSearchResult } from "./search-action";
 import { ProductSearchResult } from "./product-search-result";
 import type { Database } from "@/lib/supabase/database.types";
+import type { CreditoVentaInput } from "@/lib/validation/credito";
 
 type PaymentMethod = Database["public"]["Enums"]["payment_method"];
+
+const METODOS_ABONO = ["efectivo", "tarjeta", "transferencia", "nequi", "daviplata"] as const;
 
 export function VentaItemsEditor({
   itemsIniciales = [],
@@ -23,6 +26,7 @@ export function VentaItemsEditor({
   paymentMethodInicial = "efectivo",
   mostrarDescuento = true,
   mostrarMetodoPago = true,
+  permitirCredito = true,
   textoBoton,
   textoBotonEnviando,
   onGuardar,
@@ -32,12 +36,14 @@ export function VentaItemsEditor({
   paymentMethodInicial?: PaymentMethod;
   mostrarDescuento?: boolean;
   mostrarMetodoPago?: boolean;
+  permitirCredito?: boolean;
   textoBoton: string;
   textoBotonEnviando: string;
   onGuardar: (
     items: LocalCartItem[],
     paymentMethod: PaymentMethod,
     discount: number,
+    credito: CreditoVentaInput | null,
   ) => Promise<{ error?: string } | void>;
 }) {
   const [query, setQuery] = useState("");
@@ -45,12 +51,20 @@ export function VentaItemsEditor({
   const [items, setItems] = useState<LocalCartItem[]>(itemsIniciales);
   const [discount, setDiscount] = useState(discountInicial);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(paymentMethodInicial);
+  const [clienteNombre, setClienteNombre] = useState("");
+  const [clienteTelefono, setClienteTelefono] = useState("");
+  const [numCuotas, setNumCuotas] = useState(1);
+  const [abonoInicial, setAbonoInicial] = useState(0);
+  const [abonoInicialMetodo, setAbonoInicialMetodo] = useState<
+    (typeof METODOS_ABONO)[number] | ""
+  >("");
   const [error, setError] = useState<string | null>(null);
   const [isSearching, startSearch] = useTransition();
   const [isSubmitting, startSubmit] = useTransition();
 
   const subtotal = computeSubtotal(items);
   const total = Math.max(subtotal - discount, 0);
+  const esCredito = paymentMethod === "credito" && permitirCredito;
 
   const handleSearch = () => {
     startSearch(async () => {
@@ -73,8 +87,33 @@ export function VentaItemsEditor({
 
   const handleSubmit = () => {
     setError(null);
+
+    if (esCredito) {
+      if (!clienteNombre.trim() || !clienteTelefono.trim()) {
+        setError("Ingresa el nombre y teléfono del cliente.");
+        return;
+      }
+      if (numCuotas < 1) {
+        setError("El número de cuotas debe ser al menos 1.");
+        return;
+      }
+      if (abonoInicial > 0 && !abonoInicialMetodo) {
+        setError("Selecciona el método de pago del abono inicial.");
+        return;
+      }
+    }
+
     startSubmit(async () => {
-      const result = await onGuardar(items, paymentMethod, discount);
+      const credito: CreditoVentaInput | null = esCredito
+        ? {
+            clienteNombre: clienteNombre.trim(),
+            clienteTelefono: clienteTelefono.trim(),
+            numCuotas,
+            abonoInicial,
+            abonoInicialMetodo: abonoInicialMetodo || null,
+          }
+        : null;
+      const result = await onGuardar(items, paymentMethod, discount, credito);
       if (result?.error) {
         setError(result.error);
       }
@@ -186,7 +225,80 @@ export function VentaItemsEditor({
               <option value="transferencia">Transferencia</option>
               <option value="nequi">Nequi</option>
               <option value="daviplata">Daviplata</option>
+              {permitirCredito && <option value="credito">Crédito</option>}
             </select>
+          </div>
+        )}
+
+        {esCredito && (
+          <div className="flex flex-col gap-3 rounded-md border border-brand-oro/50 bg-brand-oro/10 p-3">
+            <p className="text-sm font-semibold text-brand-ciruela">Datos del crédito</p>
+            <div>
+              <label htmlFor="clienteNombre" className="text-sm text-brand-ciruela">
+                Cliente
+              </label>
+              <Input
+                id="clienteNombre"
+                value={clienteNombre}
+                onChange={(e) => setClienteNombre(e.target.value)}
+              />
+            </div>
+            <div>
+              <label htmlFor="clienteTelefono" className="text-sm text-brand-ciruela">
+                Teléfono
+              </label>
+              <Input
+                id="clienteTelefono"
+                value={clienteTelefono}
+                onChange={(e) => setClienteTelefono(e.target.value)}
+              />
+            </div>
+            <div>
+              <label htmlFor="numCuotas" className="text-sm text-brand-ciruela">
+                Número de cuotas
+              </label>
+              <Input
+                id="numCuotas"
+                type="number"
+                min={1}
+                value={numCuotas}
+                onChange={(e) => setNumCuotas(Math.max(1, Number(e.target.value) || 1))}
+              />
+            </div>
+            <div>
+              <label htmlFor="abonoInicial" className="text-sm text-brand-ciruela">
+                Abono inicial (opcional)
+              </label>
+              <Input
+                id="abonoInicial"
+                type="number"
+                min={0}
+                value={abonoInicial}
+                onChange={(e) => setAbonoInicial(Math.max(0, Number(e.target.value) || 0))}
+              />
+            </div>
+            {abonoInicial > 0 && (
+              <div>
+                <label htmlFor="abonoInicialMetodo" className="text-sm text-brand-ciruela">
+                  Método de pago del abono inicial
+                </label>
+                <select
+                  id="abonoInicialMetodo"
+                  value={abonoInicialMetodo}
+                  onChange={(e) =>
+                    setAbonoInicialMetodo(e.target.value as (typeof METODOS_ABONO)[number] | "")
+                  }
+                  className="w-full rounded-md border border-brand-rosa-claro bg-white px-3 py-2 text-sm"
+                >
+                  <option value="">Selecciona un método</option>
+                  {METODOS_ABONO.map((metodo) => (
+                    <option key={metodo} value={metodo}>
+                      {metodo}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
         )}
 
