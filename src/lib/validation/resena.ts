@@ -13,3 +13,14 @@ export const resenaSchema = z.object({
 });
 
 export type ResenaInput = z.infer<typeof resenaSchema>;
+
+export const resenaClienteSchema = z.object({
+  rating: z
+    .number()
+    .int()
+    .min(1, "La calificación debe ser entre 1 y 5")
+    .max(5, "La calificación debe ser entre 1 y 5"),
+  body: z.string().trim().min(10, "Ingresa un texto de al menos 10 caracteres"),
+});
+
+export type ResenaClienteInput = z.infer<typeof resenaClienteSchema>;
