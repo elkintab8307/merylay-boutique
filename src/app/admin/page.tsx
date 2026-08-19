@@ -31,10 +31,13 @@ export default async function AdminDashboardPage() {
   const [
     { data: ordenesHoy, error: ordenesError },
     { data: ventasPosHoy, error: posError },
+    { data: abonosHoy, error: abonosError },
     { data: ordenesAyer, error: ordenesAyerError },
     { data: ventasPosAyer, error: posAyerError },
+    { data: abonosAyer, error: abonosAyerError },
     { data: ordenesMes, error: ordenesMesError },
     { data: ventasPosMes, error: posMesError },
+    { data: abonosMes, error: abonosMesError },
     { count: pedidosPendientes, error: pendientesError },
     { data: productos, error: productosError },
     { data: variantes, error: variantesError },
@@ -47,7 +50,12 @@ export default async function AdminDashboardPage() {
       .select("total")
       .gte("created_at", inicioHoy)
       .neq("status", "cancelado"),
-    supabase.from("pos_sales").select("total").gte("created_at", inicioHoy),
+    supabase
+      .from("pos_sales")
+      .select("total")
+      .gte("created_at", inicioHoy)
+      .neq("payment_method", "credito"),
+    supabase.from("credit_payments").select("amount").gte("created_at", inicioHoy),
     supabase
       .from("orders")
       .select("total")
@@ -58,13 +66,24 @@ export default async function AdminDashboardPage() {
       .from("pos_sales")
       .select("total")
       .gte("created_at", inicioAyer)
+      .lt("created_at", inicioHoy)
+      .neq("payment_method", "credito"),
+    supabase
+      .from("credit_payments")
+      .select("amount")
+      .gte("created_at", inicioAyer)
       .lt("created_at", inicioHoy),
     supabase
       .from("orders")
       .select("total")
       .gte("created_at", inicioMes)
       .neq("status", "cancelado"),
-    supabase.from("pos_sales").select("total").gte("created_at", inicioMes),
+    supabase
+      .from("pos_sales")
+      .select("total")
+      .gte("created_at", inicioMes)
+      .neq("payment_method", "credito"),
+    supabase.from("credit_payments").select("amount").gte("created_at", inicioMes),
     supabase
       .from("orders")
       .select("id", { count: "exact", head: true })
@@ -85,10 +104,13 @@ export default async function AdminDashboardPage() {
   const huboError =
     ordenesError ||
     posError ||
+    abonosError ||
     ordenesAyerError ||
     posAyerError ||
+    abonosAyerError ||
     ordenesMesError ||
     posMesError ||
+    abonosMesError ||
     pendientesError ||
     productosError ||
     variantesError ||
@@ -106,12 +128,16 @@ export default async function AdminDashboardPage() {
 
   const sumar = (filas: { total: number }[] | null) =>
     (filas ?? []).reduce((sum, f) => sum + f.total, 0);
+  const sumarMontos = (filas: { amount: number }[] | null) =>
+    (filas ?? []).reduce((sum, f) => sum + f.amount, 0);
 
   const ventasTienda = sumar(ordenesHoy);
-  const ventasPos = sumar(ventasPosHoy);
+  const ventasPos = sumar(ventasPosHoy) + sumarMontos(abonosHoy);
   const ventasTotal = ventasTienda + ventasPos;
-  const ventasAyerTotal = sumar(ordenesAyer) + sumar(ventasPosAyer);
-  const ventasMesTotal = sumar(ordenesMes) + sumar(ventasPosMes);
+  const ventasAyerTotal =
+    sumar(ordenesAyer) + sumar(ventasPosAyer) + sumarMontos(abonosAyer);
+  const ventasMesTotal =
+    sumar(ordenesMes) + sumar(ventasPosMes) + sumarMontos(abonosMes);
   const variacionTexto = formatearVariacion(ventasTotal, ventasAyerTotal);
 
   const productosActivos = productos ?? [];

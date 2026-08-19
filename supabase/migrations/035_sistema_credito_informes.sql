@@ -194,7 +194,7 @@ begin
   vencido as (
     select coalesce(sum(ci.amount - ci.paid_amount), 0) as monto
     from public.credit_installments ci
-    where ci.status <> 'pagada' and ci.due_date < current_date
+    where ci.status <> 'pagada' and ci.due_date < (now() at time zone 'America/Bogota')::date
   ),
   cobrado as (
     select coalesce(sum(cp.amount), 0) as monto

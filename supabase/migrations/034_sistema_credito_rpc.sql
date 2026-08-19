@@ -103,8 +103,8 @@ begin
     if coalesce(trim(p_credit_customer_phone), '') = '' then
       raise exception 'Ingresa el telefono del cliente para la venta a credito.';
     end if;
-    if p_credit_num_cuotas is null or p_credit_num_cuotas < 1 then
-      raise exception 'El numero de cuotas debe ser al menos 1.';
+    if p_credit_num_cuotas is null or p_credit_num_cuotas < 1 or p_credit_num_cuotas > 60 then
+      raise exception 'El numero de cuotas debe estar entre 1 y 60.';
     end if;
     if p_credit_abono_inicial < 0 then
       raise exception 'El abono inicial no puede ser negativo.';
@@ -201,9 +201,12 @@ begin
       -- simbolica (check (amount > 0) impide generar cuotas de $0), que el
       -- reparto FIFO de abajo marca 'pagada' de inmediato.
       insert into public.credit_installments (sale_id, numero, due_date, amount)
-      values (v_sale_id, 1, current_date + 30, v_total);
+      values (v_sale_id, 1, (now() at time zone 'America/Bogota')::date + 30, v_total);
     else
       v_cuota_monto := trunc(v_saldo_financiar / p_credit_num_cuotas, 2);
+      if v_cuota_monto <= 0 then
+        raise exception 'El saldo a financiar es muy bajo para dividirlo en % cuotas.', p_credit_num_cuotas;
+      end if;
       v_cuota_residuo := v_saldo_financiar - (v_cuota_monto * p_credit_num_cuotas);
 
       for v_i in 1..p_credit_num_cuotas loop
@@ -211,7 +214,7 @@ begin
         values (
           v_sale_id,
           v_i,
-          current_date + (30 * v_i),
+          (now() at time zone 'America/Bogota')::date + (30 * v_i),
           case when v_i = p_credit_num_cuotas then v_cuota_monto + v_cuota_residuo else v_cuota_monto end
         );
       end loop;

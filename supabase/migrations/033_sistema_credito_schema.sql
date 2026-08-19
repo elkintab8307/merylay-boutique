@@ -38,12 +38,15 @@ create index credit_payments_sale_id_idx on public.credit_payments(sale_id);
 alter table public.credit_installments enable row level security;
 alter table public.credit_payments enable row level security;
 
+-- Solo lectura via RLS: los escritos siempre pasan por create_pos_sale y
+-- registrar_abono_credito (ambas SECURITY DEFINER, que no son gateadas por
+-- RLS). Una politica "for all" aqui permitiria a cualquier cuenta staff
+-- escribir directo via REST, saltandose las validaciones de esas RPCs
+-- (sobrepago, FIFO, etc.).
 create policy "credit_installments_staff_access"
-  on public.credit_installments for all
-  using (public.is_staff_or_above())
-  with check (public.is_staff_or_above());
+  on public.credit_installments for select
+  using (public.is_staff_or_above());
 
 create policy "credit_payments_staff_access"
-  on public.credit_payments for all
-  using (public.is_staff_or_above())
-  with check (public.is_staff_or_above());
+  on public.credit_payments for select
+  using (public.is_staff_or_above());

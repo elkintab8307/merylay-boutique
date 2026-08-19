@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { formatPrice } from "@/lib/format";
 import { calcularEstadoCredito, type EstadoCredito } from "@/lib/pos/estado-credito";
 import { rangoHoy } from "@/lib/informes/rango-fecha";
@@ -60,9 +61,10 @@ export default async function CreditoDetallePage({
   ]);
 
   const staffIds = [...new Set((pagos ?? []).map((p) => p.staff_id))];
+  const adminClient = createAdminClient();
   const { data: staff } =
     staffIds.length > 0
-      ? await supabase.from("profiles").select("id, username").in("id", staffIds)
+      ? await adminClient.from("profiles").select("id, username").in("id", staffIds)
       : { data: [] as { id: string; username: string }[] };
   const staffById = new Map((staff ?? []).map((s) => [s.id, s.username]));
 

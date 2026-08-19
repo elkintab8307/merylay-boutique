@@ -206,8 +206,19 @@ Cuando `p_payment_method = 'credito'`:
      implemente: este caso borde se cubre con un test dedicado.)
 5. Si `p_credit_abono_inicial > 0`: inserta una fila en `credit_payments`
    (`amount = p_credit_abono_inicial`, `payment_method =
-   p_credit_abono_metodo`, `staff_id = auth.uid()`) y aplica el algoritmo
-   de reparto FIFO (§4.3) sobre las cuotas recién creadas.
+   p_credit_abono_metodo`, `staff_id = auth.uid()`).
+   - **Corrección post-implementación (Tarea 2, ver ledger en
+     `.superpowers/sdd/2026-08-19-sistema-credito-pos-plan/progress.md`):**
+     el reparto FIFO (§4.3) solo se aplica aquí cuando `v_saldo_financiar
+     <= 0`, es decir, cuando el abono inicial cubre el 100% del total y las
+     cuotas del paso 4 se generaron por el monto lleno (rama de la cuota
+     simbólica única). Cuando sí queda saldo por financiar, las cuotas del
+     paso 4 ya nacen **netas** del abono inicial (`v_saldo_financiar =
+     v_total - p_credit_abono_inicial`); aplicar el FIFO también en ese
+     caso descontaría el abono inicial dos veces. Aplicar
+     incondicionalmente, como decía una versión anterior de este párrafo,
+     es el bug que se detectó y corrigió durante la ejecución de la Tarea
+     2.
 
 ### 4.3 Algoritmo de reparto FIFO (compartido entre creación y abonos)
 

@@ -6,7 +6,11 @@ export const creditoVentaSchema = z
   .object({
     clienteNombre: z.string().trim().min(2, "Ingresa el nombre del cliente"),
     clienteTelefono: z.string().trim().min(7, "Ingresa un teléfono válido"),
-    numCuotas: z.number().int().min(1, "Debe haber al menos 1 cuota"),
+    numCuotas: z
+      .number()
+      .int()
+      .min(1, "Debe haber al menos 1 cuota")
+      .max(60, "Máximo 60 cuotas"),
     abonoInicial: z.number().min(0, "El abono inicial no puede ser negativo"),
     abonoInicialMetodo: z.enum(METODOS_ABONO).nullable(),
   })
