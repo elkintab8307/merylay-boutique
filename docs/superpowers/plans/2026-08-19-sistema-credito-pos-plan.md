@@ -258,6 +258,20 @@ $$;
 
 revoke execute on function public.aplicar_abono_fifo(uuid, numeric) from public, anon, authenticated;
 
+-- Elimina la firma vieja de 3 parametros (011_pos_sale_rpc.sql) ANTES de
+-- crear la nueva de 8: Postgres identifica una funcion por su lista de
+-- tipos de parametros, no por nombre, asi que un "create or replace" con
+-- una lista de tipos distinta (mas larga) NO reemplaza la funcion vieja
+-- -- crea un overload adicional. Con las dos firmas coexistiendo,
+-- cualquier llamada con exactamente 3 parametros (el flujo normal de
+-- venta sin credito, que es como la app real llama a este RPC) queda
+-- ambigua para Postgres ("is not unique"), rompiendo toda venta normal
+-- del POS. Bug real encontrado y corregido durante la Task 2 de
+-- ejecucion (ver ledger) -- el "create or replace" de abajo YA cubre el
+-- caso de 3 argumentos via sus defaults, asi que este drop no pierde
+-- ninguna capacidad.
+drop function if exists public.create_pos_sale(jsonb, public.payment_method, numeric);
+
 -- create_pos_sale extendido: 5 parametros nuevos, todos con default, para
 -- no romper las llamadas existentes (venta normal, sin credito).
 create or replace function public.create_pos_sale(
