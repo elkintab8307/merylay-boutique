@@ -1,5 +1,6 @@
 import type { createClient } from "@/lib/supabase/server";
 import { getVariantOptions } from "./variants";
+import { calcularDescuento } from "./discount";
 import type { ProductCardData } from "@/components/store/product-card";
 
 export type FetchCatalogParams = {
@@ -11,6 +12,7 @@ export type FetchCatalogParams = {
   colores: string[];
   sort: { key: string; column: "is_featured" | "price" | "created_at"; ascending: boolean };
   userId: string | null;
+  soloPromociones?: boolean;
 };
 
 export type CatalogResult = {
@@ -33,6 +35,7 @@ export async function fetchCatalogProducts(
     colores: coloresSeleccionadas,
     sort,
     userId,
+    soloPromociones,
   } = params;
 
   let query = supabase
@@ -59,7 +62,13 @@ export async function fetchCatalogProducts(
 
   const { data: productosBase } = await query;
 
-  const productIds = (productosBase ?? []).map((p) => p.id);
+  const productosEnPromocion = soloPromociones
+    ? (productosBase ?? []).filter(
+        (p) => calcularDescuento(p.price, p.compare_at_price) !== null,
+      )
+    : (productosBase ?? []);
+
+  const productIds = productosEnPromocion.map((p) => p.id);
   const { data: variantes } =
     productIds.length > 0
       ? await supabase
@@ -79,7 +88,7 @@ export async function fetchCatalogProducts(
     })),
   );
 
-  let productosFiltrados = productosBase ?? [];
+  let productosFiltrados = productosEnPromocion;
   if (tallasSeleccionadas.length > 0 || coloresSeleccionadas.length > 0) {
     const idsConVariante = new Set(
       (variantes ?? [])
