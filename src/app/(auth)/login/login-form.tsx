@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { loginSchema, type LoginInput } from "@/lib/validation/auth";
 import { login } from "./actions";
 import { getLocalCart, clearLocalCart } from "@/lib/cart/local-cart";
@@ -79,6 +80,12 @@ export function LoginForm() {
       >
         {isSubmitting ? "Ingresando..." : "Ingresar"}
       </Button>
+      <p className="text-center text-sm text-brand-ciruela">
+        ¿No tienes cuenta?{" "}
+        <Link href="/registro" className="text-brand-rosa hover:underline">
+          Crea una aquí
+        </Link>
+      </p>
     </form>
   );
 }
