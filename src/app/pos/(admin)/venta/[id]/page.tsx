@@ -25,10 +25,29 @@ export default async function ReciboVentaPage({
     notFound();
   }
 
-  const { data: items } = await supabase
-    .from("pos_sale_items")
-    .select("qty, unit_price, line_total, product_id, variant_id")
-    .eq("sale_id", venta.id);
+  const esCredito = venta.payment_method === "credito";
+
+  const [{ data: items }, { data: abonoInicial }, { count: numCuotas }] = await Promise.all([
+    supabase
+      .from("pos_sale_items")
+      .select("qty, unit_price, line_total, product_id, variant_id")
+      .eq("sale_id", venta.id),
+    esCredito
+      ? supabase
+          .from("credit_payments")
+          .select("amount, payment_method")
+          .eq("sale_id", venta.id)
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    esCredito
+      ? supabase
+          .from("credit_installments")
+          .select("id", { count: "exact", head: true })
+          .eq("sale_id", venta.id)
+      : Promise.resolve({ count: null }),
+  ]);
 
   const productIds = (items ?? [])
     .map((i) => i.product_id)
@@ -74,6 +93,22 @@ export default async function ReciboVentaPage({
           <p>Fecha: {new Date(venta.created_at).toLocaleString("es-CO")}</p>
           <p>Método de pago: {venta.payment_method}</p>
         </div>
+        {esCredito && (
+          <div className="flex flex-col gap-1 border-y border-brand-rosa-claro py-2 text-sm text-brand-ciruela">
+            <p className="font-heading text-brand-ciruela">Crédito</p>
+            <p>Cliente: {venta.credit_customer_name}</p>
+            <p>Teléfono: {venta.credit_customer_phone}</p>
+            <p>Cuotas: {numCuotas ?? 0}</p>
+            {abonoInicial ? (
+              <p>
+                Abono inicial: {formatPrice(abonoInicial.amount)} (
+                <span className="capitalize">{abonoInicial.payment_method}</span>)
+              </p>
+            ) : (
+              <p>Abono inicial: ninguno</p>
+            )}
+          </div>
+        )}
         <div className="flex flex-col divide-y divide-brand-rosa-claro border-y border-brand-rosa-claro py-2 text-sm text-brand-ciruela">
           {(items ?? []).map((item, index) => {
             const nombre = item.product_id
