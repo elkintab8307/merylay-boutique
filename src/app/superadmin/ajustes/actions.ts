@@ -13,7 +13,6 @@ import {
   type HomeContenidoInput,
   type BannerContenido,
 } from "@/lib/validation/home-contenido";
-import { subirImagenBanner } from "@/lib/admin/upload-banner-image";
 import { horarioSchema, type Horario } from "@/lib/validation/horario";
 
 export async function guardarAjustes(
@@ -47,14 +46,10 @@ export async function guardarAjustes(
 
 export async function guardarContenidoHome(
   input: HomeContenidoInput,
-  heroDesktopFiles: File[],
-  heroMobileFiles: File[],
-  banner1ImageFile: File | null,
-  banner2ImageFile: File | null,
-  heroImagenesDesktopActuales: string[],
-  heroImagenesMobileActuales: string[],
-  banner1ImageActual: string | null,
-  banner2ImageActual: string | null,
+  heroImagenesDesktop: string[],
+  heroImagenesMobile: string[],
+  banner1ImageUrl: string | null,
+  banner2ImageUrl: string | null,
 ): Promise<{ error?: string }> {
   await requireSuperadmin();
 
@@ -63,44 +58,8 @@ export async function guardarContenidoHome(
     return { error: "Revisa los datos ingresados." };
   }
 
-  if (heroDesktopFiles.length > 3 || heroMobileFiles.length > 3) {
+  if (heroImagenesDesktop.length > 3 || heroImagenesMobile.length > 3) {
     return { error: "Puedes subir hasta 3 imágenes por versión del hero." };
-  }
-
-  let imagenesDesktop = heroImagenesDesktopActuales;
-  if (heroDesktopFiles.length > 0) {
-    const subidas: string[] = [];
-    for (const file of heroDesktopFiles) {
-      const uploadResult = await subirImagenBanner(file, "hero");
-      if (uploadResult.error) return { error: uploadResult.error };
-      if (uploadResult.url) subidas.push(uploadResult.url);
-    }
-    imagenesDesktop = subidas;
-  }
-
-  let imagenesMobile = heroImagenesMobileActuales;
-  if (heroMobileFiles.length > 0) {
-    const subidas: string[] = [];
-    for (const file of heroMobileFiles) {
-      const uploadResult = await subirImagenBanner(file, "hero-movil");
-      if (uploadResult.error) return { error: uploadResult.error };
-      if (uploadResult.url) subidas.push(uploadResult.url);
-    }
-    imagenesMobile = subidas;
-  }
-
-  let banner1ImageUrl = banner1ImageActual;
-  if (banner1ImageFile) {
-    const uploadResult = await subirImagenBanner(banner1ImageFile, "banner1");
-    if (uploadResult.error) return { error: uploadResult.error };
-    banner1ImageUrl = uploadResult.url ?? banner1ImageActual;
-  }
-
-  let banner2ImageUrl = banner2ImageActual;
-  if (banner2ImageFile) {
-    const uploadResult = await subirImagenBanner(banner2ImageFile, "banner2");
-    if (uploadResult.error) return { error: uploadResult.error };
-    banner2ImageUrl = uploadResult.url ?? banner2ImageActual;
   }
 
   const banners: BannerContenido[] = [
@@ -125,7 +84,7 @@ export async function guardarContenidoHome(
     [
       {
         key: "home_hero",
-        value: { imagenesDesktop, imagenesMobile },
+        value: { imagenesDesktop: heroImagenesDesktop, imagenesMobile: heroImagenesMobile },
       },
       { key: "home_banners", value: banners },
     ],

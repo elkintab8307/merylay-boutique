@@ -9,6 +9,7 @@ import {
   type HomeContenidoInput,
 } from "@/lib/validation/home-contenido";
 import { guardarContenidoHome } from "./actions";
+import { subirImagenBannerCliente } from "@/lib/admin/upload-banner-image-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ImageUploadButton } from "@/components/admin/image-upload-button";
@@ -42,20 +43,67 @@ export function HomeContenidoForm({
     defaultValues,
   });
 
+  const subirImagenes = async (files: File[], prefijo: string): Promise<string[] | null> => {
+    const resultados = await Promise.all(
+      files.map((file) => subirImagenBannerCliente(file, prefijo)),
+    );
+    const conError = resultados.find((r) => r.error);
+    if (conError) {
+      setServerError(conError.error ?? "No se pudo subir una de las imágenes.");
+      return null;
+    }
+    return resultados.map((r) => r.url).filter((url): url is string => Boolean(url));
+  };
+
   const onSubmit = async (data: HomeContenidoInput) => {
     setServerError(null);
     setSuccess(false);
     try {
+      // Las imagenes se suben directo desde el navegador a Supabase
+      // Storage (RLS ya restringe la escritura a superadmin), en vez de
+      // pasarlas por la Server Action: asi evitamos el limite de payload
+      // de las funciones serverless de Vercel (~4.5MB) al subir varias
+      // imagenes a la vez para el carrusel del hero.
+      let imagenesDesktop = heroImagenesDesktopActuales;
+      if (heroDesktopFiles.length > 0) {
+        const subidas = await subirImagenes(heroDesktopFiles, "hero");
+        if (!subidas) return;
+        imagenesDesktop = subidas;
+      }
+
+      let imagenesMobile = heroImagenesMobileActuales;
+      if (heroMobileFiles.length > 0) {
+        const subidas = await subirImagenes(heroMobileFiles, "hero-movil");
+        if (!subidas) return;
+        imagenesMobile = subidas;
+      }
+
+      let banner1ImageUrl = banner1ImageActual;
+      if (banner1ImageFile) {
+        const resultado = await subirImagenBannerCliente(banner1ImageFile, "banner1");
+        if (resultado.error) {
+          setServerError(resultado.error);
+          return;
+        }
+        banner1ImageUrl = resultado.url ?? banner1ImageActual;
+      }
+
+      let banner2ImageUrl = banner2ImageActual;
+      if (banner2ImageFile) {
+        const resultado = await subirImagenBannerCliente(banner2ImageFile, "banner2");
+        if (resultado.error) {
+          setServerError(resultado.error);
+          return;
+        }
+        banner2ImageUrl = resultado.url ?? banner2ImageActual;
+      }
+
       const result = await guardarContenidoHome(
         data,
-        heroDesktopFiles,
-        heroMobileFiles,
-        banner1ImageFile,
-        banner2ImageFile,
-        heroImagenesDesktopActuales,
-        heroImagenesMobileActuales,
-        banner1ImageActual,
-        banner2ImageActual,
+        imagenesDesktop,
+        imagenesMobile,
+        banner1ImageUrl,
+        banner2ImageUrl,
       );
       if (result?.error) {
         setServerError(result.error);
@@ -64,7 +112,7 @@ export function HomeContenidoForm({
       setSuccess(true);
     } catch {
       setServerError(
-        "No se pudo guardar el contenido de inicio. Verifica que las imágenes no superen los 8MB.",
+        "No se pudo guardar el contenido de inicio. Verifica tu conexión e intenta de nuevo.",
       );
     }
   };
