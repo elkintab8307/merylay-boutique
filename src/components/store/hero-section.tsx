@@ -2,39 +2,42 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { ChevronLeft, ChevronRight, Sparkle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Snowflake } from "lucide-react";
 import type { HeroContenido } from "@/lib/validation/home-contenido";
 
 const INTERVALO_MS = 4000;
 
-const ESTRELLAS = [
-  { top: "10%", left: "8%", size: 14, delay: "0s" },
-  { top: "18%", left: "88%", size: 18, delay: "0.6s" },
-  { top: "52%", left: "14%", size: 10, delay: "1.2s" },
-  { top: "72%", left: "92%", size: 16, delay: "1.8s" },
-  { top: "14%", left: "50%", size: 12, delay: "2.4s" },
-  { top: "82%", left: "42%", size: 14, delay: "0.3s" },
-  { top: "38%", left: "78%", size: 9, delay: "1.5s" },
-  { top: "34%", left: "22%", size: 17, delay: "2.1s" },
-  { top: "65%", left: "60%", size: 11, delay: "0.9s" },
-  { top: "8%", left: "68%", size: 13, delay: "1.9s" },
+const COPOS_NIEVE = [
+  { left: "4%", size: 14, delay: "0s", duration: "9s" },
+  { left: "12%", size: 10, delay: "1.5s", duration: "7s" },
+  { left: "20%", size: 16, delay: "3s", duration: "10s" },
+  { left: "28%", size: 12, delay: "0.8s", duration: "8s" },
+  { left: "36%", size: 9, delay: "2.2s", duration: "6.5s" },
+  { left: "44%", size: 15, delay: "4s", duration: "9.5s" },
+  { left: "52%", size: 11, delay: "1s", duration: "7.5s" },
+  { left: "60%", size: 13, delay: "3.5s", duration: "8.5s" },
+  { left: "68%", size: 10, delay: "0.4s", duration: "6s" },
+  { left: "76%", size: 16, delay: "2.6s", duration: "10.5s" },
+  { left: "84%", size: 12, delay: "1.8s", duration: "7.8s" },
+  { left: "92%", size: 14, delay: "3.2s", duration: "9s" },
+  { left: "8%", size: 9, delay: "4.5s", duration: "6.8s" },
+  { left: "56%", size: 10, delay: "0.2s", duration: "8.2s" },
 ];
 
-function EfectoEstrellas() {
+function EfectoNieve() {
   return (
     <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden">
-      {ESTRELLAS.map((estrella, index) => (
-        <Sparkle
+      {COPOS_NIEVE.map((copo, index) => (
+        <Snowflake
           key={index}
           aria-hidden
-          fill="currentColor"
-          className="absolute animate-twinkle text-brand-oro drop-shadow-[0_0_4px_rgba(217,164,65,0.8)]"
+          className="absolute animate-caer-nieve text-white opacity-70 drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)]"
           style={{
-            top: estrella.top,
-            left: estrella.left,
-            width: estrella.size,
-            height: estrella.size,
-            animationDelay: estrella.delay,
+            left: copo.left,
+            width: copo.size,
+            height: copo.size,
+            animationDelay: copo.delay,
+            animationDuration: copo.duration,
           }}
         />
       ))}
@@ -132,7 +135,7 @@ export function HeroSection({ hero }: { hero: HeroContenido | null }) {
       ) : (
         <div className="absolute inset-0 bg-gradient-to-br from-brand-rosa-claro via-brand-crema to-brand-rosa-medio" />
       )}
-      <EfectoEstrellas />
+      <EfectoNieve />
       <div className="absolute bottom-0 left-1/2 z-20 flex h-20 w-20 -translate-x-1/2 translate-y-1/2 items-center justify-center overflow-hidden rounded-full border-4 border-brand-crema bg-brand-crema shadow-brand-md">
         <Image
           src="/brand/logo-principal.png"
