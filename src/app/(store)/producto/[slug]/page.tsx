@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ProductDetailInteractive } from "./product-detail-interactive";
+import { ProductRatingsSection, type CalificacionItem } from "./product-ratings-section";
 import type { ImagenProducto } from "@/lib/store/variant-images";
 import { Breadcrumbs, type BreadcrumbItem } from "@/components/store/breadcrumbs";
 import { RelatedProducts } from "@/components/store/related-products";
@@ -23,7 +24,15 @@ export default async function ProductoPage({
     notFound();
   }
 
-  const [{ data: imagenes }, { data: variantes }, { data: { user } }] = await Promise.all([
+  const [
+    { data: imagenes },
+    { data: variantes },
+    {
+      data: { user },
+    },
+    { data: calificacionesBase },
+    { data: whatsappSetting },
+  ] = await Promise.all([
     supabase
       .from("product_images")
       .select("url, alt, variant_id")
@@ -34,7 +43,33 @@ export default async function ProductoPage({
       .select("id, talla, color, sku, stock, price_override")
       .eq("product_id", producto.id),
     supabase.auth.getUser(),
+    supabase
+      .from("product_ratings")
+      .select("id, rating, comment, author_name, user_id")
+      .eq("product_id", producto.id)
+      .order("created_at", { ascending: false }),
+    supabase.from("store_settings").select("value").eq("key", "redes_whatsapp").maybeSingle(),
   ]);
+
+  const redesWhatsapp = whatsappSetting?.value ? String(whatsappSetting.value) : null;
+
+  const calificaciones: CalificacionItem[] = (calificacionesBase ?? []).map((c) => ({
+    id: c.id,
+    rating: c.rating,
+    comment: c.comment,
+    autorNombre: c.author_name,
+  }));
+  const totalCalificaciones = calificaciones.length;
+  const promedioCalificacion =
+    totalCalificaciones > 0
+      ? calificaciones.reduce((sum, c) => sum + c.rating, 0) / totalCalificaciones
+      : 0;
+  const calificacionPropiaBase = user
+    ? (calificacionesBase ?? []).find((c) => c.user_id === user.id)
+    : null;
+  const calificacionPropia = calificacionPropiaBase
+    ? { rating: calificacionPropiaBase.rating, comment: calificacionPropiaBase.comment ?? "" }
+    : null;
 
   const { data: favorito } = user
     ? await supabase
@@ -168,6 +203,17 @@ export default async function ProductoPage({
         currentUserId={user?.id ?? null}
         initialFavorite={Boolean(favorito)}
         imagenPrincipal={imagenPrincipal}
+        promedioCalificacion={promedioCalificacion}
+        totalCalificaciones={totalCalificaciones}
+        redesWhatsapp={redesWhatsapp}
+      />
+
+      <ProductRatingsSection
+        productId={producto.id}
+        productSlug={producto.slug}
+        calificaciones={calificaciones}
+        estaAutenticado={Boolean(user)}
+        calificacionPropia={calificacionPropia}
       />
 
       <RelatedProducts

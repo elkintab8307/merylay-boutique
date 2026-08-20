@@ -7,6 +7,9 @@ import { calcularDescuento, precioEfectivo } from "@/lib/store/discount";
 import { ProductGallery } from "./product-gallery";
 import { ProductVariantSelector } from "./product-variant-selector";
 import { FavoriteButton } from "@/components/store/favorite-button";
+import { ProductRatingSummary } from "@/components/store/product-rating-summary";
+import { ShareButton } from "@/components/store/share-button";
+import { WhatsappProductButton } from "@/components/store/whatsapp-product-button";
 import { findMatchingVariant, type VariantOption } from "@/lib/store/variants";
 import { getImagesForVariant, type ImagenProducto } from "@/lib/store/variant-images";
 
@@ -23,6 +26,9 @@ export function ProductDetailInteractive({
   currentUserId,
   initialFavorite,
   imagenPrincipal,
+  promedioCalificacion,
+  totalCalificaciones,
+  redesWhatsapp,
 }: {
   productId: string;
   productSlug: string;
@@ -36,6 +42,9 @@ export function ProductDetailInteractive({
   currentUserId: string | null;
   initialFavorite: boolean;
   imagenPrincipal: string | null;
+  promedioCalificacion: number;
+  totalCalificaciones: number;
+  redesWhatsapp: string | null;
 }) {
   const [talla, setTalla] = useState<string | null>(variants[0]?.talla ?? null);
   const [color, setColor] = useState<string | null>(variants[0]?.color ?? null);
@@ -78,6 +87,7 @@ export function ProductDetailInteractive({
             }}
           />
         </div>
+        <ProductRatingSummary promedio={promedioCalificacion} total={totalCalificaciones} />
         <div className="flex items-baseline gap-3">
           <span className="font-heading text-2xl text-brand-rosa">
             {formatPrice(precioMostrado)}
@@ -101,6 +111,10 @@ export function ProductDetailInteractive({
           onTallaChange={setTalla}
           onColorChange={setColor}
         />
+        <div className="flex flex-wrap items-center gap-3">
+          <WhatsappProductButton redesWhatsapp={redesWhatsapp} productName={productName} />
+          <ShareButton productName={productName} />
+        </div>
         <div className="flex flex-wrap items-center gap-4 border-t border-brand-rosa-claro pt-4 text-xs text-brand-ciruela/70">
           <span className="flex items-center gap-1.5">
             <Truck className="h-4 w-4 text-brand-rosa" />
