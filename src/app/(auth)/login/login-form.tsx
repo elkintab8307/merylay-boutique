@@ -58,7 +58,13 @@ export function LoginForm() {
         <label htmlFor="identifier" className="text-sm text-brand-ciruela">
           Usuario, correo electrónico o WhatsApp
         </label>
-        <Input id="identifier" {...register("identifier")} />
+        <Input
+          id="identifier"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
+          {...register("identifier")}
+        />
         {errors.identifier && (
           <p className="text-sm text-red-600">{errors.identifier.message}</p>
         )}
