@@ -20,12 +20,14 @@ export function HomeContenidoForm({
   heroImagenesMobileActuales,
   banner1ImageActual,
   banner2ImageActual,
+  banner3ImageActual,
 }: {
   defaultValues: HomeContenidoInput;
   heroImagenesDesktopActuales: string[];
   heroImagenesMobileActuales: string[];
   banner1ImageActual: string | null;
   banner2ImageActual: string | null;
+  banner3ImageActual: string | null;
 }) {
   const [serverError, setServerError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -33,6 +35,7 @@ export function HomeContenidoForm({
   const [heroMobileFiles, setHeroMobileFiles] = useState<File[]>([]);
   const [banner1ImageFile, setBanner1ImageFile] = useState<File | null>(null);
   const [banner2ImageFile, setBanner2ImageFile] = useState<File | null>(null);
+  const [banner3ImageFile, setBanner3ImageFile] = useState<File | null>(null);
 
   const {
     register,
@@ -98,12 +101,23 @@ export function HomeContenidoForm({
         banner2ImageUrl = resultado.url ?? banner2ImageActual;
       }
 
+      let banner3ImageUrl = banner3ImageActual;
+      if (banner3ImageFile) {
+        const resultado = await subirImagenBannerCliente(banner3ImageFile, "banner3");
+        if (resultado.error) {
+          setServerError(resultado.error);
+          return;
+        }
+        banner3ImageUrl = resultado.url ?? banner3ImageActual;
+      }
+
       const result = await guardarContenidoHome(
         data,
         imagenesDesktop,
         imagenesMobile,
         banner1ImageUrl,
         banner2ImageUrl,
+        banner3ImageUrl,
       );
       if (result?.error) {
         setServerError(result.error);
@@ -203,16 +217,6 @@ export function HomeContenidoForm({
           files={banner1ImageFile ? [banner1ImageFile] : []}
           onChange={(files) => setBanner1ImageFile(files[0] ?? null)}
         />
-        <p className="text-xs text-brand-ciruela/60">
-          El título es opcional: déjalo vacío si la imagen ya incluye su
-          propio texto y diseño.
-        </p>
-        <div>
-          <label htmlFor="banner1Titulo" className="text-sm text-brand-ciruela">
-            Título
-          </label>
-          <Input id="banner1Titulo" {...register("banner1.titulo")} />
-        </div>
         <div>
           <label htmlFor="banner1Link" className="text-sm text-brand-ciruela">
             Link (ej. /categoria/pijamas)
@@ -244,16 +248,6 @@ export function HomeContenidoForm({
           files={banner2ImageFile ? [banner2ImageFile] : []}
           onChange={(files) => setBanner2ImageFile(files[0] ?? null)}
         />
-        <p className="text-xs text-brand-ciruela/60">
-          El título es opcional: déjalo vacío si la imagen ya incluye su
-          propio texto y diseño.
-        </p>
-        <div>
-          <label htmlFor="banner2Titulo" className="text-sm text-brand-ciruela">
-            Título
-          </label>
-          <Input id="banner2Titulo" {...register("banner2.titulo")} />
-        </div>
         <div>
           <label htmlFor="banner2Link" className="text-sm text-brand-ciruela">
             Link (ej. /categoria/pijamas)
@@ -261,6 +255,37 @@ export function HomeContenidoForm({
           <Input id="banner2Link" {...register("banner2.link")} />
           {errors.banner2?.link && (
             <p className="text-sm text-red-600">{errors.banner2.link.message}</p>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-4">
+        <h3 className="font-heading text-base text-brand-ciruela">
+          Banner de colección 3
+        </h3>
+        {banner3ImageActual && (
+          <Image
+            src={banner3ImageActual}
+            alt=""
+            width={400}
+            height={224}
+            className="h-28 w-full rounded-md object-cover"
+          />
+        )}
+        <ImageUploadButton
+          id="banner3-imagen"
+          multiple={false}
+          label="Elegir imagen"
+          files={banner3ImageFile ? [banner3ImageFile] : []}
+          onChange={(files) => setBanner3ImageFile(files[0] ?? null)}
+        />
+        <div>
+          <label htmlFor="banner3Link" className="text-sm text-brand-ciruela">
+            Link (ej. /categoria/pijamas)
+          </label>
+          <Input id="banner3Link" {...register("banner3.link")} />
+          {errors.banner3?.link && (
+            <p className="text-sm text-red-600">{errors.banner3.link.message}</p>
           )}
         </div>
       </div>
