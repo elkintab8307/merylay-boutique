@@ -56,7 +56,20 @@ async function getOrCreateAuthUser(
     );
   }
 
-  return { user: existing, created: false as const };
+  // El usuario ya existia: sincroniza la contraseña con la de .env.local.
+  // Sin esto, cambiar SUPERADMIN_PASSWORD y volver a correr el seed no
+  // tenia ningun efecto -- la cuenta en Supabase se quedaba con la
+  // contraseña anterior, dejando el env y la cuenta real desincronizados.
+  const { data: updated, error: updateError } =
+    await admin.auth.admin.updateUserById(existing.id, {
+      password,
+      email_confirm: true,
+    });
+  if (updateError) {
+    throw updateError;
+  }
+
+  return { user: updated.user, created: false as const };
 }
 
 async function main() {
@@ -77,7 +90,7 @@ async function main() {
   console.log(
     created
       ? `Usuario superadmin creado: ${email} (username: ${username}).`
-      : `Usuario superadmin ya existia: ${email} (username: ${username}). Rol confirmado.`,
+      : `Usuario superadmin ya existia: ${email} (username: ${username}). Rol y contraseña sincronizados con .env.local.`,
   );
   console.log(
     "IMPORTANTE: cambia la contraseña del superadmin despues del primer inicio de sesion.",
