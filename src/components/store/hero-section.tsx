@@ -121,21 +121,23 @@ export function HeroSection({ hero }: { hero: HeroContenido | null }) {
 
   return (
     <section
-      className={`relative flex items-center overflow-hidden rounded-2xl ${
+      className={`relative flex items-center rounded-2xl ${
         tieneImagenMovilPropia
           ? "aspect-[2/3] sm:aspect-[2/1]"
           : "aspect-[4/3] sm:aspect-[2/1] lg:aspect-[3/1]"
       }`}
     >
-      {hayImagenes ? (
-        <>
-          <CarruselImagenes imagenes={imagenesMobile} claseVisibilidad="block sm:hidden" />
-          <CarruselImagenes imagenes={imagenesDesktop} claseVisibilidad="hidden sm:block" />
-        </>
-      ) : (
-        <div className="absolute inset-0 bg-gradient-to-br from-brand-rosa-claro via-brand-crema to-brand-rosa-medio" />
-      )}
-      <EfectoNieve />
+      <div className="absolute inset-0 overflow-hidden rounded-2xl">
+        {hayImagenes ? (
+          <>
+            <CarruselImagenes imagenes={imagenesMobile} claseVisibilidad="block sm:hidden" />
+            <CarruselImagenes imagenes={imagenesDesktop} claseVisibilidad="hidden sm:block" />
+          </>
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-br from-brand-rosa-claro via-brand-crema to-brand-rosa-medio" />
+        )}
+        <EfectoNieve />
+      </div>
       <div className="absolute bottom-0 left-1/2 z-20 flex h-20 w-20 -translate-x-1/2 translate-y-1/2 items-center justify-center overflow-hidden rounded-full border-4 border-brand-crema bg-brand-crema shadow-brand-md">
         <Image
           src="/brand/logo-principal.png"
