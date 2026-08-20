@@ -47,12 +47,12 @@ export async function guardarAjustes(
 
 export async function guardarContenidoHome(
   input: HomeContenidoInput,
-  heroImageFile: File | null,
-  heroMobileImageFile: File | null,
+  heroDesktopFiles: File[],
+  heroMobileFiles: File[],
   banner1ImageFile: File | null,
   banner2ImageFile: File | null,
-  heroImageActual: string | null,
-  heroMobileImageActual: string | null,
+  heroImagenesDesktopActuales: string[],
+  heroImagenesMobileActuales: string[],
   banner1ImageActual: string | null,
   banner2ImageActual: string | null,
 ): Promise<{ error?: string }> {
@@ -63,18 +63,30 @@ export async function guardarContenidoHome(
     return { error: "Revisa los datos ingresados." };
   }
 
-  let heroImageUrl = heroImageActual;
-  if (heroImageFile) {
-    const uploadResult = await subirImagenBanner(heroImageFile, "hero");
-    if (uploadResult.error) return { error: uploadResult.error };
-    heroImageUrl = uploadResult.url ?? heroImageActual;
+  if (heroDesktopFiles.length > 3 || heroMobileFiles.length > 3) {
+    return { error: "Puedes subir hasta 3 imágenes por versión del hero." };
   }
 
-  let heroMobileImageUrl = heroMobileImageActual;
-  if (heroMobileImageFile) {
-    const uploadResult = await subirImagenBanner(heroMobileImageFile, "hero-movil");
-    if (uploadResult.error) return { error: uploadResult.error };
-    heroMobileImageUrl = uploadResult.url ?? heroMobileImageActual;
+  let imagenesDesktop = heroImagenesDesktopActuales;
+  if (heroDesktopFiles.length > 0) {
+    const subidas: string[] = [];
+    for (const file of heroDesktopFiles) {
+      const uploadResult = await subirImagenBanner(file, "hero");
+      if (uploadResult.error) return { error: uploadResult.error };
+      if (uploadResult.url) subidas.push(uploadResult.url);
+    }
+    imagenesDesktop = subidas;
+  }
+
+  let imagenesMobile = heroImagenesMobileActuales;
+  if (heroMobileFiles.length > 0) {
+    const subidas: string[] = [];
+    for (const file of heroMobileFiles) {
+      const uploadResult = await subirImagenBanner(file, "hero-movil");
+      if (uploadResult.error) return { error: uploadResult.error };
+      if (uploadResult.url) subidas.push(uploadResult.url);
+    }
+    imagenesMobile = subidas;
   }
 
   let banner1ImageUrl = banner1ImageActual;
@@ -113,11 +125,7 @@ export async function guardarContenidoHome(
     [
       {
         key: "home_hero",
-        value: {
-          imageUrl: heroImageUrl,
-          imageUrlMobile: heroMobileImageUrl,
-          ...parsed.data.hero,
-        },
+        value: { imagenesDesktop, imagenesMobile },
       },
       { key: "home_banners", value: banners },
     ],

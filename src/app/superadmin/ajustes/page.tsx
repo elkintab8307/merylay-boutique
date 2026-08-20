@@ -4,7 +4,7 @@ import {
   type StoreSettingsInput,
 } from "@/lib/validation/store-settings";
 import {
-  heroStoredSchema,
+  parseHeroStored,
   bannersStoredSchema,
   type HomeContenidoInput,
 } from "@/lib/validation/home-contenido";
@@ -64,18 +64,11 @@ export default async function AjustesPage() {
     ),
   };
 
-  const heroParsed = heroStoredSchema.safeParse(valueByKey.get("home_hero"));
-  const heroStored = heroParsed.success ? heroParsed.data : null;
+  const heroStored = parseHeroStored(valueByKey.get("home_hero"));
   const bannersParsed = bannersStoredSchema.safeParse(valueByKey.get("home_banners"));
   const bannersStored = bannersParsed.success ? bannersParsed.data : [];
 
   const homeDefaultValues: HomeContenidoInput = {
-    hero: {
-      titulo: heroStored?.titulo ?? "",
-      subtitulo: heroStored?.subtitulo ?? "",
-      textoBoton: heroStored?.textoBoton ?? "",
-      linkBoton: heroStored?.linkBoton ?? "",
-    },
     banner1: {
       titulo: bannersStored[0]?.titulo ?? "",
       link: bannersStored[0]?.link ?? "",
@@ -103,8 +96,8 @@ export default async function AjustesPage() {
         </h2>
         <HomeContenidoForm
           defaultValues={homeDefaultValues}
-          heroImageActual={heroStored?.imageUrl ?? null}
-          heroMobileImageActual={heroStored?.imageUrlMobile ?? null}
+          heroImagenesDesktopActuales={heroStored?.imagenesDesktop ?? []}
+          heroImagenesMobileActuales={heroStored?.imagenesMobile ?? []}
           banner1ImageActual={bannersStored[0]?.imageUrl ?? null}
           banner2ImageActual={bannersStored[1]?.imageUrl ?? null}
         />
