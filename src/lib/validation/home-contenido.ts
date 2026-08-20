@@ -12,7 +12,6 @@ const heroLegacySchema = z.object({
 
 const bannerSchema = z.object({
   imageUrl: z.string().nullable(),
-  titulo: z.string().trim(),
   link: z.string().trim(),
 });
 
@@ -45,19 +44,14 @@ export function parseHeroStored(value: unknown): HeroContenido | null {
   return null;
 }
 
-const bannerInputSchema = z
-  .object({
-    titulo: z.string().trim(),
-    link: z.string().trim(),
-  })
-  .refine((data) => !data.titulo || data.link.length > 0, {
-    message: "Ingresa un link para este banner",
-    path: ["link"],
-  });
+const bannerInputSchema = z.object({
+  link: z.string().trim(),
+});
 
 export const homeContenidoSchema = z.object({
   banner1: bannerInputSchema,
   banner2: bannerInputSchema,
+  banner3: bannerInputSchema,
 });
 
 export type HomeContenidoInput = z.infer<typeof homeContenidoSchema>;

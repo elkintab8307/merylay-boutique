@@ -50,6 +50,7 @@ export async function guardarContenidoHome(
   heroImagenesMobile: string[],
   banner1ImageUrl: string | null,
   banner2ImageUrl: string | null,
+  banner3ImageUrl: string | null,
 ): Promise<{ error?: string }> {
   await requireSuperadmin();
 
@@ -62,21 +63,15 @@ export async function guardarContenidoHome(
     return { error: "Puedes subir hasta 3 imágenes por versión del hero." };
   }
 
+  const bannerOrNull = (
+    imageUrl: string | null,
+    link: string,
+  ): BannerContenido | null => (imageUrl ? { imageUrl, link } : null);
+
   const banners: BannerContenido[] = [
-    parsed.data.banner1.titulo || banner1ImageUrl
-      ? {
-          imageUrl: banner1ImageUrl,
-          titulo: parsed.data.banner1.titulo,
-          link: parsed.data.banner1.link,
-        }
-      : null,
-    parsed.data.banner2.titulo || banner2ImageUrl
-      ? {
-          imageUrl: banner2ImageUrl,
-          titulo: parsed.data.banner2.titulo,
-          link: parsed.data.banner2.link,
-        }
-      : null,
+    bannerOrNull(banner1ImageUrl, parsed.data.banner1.link),
+    bannerOrNull(banner2ImageUrl, parsed.data.banner2.link),
+    bannerOrNull(banner3ImageUrl, parsed.data.banner3.link),
   ].filter((b): b is BannerContenido => b !== null);
 
   const supabase = await createClient();

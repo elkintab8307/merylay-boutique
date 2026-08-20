@@ -69,14 +69,9 @@ export default async function AjustesPage() {
   const bannersStored = bannersParsed.success ? bannersParsed.data : [];
 
   const homeDefaultValues: HomeContenidoInput = {
-    banner1: {
-      titulo: bannersStored[0]?.titulo ?? "",
-      link: bannersStored[0]?.link ?? "",
-    },
-    banner2: {
-      titulo: bannersStored[1]?.titulo ?? "",
-      link: bannersStored[1]?.link ?? "",
-    },
+    banner1: { link: bannersStored[0]?.link ?? "" },
+    banner2: { link: bannersStored[1]?.link ?? "" },
+    banner3: { link: bannersStored[2]?.link ?? "" },
   };
 
   const horarioParsed = horarioSchema.safeParse(valueByKey.get("horario"));
@@ -100,6 +95,7 @@ export default async function AjustesPage() {
           heroImagenesMobileActuales={heroStored?.imagenesMobile ?? []}
           banner1ImageActual={bannersStored[0]?.imageUrl ?? null}
           banner2ImageActual={bannersStored[1]?.imageUrl ?? null}
+          banner3ImageActual={bannersStored[2]?.imageUrl ?? null}
         />
       </div>
       <div className="flex flex-col gap-6">
