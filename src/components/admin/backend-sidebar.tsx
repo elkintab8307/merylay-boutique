@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, type LucideIcon } from "lucide-react";
+import { Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Sheet,
@@ -15,7 +15,7 @@ import {
 
 export type SidebarSection = {
   label: string;
-  items: { href: string; label: string; icon?: LucideIcon }[];
+  items: { href: string; label: string; icon?: React.ReactNode }[];
 };
 
 function NavLinks({
@@ -26,7 +26,7 @@ function NavLinks({
   sections: SidebarSection[];
   currentPath: string;
   onNavigate?: (
-    item: { href: string; label: string; icon?: LucideIcon },
+    item: { href: string; label: string; icon?: React.ReactNode },
     className: string,
     content: React.ReactNode,
   ) => React.ReactNode;
@@ -40,7 +40,6 @@ function NavLinks({
           </p>
           {section.items.map((item) => {
             const active = currentPath === item.href;
-            const Icon = item.icon;
             const linkClassName = cn(
               "flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
               active
@@ -49,7 +48,7 @@ function NavLinks({
             );
             const content = (
               <>
-                {Icon && <Icon className="h-4 w-4 shrink-0" />}
+                {item.icon}
                 {item.label}
               </>
             );

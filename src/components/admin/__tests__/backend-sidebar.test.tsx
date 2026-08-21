@@ -13,7 +13,7 @@ describe("BackendSidebar", () => {
     render(
       <BackendSidebar
         sections={[
-          { label: "POS", items: [{ href: "/pos", label: "Terminal", icon: Store }] },
+          { label: "POS", items: [{ href: "/pos", label: "Terminal", icon: <Store className="h-4 w-4" /> }] },
         ]}
         homeHref="/pos"
       />,

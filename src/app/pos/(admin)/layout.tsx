@@ -5,9 +5,9 @@ const SECTIONS: SidebarSection[] = [
   {
     label: "POS",
     items: [
-      { href: "/pos", label: "Terminal", icon: Store },
-      { href: "/pos/ventas", label: "Ventas POS", icon: Receipt },
-      { href: "/pos/creditos", label: "Créditos", icon: CreditCard },
+      { href: "/pos", label: "Terminal", icon: <Store className="h-4 w-4 shrink-0" /> },
+      { href: "/pos/ventas", label: "Ventas POS", icon: <Receipt className="h-4 w-4 shrink-0" /> },
+      { href: "/pos/creditos", label: "Créditos", icon: <CreditCard className="h-4 w-4 shrink-0" /> },
     ],
   },
 ];
