@@ -80,6 +80,7 @@ describe("reimprimirUltimoRecibo", () => {
 
     expect(supabase.from).toHaveBeenCalledWith("pos_sales");
     expect(supabase._spies.eq).toHaveBeenCalledWith("staff_id", "staff-1");
+    expect(supabase._spies.order).toHaveBeenCalledWith("created_at", { ascending: false });
     expect(redirect).toHaveBeenCalledWith("/pos/venta/sale-uuid-9?print=1");
   });
 });

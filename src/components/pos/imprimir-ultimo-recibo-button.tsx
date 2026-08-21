@@ -24,10 +24,12 @@ export function ImprimirUltimoReciboButton() {
         type="button"
         onClick={handleClick}
         disabled={isPending}
+        title="Reimprime el último recibo registrado"
+        aria-label="Reimprimir el último recibo registrado"
         className="inline-flex items-center gap-1.5 rounded-md border border-brand-rosa-claro px-3 py-1.5 text-sm text-brand-ciruela hover:bg-brand-rosa-claro/30 disabled:opacity-50"
       >
         <Printer className="h-4 w-4" />
-        {isPending ? "Abriendo..." : "Imprimir"}
+        {isPending ? "Abriendo..." : "Reimprimir último"}
       </button>
       {error && (
         <p className="absolute right-0 top-full z-10 mt-1 w-48 rounded-md bg-white p-2 text-xs text-red-600 shadow-brand-sm">
