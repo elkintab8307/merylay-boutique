@@ -1,8 +1,15 @@
 "use client";
 
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 
-export function PrintButton() {
+export function PrintButton({ autoImprimir = false }: { autoImprimir?: boolean }) {
+  useEffect(() => {
+    if (autoImprimir) {
+      window.print();
+    }
+  }, [autoImprimir]);
+
   return (
     <Button
       type="button"
