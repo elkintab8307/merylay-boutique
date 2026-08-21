@@ -1087,6 +1087,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      delete_pos_sale: { Args: { p_sale_id: string }; Returns: undefined }
       generar_sku_producto: { Args: { p_category_id: string }; Returns: string }
       informe_compras_serie: {
         Args: { p_desde: string; p_hasta: string }
