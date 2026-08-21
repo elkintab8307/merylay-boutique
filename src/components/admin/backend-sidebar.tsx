@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu } from "lucide-react";
+import { Menu, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Sheet,
@@ -15,7 +15,7 @@ import {
 
 export type SidebarSection = {
   label: string;
-  items: { href: string; label: string }[];
+  items: { href: string; label: string; icon?: LucideIcon }[];
 };
 
 function NavLinks({
@@ -25,7 +25,11 @@ function NavLinks({
 }: {
   sections: SidebarSection[];
   currentPath: string;
-  onNavigate?: (item: { href: string; label: string }, className: string) => React.ReactNode;
+  onNavigate?: (
+    item: { href: string; label: string; icon?: LucideIcon },
+    className: string,
+    content: React.ReactNode,
+  ) => React.ReactNode;
 }) {
   return (
     <nav className="flex flex-col gap-5">
@@ -36,18 +40,25 @@ function NavLinks({
           </p>
           {section.items.map((item) => {
             const active = currentPath === item.href;
+            const Icon = item.icon;
             const linkClassName = cn(
-              "rounded-md px-3 py-2 text-sm transition-colors",
+              "flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
               active
                 ? "bg-brand-rosa/10 font-medium text-brand-rosa"
                 : "text-brand-ciruela hover:bg-brand-rosa-claro/20",
             );
+            const content = (
+              <>
+                {Icon && <Icon className="h-4 w-4 shrink-0" />}
+                {item.label}
+              </>
+            );
             if (onNavigate) {
-              return <div key={item.href}>{onNavigate(item, linkClassName)}</div>;
+              return <div key={item.href}>{onNavigate(item, linkClassName, content)}</div>;
             }
             return (
               <Link key={item.href} href={item.href} className={linkClassName}>
-                {item.label}
+                {content}
               </Link>
             );
           })}
@@ -92,9 +103,9 @@ export function BackendSidebar({
               <NavLinks
                 sections={sections}
                 currentPath={pathname}
-                onNavigate={(item, className) => (
+                onNavigate={(item, className, content) => (
                   <SheetClose render={<Link href={item.href} />} className={className}>
-                    {item.label}
+                    {content}
                   </SheetClose>
                 )}
               />
