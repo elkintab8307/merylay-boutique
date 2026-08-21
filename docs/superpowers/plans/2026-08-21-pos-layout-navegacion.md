@@ -20,6 +20,7 @@
 - Todo el texto de la UI en español, mensajes de error claros.
 - `BackendSidebar` debe seguir funcionando sin cambios para `admin-nav.tsx`, que no pasa íconos — cualquier cambio a su tipo debe ser retrocompatible (ícono opcional).
 - Toda barra/elemento de navegación nuevo debe llevar `print:hidden` para no aparecer en el recibo impreso (mismo criterio que ya usa `BackendSidebar` y `PrintButton`).
+- **[Ruling post-Task 4]** `SidebarSection.items[].icon` es `React.ReactNode` (un elemento ya renderizado, p. ej. `<Store className="h-4 w-4 shrink-0" />`), **nunca** el tipo `LucideIcon`/una referencia a componente sin invocar. Un Server Component (como `PosAdminLayout`) no puede pasarle una función/referencia a componente como prop a un Client Component (`BackendSidebar` lleva `"use client"`) — Next.js lo rechaza en build con "Functions cannot be passed directly to Client Components". Descubierto durante la verificación de build de la Task 4; corregido en `backend-sidebar.tsx` y en el bloque de la Task 7 más abajo.
 
 ---
 
@@ -841,9 +842,9 @@ const SECTIONS: SidebarSection[] = [
   {
     label: "POS",
     items: [
-      { href: "/pos", label: "Terminal", icon: Store },
-      { href: "/pos/ventas", label: "Ventas POS", icon: Receipt },
-      { href: "/pos/creditos", label: "Créditos", icon: CreditCard },
+      { href: "/pos", label: "Terminal", icon: <Store className="h-4 w-4 shrink-0" /> },
+      { href: "/pos/ventas", label: "Ventas POS", icon: <Receipt className="h-4 w-4 shrink-0" /> },
+      { href: "/pos/creditos", label: "Créditos", icon: <CreditCard className="h-4 w-4 shrink-0" /> },
     ],
   },
 ];
