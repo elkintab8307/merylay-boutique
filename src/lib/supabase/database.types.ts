@@ -1017,6 +1017,10 @@ export type Database = {
         Args: { p_monto: number; p_sale_id: string }
         Returns: undefined
       }
+      buscar_profile_por_telefono: {
+        Args: { p_telefono: string }
+        Returns: string
+      }
       confirm_order_payment_wompi: {
         Args: { p_order_id: string; p_wompi_transaction_id: string }
         Returns: {
