@@ -6,7 +6,7 @@ export default async function ClientesPage({
   searchParams,
 }: PageProps<"/pos/clientes">) {
   const { q } = await searchParams;
-  const query = typeof q === "string" ? q.trim() : "";
+  const query = typeof q === "string" ? q.trim().replace(/[%,()]/g, "") : "";
 
   const supabase = await createClient();
   const base = supabase
