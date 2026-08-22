@@ -8,8 +8,11 @@ import { PrintButton } from "./print-button";
 
 export default async function ReciboVentaPage({
   params,
+  searchParams,
 }: PageProps<"/pos/venta/[id]">) {
   const { id } = await params;
+  const query = await searchParams;
+  const autoImprimir = query.print === "1";
   const supabase = await createClient();
   const currentUser = await getCurrentProfile();
   const esAdmin =
@@ -145,7 +148,7 @@ export default async function ReciboVentaPage({
         </div>
       </div>
       <div className="mt-6 flex justify-center gap-3">
-        <PrintButton />
+        <PrintButton autoImprimir={autoImprimir} />
         {esAdmin && (
           <Link
             href={`/pos/venta/${venta.id}/editar`}

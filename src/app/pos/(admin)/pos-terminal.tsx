@@ -1,7 +1,7 @@
 "use client";
 
-import { VentaItemsEditor } from "./venta-items-editor";
-import { registrarVenta } from "./sale-action";
+import { VentaItemsEditor } from "@/app/pos/venta-items-editor";
+import { registrarVenta } from "@/app/pos/sale-action";
 
 export function PosTerminal() {
   return (

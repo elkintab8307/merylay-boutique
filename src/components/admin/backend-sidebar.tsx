@@ -15,7 +15,7 @@ import {
 
 export type SidebarSection = {
   label: string;
-  items: { href: string; label: string }[];
+  items: { href: string; label: string; icon?: React.ReactNode }[];
 };
 
 function NavLinks({
@@ -25,7 +25,11 @@ function NavLinks({
 }: {
   sections: SidebarSection[];
   currentPath: string;
-  onNavigate?: (item: { href: string; label: string }, className: string) => React.ReactNode;
+  onNavigate?: (
+    item: { href: string; label: string; icon?: React.ReactNode },
+    className: string,
+    content: React.ReactNode,
+  ) => React.ReactNode;
 }) {
   return (
     <nav className="flex flex-col gap-5">
@@ -37,17 +41,23 @@ function NavLinks({
           {section.items.map((item) => {
             const active = currentPath === item.href;
             const linkClassName = cn(
-              "rounded-md px-3 py-2 text-sm transition-colors",
+              "flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
               active
                 ? "bg-brand-rosa/10 font-medium text-brand-rosa"
                 : "text-brand-ciruela hover:bg-brand-rosa-claro/20",
             );
+            const content = (
+              <>
+                {item.icon}
+                {item.label}
+              </>
+            );
             if (onNavigate) {
-              return <div key={item.href}>{onNavigate(item, linkClassName)}</div>;
+              return <div key={item.href}>{onNavigate(item, linkClassName, content)}</div>;
             }
             return (
               <Link key={item.href} href={item.href} className={linkClassName}>
-                {item.label}
+                {content}
               </Link>
             );
           })}
@@ -92,9 +102,9 @@ export function BackendSidebar({
               <NavLinks
                 sections={sections}
                 currentPath={pathname}
-                onNavigate={(item, className) => (
+                onNavigate={(item, className, content) => (
                   <SheetClose render={<Link href={item.href} />} className={className}>
-                    {item.label}
+                    {content}
                   </SheetClose>
                 )}
               />
