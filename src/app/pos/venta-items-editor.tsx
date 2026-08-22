@@ -28,6 +28,7 @@ export function VentaItemsEditor({
   clienteInicial = null,
   mostrarDescuento = true,
   mostrarMetodoPago = true,
+  mostrarCliente = true,
   permitirCredito = true,
   textoBoton,
   textoBotonEnviando,
@@ -39,6 +40,7 @@ export function VentaItemsEditor({
   clienteInicial?: ClienteSeleccionado | null;
   mostrarDescuento?: boolean;
   mostrarMetodoPago?: boolean;
+  mostrarCliente?: boolean;
   permitirCredito?: boolean;
   textoBoton: string;
   textoBotonEnviando: string;
@@ -231,11 +233,13 @@ export function VentaItemsEditor({
           </div>
         )}
 
-        <ClienteSelector
-          cliente={cliente}
-          onChange={setCliente}
-          requerido={esCredito}
-        />
+        {mostrarCliente && (
+          <ClienteSelector
+            cliente={cliente}
+            onChange={setCliente}
+            requerido={esCredito}
+          />
+        )}
 
         {esCredito && (
           <div className="flex flex-col gap-3 rounded-md border border-brand-oro/50 bg-brand-oro/10 p-3">

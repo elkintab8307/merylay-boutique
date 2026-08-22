@@ -1,17 +1,12 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
 }));
 
-vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: vi.fn(),
-}));
-
-function crearSupabaseMock() {
+function crearSupabaseMock(profileId: string | null = null) {
   const limit = vi.fn(() => Promise.resolve({ data: [], error: null }));
   const or = vi.fn(() => ({ limit }));
   const select = vi.fn(() => ({ or }));
@@ -24,18 +19,8 @@ function crearSupabaseMock() {
     if (table === "pos_customers") return { select, insert };
     return { select };
   });
-  return { from, _spies: { select, or, limit, insert, insertSelect, single } };
-}
-
-function crearAdminSupabaseMock(profileId: string | null) {
-  const limit = vi.fn(() =>
-    Promise.resolve({ data: profileId ? [{ id: profileId }] : [], error: null }),
-  );
-  const order = vi.fn(() => ({ limit }));
-  const eq = vi.fn(() => ({ order }));
-  const select = vi.fn(() => ({ eq }));
-  const from = vi.fn(() => ({ select }));
-  return { from, _spies: { select, eq, order, limit } };
+  const rpc = vi.fn(() => Promise.resolve({ data: profileId, error: null }));
+  return { from, rpc, _spies: { select, or, limit, insert, insertSelect, single, rpc } };
 }
 
 describe("buscarClientes", () => {
@@ -75,7 +60,6 @@ describe("buscarClientes", () => {
 describe("crearCliente", () => {
   beforeEach(() => {
     vi.mocked(createClient).mockReset();
-    vi.mocked(createAdminClient).mockReset();
   });
 
   afterEach(() => {
@@ -85,37 +69,37 @@ describe("crearCliente", () => {
   it("rechaza nombre vacio sin llamar a la base de datos", async () => {
     const supabase = crearSupabaseMock();
     vi.mocked(createClient).mockResolvedValue(supabase as never);
-    vi.mocked(createAdminClient).mockReturnValue(crearAdminSupabaseMock(null) as never);
 
     const { crearCliente } = await import("../customer-actions");
     const resultado = await crearCliente("", "3001234567");
 
     expect(resultado).toEqual({ error: expect.any(String) });
     expect(supabase.from).not.toHaveBeenCalled();
+    expect(supabase.rpc).not.toHaveBeenCalled();
   });
 
   it("rechaza telefono invalido (menos de 7 digitos) sin llamar a la base de datos", async () => {
     const supabase = crearSupabaseMock();
     vi.mocked(createClient).mockResolvedValue(supabase as never);
-    vi.mocked(createAdminClient).mockReturnValue(crearAdminSupabaseMock(null) as never);
 
     const { crearCliente } = await import("../customer-actions");
     const resultado = await crearCliente("Ana", "123");
 
     expect(resultado).toEqual({ error: expect.any(String) });
     expect(supabase.from).not.toHaveBeenCalled();
+    expect(supabase.rpc).not.toHaveBeenCalled();
   });
 
-  it("normaliza el telefono y vincula profile_id si hay coincidencia en profiles.whatsapp", async () => {
-    const supabase = crearSupabaseMock();
+  it("normaliza el telefono y vincula profile_id si el RPC encuentra coincidencia", async () => {
+    const supabase = crearSupabaseMock("profile-9");
     vi.mocked(createClient).mockResolvedValue(supabase as never);
-    const adminSupabase = crearAdminSupabaseMock("profile-9");
-    vi.mocked(createAdminClient).mockReturnValue(adminSupabase as never);
 
     const { crearCliente } = await import("../customer-actions");
     await crearCliente("Ana Ruiz", "300 123 4567");
 
-    expect(adminSupabase.from).toHaveBeenCalledWith("profiles");
+    expect(supabase.rpc).toHaveBeenCalledWith("buscar_profile_por_telefono", {
+      p_telefono: "3001234567",
+    });
     expect(supabase._spies.insert).toHaveBeenCalledWith(
       expect.objectContaining({
         nombre: "Ana Ruiz",
@@ -125,10 +109,9 @@ describe("crearCliente", () => {
     );
   });
 
-  it("sin coincidencia en profiles, crea el cliente con profile_id null", async () => {
-    const supabase = crearSupabaseMock();
+  it("sin coincidencia del RPC, crea el cliente con profile_id null", async () => {
+    const supabase = crearSupabaseMock(null);
     vi.mocked(createClient).mockResolvedValue(supabase as never);
-    vi.mocked(createAdminClient).mockReturnValue(crearAdminSupabaseMock(null) as never);
 
     const { crearCliente } = await import("../customer-actions");
     const resultado = await crearCliente("Ana Ruiz", "3001234567");

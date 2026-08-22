@@ -16,6 +16,7 @@ export function PedidoEditarForm({
       itemsIniciales={itemsIniciales}
       mostrarDescuento={false}
       mostrarMetodoPago={false}
+      mostrarCliente={false}
       textoBoton="Guardar cambios"
       textoBotonEnviando="Guardando..."
       onGuardar={(items) => actualizarPedidoItems(orderId, items)}

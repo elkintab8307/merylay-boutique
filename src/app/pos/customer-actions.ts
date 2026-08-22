@@ -1,7 +1,6 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 
 export type PosCustomerResult = {
   id: string;
@@ -41,23 +40,17 @@ export async function crearCliente(
     return { error: "Ingresa un teléfono válido." };
   }
 
-  const adminClient = createAdminClient();
-  const { data: perfiles } = await adminClient
-    .from("profiles")
-    .select("id")
-    .eq("whatsapp", telefonoNormalizado)
-    .order("created_at", { ascending: false })
-    .limit(1);
-
-  const profileId = perfiles?.[0]?.id ?? null;
-
   const supabase = await createClient();
+  const { data: profileId } = await supabase.rpc("buscar_profile_por_telefono", {
+    p_telefono: telefonoNormalizado,
+  });
+
   const { data, error } = await supabase
     .from("pos_customers")
     .insert({
       nombre: nombreLimpio,
       telefono: telefonoNormalizado,
-      profile_id: profileId,
+      profile_id: profileId ?? null,
     })
     .select("id, nombre, telefono")
     .single();
