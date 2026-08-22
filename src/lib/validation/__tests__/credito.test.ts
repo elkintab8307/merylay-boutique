@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 import { abonoSchema, creditoVentaSchema } from "../credito";
 
 const BASE = {
-  clienteNombre: "Ana Ruiz",
-  clienteTelefono: "3001234567",
   numCuotas: 3,
   abonoInicial: 0,
   abonoInicialMetodo: null,
@@ -21,14 +19,6 @@ describe("creditoVentaSchema", () => {
       abonoInicialMetodo: "efectivo",
     });
     expect(resultado.success).toBe(true);
-  });
-
-  it("rechaza nombre de cliente vacio", () => {
-    expect(creditoVentaSchema.safeParse({ ...BASE, clienteNombre: "" }).success).toBe(false);
-  });
-
-  it("rechaza telefono vacio", () => {
-    expect(creditoVentaSchema.safeParse({ ...BASE, clienteTelefono: "" }).success).toBe(false);
   });
 
   it("rechaza menos de 1 cuota", () => {

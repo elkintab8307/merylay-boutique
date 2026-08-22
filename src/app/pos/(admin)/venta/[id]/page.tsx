@@ -30,7 +30,7 @@ export default async function ReciboVentaPage({
 
   const esCredito = venta.payment_method === "credito";
 
-  const [{ data: items }, { data: abonoInicial }, { count: numCuotas }] = await Promise.all([
+  const [{ data: items }, { data: abonoInicial }, { count: numCuotas }, { data: cliente }] = await Promise.all([
     supabase
       .from("pos_sale_items")
       .select("qty, unit_price, line_total, product_id, variant_id")
@@ -50,6 +50,9 @@ export default async function ReciboVentaPage({
           .select("id", { count: "exact", head: true })
           .eq("sale_id", venta.id)
       : Promise.resolve({ count: null }),
+    venta.customer_id
+      ? supabase.from("pos_customers").select("nombre, telefono").eq("id", venta.customer_id).single()
+      : Promise.resolve({ data: null }),
   ]);
 
   const productIds = (items ?? [])
@@ -99,8 +102,8 @@ export default async function ReciboVentaPage({
         {esCredito && (
           <div className="flex flex-col gap-1 border-y border-brand-rosa-claro py-2 text-sm text-brand-ciruela">
             <p className="font-heading text-brand-ciruela">Crédito</p>
-            <p>Cliente: {venta.credit_customer_name}</p>
-            <p>Teléfono: {venta.credit_customer_phone}</p>
+            <p>Cliente: {cliente?.nombre ?? "-"}</p>
+            <p>Teléfono: {cliente?.telefono ?? "-"}</p>
             <p>Cuotas: {numCuotas ?? 0}</p>
             {abonoInicial ? (
               <p>

@@ -13,6 +13,7 @@ export async function actualizarVenta(
   items: LocalCartItem[],
   paymentMethod: PaymentMethod,
   discount: number,
+  customerId: string | null,
 ): Promise<{ error?: string }> {
   await requireAdmin();
 
@@ -31,6 +32,7 @@ export async function actualizarVenta(
     })),
     p_payment_method: paymentMethod,
     p_discount: discount,
+    p_customer_id: customerId ?? undefined,
   });
 
   if (error || !data) {

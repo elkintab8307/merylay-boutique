@@ -1,4 +1,4 @@
-import { Store, Receipt, CreditCard, LayoutDashboard } from "lucide-react";
+import { Store, Receipt, CreditCard, Users, LayoutDashboard } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/get-current-user";
 import { buildLowStockItems, obtenerUmbralStockBajo } from "@/lib/admin/low-stock";
@@ -35,6 +35,7 @@ export default async function PosAdminLayout({
         { href: "/pos", label: "Terminal", icon: <Store className="h-4 w-4 shrink-0" /> },
         { href: "/pos/ventas", label: "Ventas POS", icon: <Receipt className="h-4 w-4 shrink-0" /> },
         { href: "/pos/creditos", label: "Créditos", icon: <CreditCard className="h-4 w-4 shrink-0" /> },
+        { href: "/pos/clientes", label: "Clientes", icon: <Users className="h-4 w-4 shrink-0" /> },
       ],
     },
   ];

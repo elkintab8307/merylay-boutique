@@ -13,6 +13,7 @@ export async function registrarVenta(
   paymentMethod: PaymentMethod,
   discount: number,
   credito: CreditoVentaInput | null,
+  customerId: string | null,
 ): Promise<{ error?: string }> {
   if (items.length === 0) {
     return { error: "Agrega al menos un producto a la venta." };
@@ -20,6 +21,9 @@ export async function registrarVenta(
 
   let creditoValidado: CreditoVentaInput | null = null;
   if (paymentMethod === "credito") {
+    if (!customerId) {
+      return { error: "Selecciona el cliente para la venta a crédito." };
+    }
     const parsed = creditoVentaSchema.safeParse(credito);
     if (!parsed.success) {
       return { error: parsed.error.issues[0]?.message ?? "Revisa los datos del crédito." };
@@ -32,7 +36,7 @@ export async function registrarVenta(
   // generador de tipos de Supabase los tipa como `T | undefined` (sin `null`)
   // por tratarse de argumentos opcionales. La aserción de tipo es necesaria
   // para poder enviar `null` explícito, que es lo que el RPC espera cuando
-  // la venta no es a crédito.
+  // la venta no es a crédito o no tiene cliente.
   const { data, error } = await supabase.rpc("create_pos_sale", {
     p_items: items.map((item) => ({
       productId: item.productId,
@@ -42,8 +46,7 @@ export async function registrarVenta(
     })),
     p_payment_method: paymentMethod,
     p_discount: discount,
-    p_credit_customer_name: creditoValidado?.clienteNombre ?? null,
-    p_credit_customer_phone: creditoValidado?.clienteTelefono ?? null,
+    p_customer_id: customerId,
     p_credit_num_cuotas: creditoValidado?.numCuotas ?? null,
     p_credit_abono_inicial: creditoValidado?.abonoInicial ?? 0,
     p_credit_abono_metodo: creditoValidado?.abonoInicialMetodo ?? null,

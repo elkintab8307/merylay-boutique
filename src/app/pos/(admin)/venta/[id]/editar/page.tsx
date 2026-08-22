@@ -21,7 +21,7 @@ export default async function EditarVentaPage({
   const supabase = await createClient();
   const { data: venta } = await supabase
     .from("pos_sales")
-    .select("id, discount, payment_method")
+    .select("id, discount, payment_method, customer_id")
     .eq("id", id)
     .single();
 
@@ -90,6 +90,14 @@ export default async function EditarVentaPage({
     };
   });
 
+  const { data: clienteData } = venta.customer_id
+    ? await supabase
+        .from("pos_customers")
+        .select("id, nombre, telefono")
+        .eq("id", venta.customer_id)
+        .single()
+    : { data: null };
+
   return (
     <div className="mx-auto max-w-5xl px-6 py-12">
       <Link
@@ -119,6 +127,7 @@ export default async function EditarVentaPage({
           itemsIniciales={itemsIniciales}
           discountInicial={venta.discount}
           paymentMethodInicial={venta.payment_method}
+          clienteInicial={clienteData}
         />
       )}
     </div>

@@ -426,6 +426,44 @@ export type Database = {
           },
         ]
       }
+      pos_customers: {
+        Row: {
+          cedula: string | null
+          created_at: string
+          direccion: string | null
+          id: string
+          nombre: string
+          profile_id: string | null
+          telefono: string
+        }
+        Insert: {
+          cedula?: string | null
+          created_at?: string
+          direccion?: string | null
+          id?: string
+          nombre: string
+          profile_id?: string | null
+          telefono: string
+        }
+        Update: {
+          cedula?: string | null
+          created_at?: string
+          direccion?: string | null
+          id?: string
+          nombre?: string
+          profile_id?: string | null
+          telefono?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_customers_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pos_sale_items: {
         Row: {
           id: string
@@ -481,8 +519,7 @@ export type Database = {
       pos_sales: {
         Row: {
           created_at: string
-          credit_customer_name: string | null
-          credit_customer_phone: string | null
+          customer_id: string | null
           discount: number
           id: string
           payment_method: Database["public"]["Enums"]["payment_method"]
@@ -493,8 +530,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
-          credit_customer_name?: string | null
-          credit_customer_phone?: string | null
+          customer_id?: string | null
           discount?: number
           id?: string
           payment_method: Database["public"]["Enums"]["payment_method"]
@@ -505,8 +541,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
-          credit_customer_name?: string | null
-          credit_customer_phone?: string | null
+          customer_id?: string | null
           discount?: number
           id?: string
           payment_method?: Database["public"]["Enums"]["payment_method"]
@@ -516,6 +551,13 @@ export type Database = {
           total?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "pos_sales_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "pos_customers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "pos_sales_staff_id_fkey"
             columns: ["staff_id"]
@@ -975,6 +1017,10 @@ export type Database = {
         Args: { p_monto: number; p_sale_id: string }
         Returns: undefined
       }
+      buscar_profile_por_telefono: {
+        Args: { p_telefono: string }
+        Returns: string
+      }
       confirm_order_payment_wompi: {
         Args: { p_order_id: string; p_wompi_transaction_id: string }
         Returns: {
@@ -1045,17 +1091,15 @@ export type Database = {
         Args: {
           p_credit_abono_inicial?: number
           p_credit_abono_metodo?: Database["public"]["Enums"]["payment_method"]
-          p_credit_customer_name?: string
-          p_credit_customer_phone?: string
           p_credit_num_cuotas?: number
+          p_customer_id?: string
           p_discount?: number
           p_items: Json
           p_payment_method: Database["public"]["Enums"]["payment_method"]
         }
         Returns: {
           created_at: string
-          credit_customer_name: string | null
-          credit_customer_phone: string | null
+          customer_id: string | null
           discount: number
           id: string
           payment_method: Database["public"]["Enums"]["payment_method"]
@@ -1196,6 +1240,7 @@ export type Database = {
       }
       update_pos_sale: {
         Args: {
+          p_customer_id?: string
           p_discount?: number
           p_items: Json
           p_payment_method: Database["public"]["Enums"]["payment_method"]
@@ -1203,8 +1248,7 @@ export type Database = {
         }
         Returns: {
           created_at: string
-          credit_customer_name: string | null
-          credit_customer_phone: string | null
+          customer_id: string | null
           discount: number
           id: string
           payment_method: Database["public"]["Enums"]["payment_method"]

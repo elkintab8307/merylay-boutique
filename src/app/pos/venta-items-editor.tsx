@@ -15,6 +15,7 @@ import { searchProducts, type PosSearchResult } from "./search-action";
 import { ProductSearchResult } from "./product-search-result";
 import type { Database } from "@/lib/supabase/database.types";
 import type { CreditoVentaInput } from "@/lib/validation/credito";
+import { ClienteSelector, type ClienteSeleccionado } from "./cliente-selector";
 
 type PaymentMethod = Database["public"]["Enums"]["payment_method"];
 
@@ -24,8 +25,10 @@ export function VentaItemsEditor({
   itemsIniciales = [],
   discountInicial = 0,
   paymentMethodInicial = "efectivo",
+  clienteInicial = null,
   mostrarDescuento = true,
   mostrarMetodoPago = true,
+  mostrarCliente = true,
   permitirCredito = true,
   textoBoton,
   textoBotonEnviando,
@@ -34,8 +37,10 @@ export function VentaItemsEditor({
   itemsIniciales?: LocalCartItem[];
   discountInicial?: number;
   paymentMethodInicial?: PaymentMethod;
+  clienteInicial?: ClienteSeleccionado | null;
   mostrarDescuento?: boolean;
   mostrarMetodoPago?: boolean;
+  mostrarCliente?: boolean;
   permitirCredito?: boolean;
   textoBoton: string;
   textoBotonEnviando: string;
@@ -44,6 +49,7 @@ export function VentaItemsEditor({
     paymentMethod: PaymentMethod,
     discount: number,
     credito: CreditoVentaInput | null,
+    customerId: string | null,
   ) => Promise<{ error?: string } | void>;
 }) {
   const [query, setQuery] = useState("");
@@ -51,8 +57,7 @@ export function VentaItemsEditor({
   const [items, setItems] = useState<LocalCartItem[]>(itemsIniciales);
   const [discount, setDiscount] = useState(discountInicial);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(paymentMethodInicial);
-  const [clienteNombre, setClienteNombre] = useState("");
-  const [clienteTelefono, setClienteTelefono] = useState("");
+  const [cliente, setCliente] = useState<ClienteSeleccionado | null>(clienteInicial ?? null);
   const [numCuotas, setNumCuotas] = useState(1);
   const [abonoInicial, setAbonoInicial] = useState(0);
   const [abonoInicialMetodo, setAbonoInicialMetodo] = useState<
@@ -89,8 +94,8 @@ export function VentaItemsEditor({
     setError(null);
 
     if (esCredito) {
-      if (!clienteNombre.trim() || !clienteTelefono.trim()) {
-        setError("Ingresa el nombre y teléfono del cliente.");
+      if (!cliente) {
+        setError("Selecciona el cliente para la venta a crédito.");
         return;
       }
       if (numCuotas < 1) {
@@ -106,14 +111,12 @@ export function VentaItemsEditor({
     startSubmit(async () => {
       const credito: CreditoVentaInput | null = esCredito
         ? {
-            clienteNombre: clienteNombre.trim(),
-            clienteTelefono: clienteTelefono.trim(),
             numCuotas,
             abonoInicial,
             abonoInicialMetodo: abonoInicialMetodo || null,
           }
         : null;
-      const result = await onGuardar(items, paymentMethod, discount, credito);
+      const result = await onGuardar(items, paymentMethod, discount, credito, cliente?.id ?? null);
       if (result?.error) {
         setError(result.error);
       }
@@ -230,29 +233,17 @@ export function VentaItemsEditor({
           </div>
         )}
 
+        {mostrarCliente && (
+          <ClienteSelector
+            cliente={cliente}
+            onChange={setCliente}
+            requerido={esCredito}
+          />
+        )}
+
         {esCredito && (
           <div className="flex flex-col gap-3 rounded-md border border-brand-oro/50 bg-brand-oro/10 p-3">
             <p className="text-sm font-semibold text-brand-ciruela">Datos del crédito</p>
-            <div>
-              <label htmlFor="clienteNombre" className="text-sm text-brand-ciruela">
-                Cliente
-              </label>
-              <Input
-                id="clienteNombre"
-                value={clienteNombre}
-                onChange={(e) => setClienteNombre(e.target.value)}
-              />
-            </div>
-            <div>
-              <label htmlFor="clienteTelefono" className="text-sm text-brand-ciruela">
-                Teléfono
-              </label>
-              <Input
-                id="clienteTelefono"
-                value={clienteTelefono}
-                onChange={(e) => setClienteTelefono(e.target.value)}
-              />
-            </div>
             <div>
               <label htmlFor="numCuotas" className="text-sm text-brand-ciruela">
                 Número de cuotas
