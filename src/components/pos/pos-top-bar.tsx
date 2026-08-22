@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { Users } from "lucide-react";
 import type { LowStockItem } from "@/lib/admin/low-stock";
 import { ImprimirUltimoReciboButton } from "./imprimir-ultimo-recibo-button";
 import { NotificacionesStockBajo } from "./notificaciones-stock-bajo";
@@ -24,6 +26,13 @@ export function PosTopBar({
         <p className="text-sm text-brand-ciruela/70">¡Bienvenida/o, {nombreVendedor}!</p>
       </div>
       <div className="flex items-center gap-3">
+        <Link
+          href="/pos/clientes"
+          className="inline-flex items-center gap-1.5 rounded-md border border-brand-rosa-claro px-3 py-1.5 text-sm text-brand-ciruela hover:bg-brand-rosa-claro/30"
+        >
+          <Users className="h-4 w-4" />
+          Clientes
+        </Link>
         <ImprimirUltimoReciboButton />
         <NotificacionesStockBajo items={stockBajo} />
         <div className="flex items-center gap-2 border-l border-brand-rosa-claro pl-3">
