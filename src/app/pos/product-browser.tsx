@@ -20,21 +20,45 @@ export function ProductBrowser({ onAdd }: { onAdd: (item: LocalCartItem) => void
   const [productos, setProductos] = useState<PosProductoResult[]>([]);
   const [umbralStockBajo, setUmbralStockBajo] = useState(5);
   const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    listarCategoriasPos().then(setCategorias);
-    obtenerUmbralStockBajoPos().then(setUmbralStockBajo);
+    listarCategoriasPos()
+      .then(setCategorias)
+      .catch((err) => {
+        console.error("Error al cargar categorías:", err);
+        setError("No se pudieron cargar las categorías. Intenta de nuevo.");
+      });
+    obtenerUmbralStockBajoPos()
+      .then(setUmbralStockBajo)
+      .catch((err) => {
+        console.error("Error al obtener umbral de stock bajo:", err);
+        setError("No se pudo obtener la configuración de stock. Intenta de nuevo.");
+      });
   }, []);
 
   useEffect(() => {
     setCargando(true);
+    setError(null);
+    let cancelled = false;
     const timeout = setTimeout(() => {
-      buscarProductosPos({ query, categoryId }).then((resultado) => {
-        setProductos(resultado);
-        setCargando(false);
-      });
+      buscarProductosPos({ query, categoryId })
+        .then((resultado) => {
+          if (cancelled) return;
+          setProductos(resultado);
+          setCargando(false);
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          console.error("Error al buscar productos:", err);
+          setError("No se pudieron cargar los productos. Intenta de nuevo.");
+          setCargando(false);
+        });
     }, 300);
-    return () => clearTimeout(timeout);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
   }, [query, categoryId]);
 
   return (
@@ -86,6 +110,10 @@ export function ProductBrowser({ onAdd }: { onAdd: (item: LocalCartItem) => void
         </button>
       </div>
 
+      {error && (
+        <p className="text-sm text-red-600">{error}</p>
+      )}
+
       <div className="grid grid-cols-2 gap-3">
         {productos.map((product) => (
           <ProductCardPos
@@ -96,7 +124,7 @@ export function ProductBrowser({ onAdd }: { onAdd: (item: LocalCartItem) => void
           />
         ))}
       </div>
-      {!cargando && productos.length === 0 && (
+      {(query || categoryId) && !cargando && productos.length === 0 && (
         <p className="text-sm text-brand-ciruela/60">Sin resultados.</p>
       )}
     </div>
