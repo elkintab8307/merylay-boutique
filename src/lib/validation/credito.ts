@@ -4,8 +4,6 @@ const METODOS_ABONO = ["efectivo", "tarjeta", "transferencia", "nequi", "davipla
 
 export const creditoVentaSchema = z
   .object({
-    clienteNombre: z.string().trim().min(2, "Ingresa el nombre del cliente"),
-    clienteTelefono: z.string().trim().min(7, "Ingresa un teléfono válido"),
     numCuotas: z
       .number()
       .int()

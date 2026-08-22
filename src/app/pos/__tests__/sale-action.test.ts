@@ -47,33 +47,26 @@ describe("registrarVenta", () => {
     vi.mocked(createClient).mockResolvedValue(supabase as never);
 
     const { registrarVenta } = await import("../sale-action");
-    const resultado = await registrarVenta([], "efectivo", 0, null);
+    const resultado = await registrarVenta([], "efectivo", 0, null, null);
 
     expect(resultado).toEqual({ error: expect.any(String) });
     expect(supabase.rpc).not.toHaveBeenCalled();
   });
 
-  it("venta normal (no credito): envia los campos de credito en null/0 aunque llegue un objeto credito", async () => {
+  it("venta normal sin cliente: envia p_customer_id null y los campos de credito en null/0", async () => {
     const supabase = crearSupabaseMock();
     vi.mocked(createClient).mockResolvedValue(supabase as never);
 
     const { registrarVenta } = await import("../sale-action");
     await expect(
-      registrarVenta(ITEMS, "efectivo", 0, {
-        clienteNombre: "Ana",
-        clienteTelefono: "3001234567",
-        numCuotas: 3,
-        abonoInicial: 0,
-        abonoInicialMetodo: null,
-      }),
+      registrarVenta(ITEMS, "efectivo", 0, null, null),
     ).rejects.toThrow("NEXT_REDIRECT");
 
     expect(supabase.rpc).toHaveBeenCalledWith(
       "create_pos_sale",
       expect.objectContaining({
         p_payment_method: "efectivo",
-        p_credit_customer_name: null,
-        p_credit_customer_phone: null,
+        p_customer_id: null,
         p_credit_num_cuotas: null,
         p_credit_abono_inicial: 0,
         p_credit_abono_metodo: null,
@@ -81,61 +74,75 @@ describe("registrarVenta", () => {
     );
   });
 
-  it("credito: rechaza datos invalidos (sin nombre de cliente) sin llamar al RPC", async () => {
-    const supabase = crearSupabaseMock();
-    vi.mocked(createClient).mockResolvedValue(supabase as never);
-
-    const { registrarVenta } = await import("../sale-action");
-    const resultado = await registrarVenta(ITEMS, "credito", 0, {
-      clienteNombre: "",
-      clienteTelefono: "3001234567",
-      numCuotas: 3,
-      abonoInicial: 0,
-      abonoInicialMetodo: null,
-    });
-
-    expect(resultado).toEqual({ error: expect.any(String) });
-    expect(supabase.rpc).not.toHaveBeenCalled();
-  });
-
-  it("credito: con abono inicial > 0 sin metodo, rechaza sin llamar al RPC", async () => {
-    const supabase = crearSupabaseMock();
-    vi.mocked(createClient).mockResolvedValue(supabase as never);
-
-    const { registrarVenta } = await import("../sale-action");
-    const resultado = await registrarVenta(ITEMS, "credito", 0, {
-      clienteNombre: "Ana",
-      clienteTelefono: "3001234567",
-      numCuotas: 3,
-      abonoInicial: 20000,
-      abonoInicialMetodo: null,
-    });
-
-    expect(resultado).toEqual({ error: expect.any(String) });
-    expect(supabase.rpc).not.toHaveBeenCalled();
-  });
-
-  it("credito valido: llama al RPC con los campos de credito y redirige", async () => {
+  it("venta normal con cliente: envia p_customer_id", async () => {
     const supabase = crearSupabaseMock();
     vi.mocked(createClient).mockResolvedValue(supabase as never);
 
     const { registrarVenta } = await import("../sale-action");
     await expect(
-      registrarVenta(ITEMS, "credito", 0, {
-        clienteNombre: "Ana Ruiz",
-        clienteTelefono: "3001234567",
-        numCuotas: 3,
-        abonoInicial: 20000,
-        abonoInicialMetodo: "efectivo",
-      }),
+      registrarVenta(ITEMS, "efectivo", 0, null, "cust-1"),
+    ).rejects.toThrow("NEXT_REDIRECT");
+
+    expect(supabase.rpc).toHaveBeenCalledWith(
+      "create_pos_sale",
+      expect.objectContaining({ p_customer_id: "cust-1" }),
+    );
+  });
+
+  it("credito sin cliente: rechaza sin llamar al RPC", async () => {
+    const supabase = crearSupabaseMock();
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+
+    const { registrarVenta } = await import("../sale-action");
+    const resultado = await registrarVenta(
+      ITEMS,
+      "credito",
+      0,
+      { numCuotas: 3, abonoInicial: 0, abonoInicialMetodo: null },
+      null,
+    );
+
+    expect(resultado).toEqual({ error: expect.any(String) });
+    expect(supabase.rpc).not.toHaveBeenCalled();
+  });
+
+  it("credito con abono inicial > 0 sin metodo, rechaza sin llamar al RPC", async () => {
+    const supabase = crearSupabaseMock();
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+
+    const { registrarVenta } = await import("../sale-action");
+    const resultado = await registrarVenta(
+      ITEMS,
+      "credito",
+      0,
+      { numCuotas: 3, abonoInicial: 20000, abonoInicialMetodo: null },
+      "cust-1",
+    );
+
+    expect(resultado).toEqual({ error: expect.any(String) });
+    expect(supabase.rpc).not.toHaveBeenCalled();
+  });
+
+  it("credito valido: llama al RPC con customerId y los campos de credito, y redirige", async () => {
+    const supabase = crearSupabaseMock();
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+
+    const { registrarVenta } = await import("../sale-action");
+    await expect(
+      registrarVenta(
+        ITEMS,
+        "credito",
+        0,
+        { numCuotas: 3, abonoInicial: 20000, abonoInicialMetodo: "efectivo" },
+        "cust-1",
+      ),
     ).rejects.toThrow("NEXT_REDIRECT");
 
     expect(supabase.rpc).toHaveBeenCalledWith(
       "create_pos_sale",
       expect.objectContaining({
         p_payment_method: "credito",
-        p_credit_customer_name: "Ana Ruiz",
-        p_credit_customer_phone: "3001234567",
+        p_customer_id: "cust-1",
         p_credit_num_cuotas: 3,
         p_credit_abono_inicial: 20000,
         p_credit_abono_metodo: "efectivo",
