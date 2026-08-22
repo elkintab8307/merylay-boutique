@@ -8,8 +8,8 @@ export function PosTerminal() {
     <VentaItemsEditor
       textoBoton="Registrar venta"
       textoBotonEnviando="Registrando..."
-      onGuardar={(items, paymentMethod, discount, credito) =>
-        registrarVenta(items, paymentMethod, discount, credito)
+      onGuardar={(items, paymentMethod, discount, credito, customerId) =>
+        registrarVenta(items, paymentMethod, discount, credito, customerId)
       }
     />
   );
