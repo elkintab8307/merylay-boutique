@@ -37,15 +37,17 @@ export default async function CreditoDetallePage({
 
   const { data: venta } = await supabase
     .from("pos_sales")
-    .select(
-      "id, created_at, total, credit_customer_name, credit_customer_phone, payment_method",
-    )
+    .select("id, created_at, total, customer_id, payment_method")
     .eq("id", id)
     .single();
 
   if (!venta || venta.payment_method !== "credito") {
     notFound();
   }
+
+  const { data: cliente } = venta.customer_id
+    ? await supabase.from("pos_customers").select("nombre, telefono").eq("id", venta.customer_id).single()
+    : { data: null };
 
   const [{ data: cuotas }, { data: pagos }] = await Promise.all([
     supabase
@@ -89,9 +91,9 @@ export default async function CreditoDetallePage({
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="font-heading text-3xl text-brand-ciruela">
-            {venta.credit_customer_name}
+            {cliente?.nombre ?? "-"}
           </h1>
-          <p className="text-sm text-brand-ciruela/70">{venta.credit_customer_phone}</p>
+          <p className="text-sm text-brand-ciruela/70">{cliente?.telefono ?? "-"}</p>
         </div>
         <div className="flex items-center gap-3">
           <Badge variant={ESTADO_VARIANT[estadoCredito]}>{ESTADO_LABEL[estadoCredito]}</Badge>

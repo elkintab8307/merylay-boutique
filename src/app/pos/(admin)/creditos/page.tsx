@@ -27,11 +27,18 @@ export default async function CreditosPage({
 
   const { data: ventas } = await supabase
     .from("pos_sales")
-    .select("id, created_at, total, credit_customer_name, credit_customer_phone")
+    .select("id, created_at, total, customer_id")
     .eq("payment_method", "credito")
     .order("created_at", { ascending: false });
 
   const saleIds = (ventas ?? []).map((v) => v.id);
+
+  const customerIds = [...new Set((ventas ?? []).map((v) => v.customer_id).filter((id): id is string => Boolean(id)))];
+  const { data: clientes } =
+    customerIds.length > 0
+      ? await supabase.from("pos_customers").select("id, nombre, telefono").in("id", customerIds)
+      : { data: [] as { id: string; nombre: string; telefono: string }[] };
+  const clientePorId = new Map((clientes ?? []).map((c) => [c.id, c]));
 
   const [{ data: pagos }, { data: cuotas }] = await Promise.all([
     saleIds.length > 0
@@ -112,9 +119,11 @@ export default async function CreditosPage({
               <TableRow key={venta.id}>
                 <TableCell>
                   <Link href={`/pos/creditos/${venta.id}`} className="text-brand-rosa hover:underline">
-                    {venta.credit_customer_name}
+                    {clientePorId.get(venta.customer_id ?? "")?.nombre ?? "-"}
                   </Link>
-                  <p className="text-xs text-brand-ciruela/60">{venta.credit_customer_phone}</p>
+                  <p className="text-xs text-brand-ciruela/60">
+                    {clientePorId.get(venta.customer_id ?? "")?.telefono ?? "-"}
+                  </p>
                 </TableCell>
                 <TableCell>{new Date(venta.created_at).toLocaleDateString("es-CO")}</TableCell>
                 <TableCell>{formatPrice(venta.total)}</TableCell>
