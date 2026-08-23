@@ -23,6 +23,14 @@ type PaymentMethod = Database["public"]["Enums"]["payment_method"];
 
 const METODOS_ABONO = ["efectivo", "tarjeta", "transferencia", "nequi", "daviplata"] as const;
 
+const METODOS_ABONO_OPTIONS: PaymentMethodOption<(typeof METODOS_ABONO)[number]>[] = [
+  { value: "efectivo", label: "Efectivo", Icon: Banknote },
+  { value: "tarjeta", label: "Tarjeta", Icon: CreditCard },
+  { value: "transferencia", label: "Transferencia", Icon: Landmark },
+  { value: "nequi", label: "Nequi", Icon: Smartphone },
+  { value: "daviplata", label: "Daviplata", Icon: Smartphone },
+];
+
 export function VentaItemsEditor({
   itemsIniciales = [],
   discountInicial = 0,
@@ -215,51 +223,47 @@ export function VentaItemsEditor({
 
         {esCredito && (
           <div className="flex flex-col gap-3 rounded-md border border-brand-oro/50 bg-brand-oro/10 p-3">
-            <p className="text-sm font-semibold text-brand-ciruela">Datos del crédito</p>
-            <div>
-              <label htmlFor="numCuotas" className="text-sm text-brand-ciruela">
-                Número de cuotas
-              </label>
-              <Input
-                id="numCuotas"
-                type="number"
-                min={1}
-                value={numCuotas}
-                onChange={(e) => setNumCuotas(Math.max(1, Number(e.target.value) || 1))}
-              />
+            <div className="flex items-center gap-2">
+              <Wallet className="h-4 w-4 text-brand-ciruela" />
+              <p className="text-sm font-semibold text-brand-ciruela">Datos del crédito</p>
             </div>
-            <div>
-              <label htmlFor="abonoInicial" className="text-sm text-brand-ciruela">
-                Abono inicial (opcional)
-              </label>
-              <Input
-                id="abonoInicial"
-                type="number"
-                min={0}
-                value={abonoInicial}
-                onChange={(e) => setAbonoInicial(Math.max(0, Number(e.target.value) || 0))}
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="numCuotas" className="text-sm text-brand-ciruela">
+                  Número de cuotas
+                </label>
+                <Input
+                  id="numCuotas"
+                  type="number"
+                  min={1}
+                  value={numCuotas}
+                  onChange={(e) => setNumCuotas(Math.max(1, Number(e.target.value) || 1))}
+                />
+              </div>
+              <div>
+                <label htmlFor="abonoInicial" className="text-sm text-brand-ciruela">
+                  Abono inicial (opcional)
+                </label>
+                <Input
+                  id="abonoInicial"
+                  type="number"
+                  min={0}
+                  value={abonoInicial}
+                  onChange={(e) => setAbonoInicial(Math.max(0, Number(e.target.value) || 0))}
+                />
+              </div>
             </div>
             {abonoInicial > 0 && (
               <div>
-                <label htmlFor="abonoInicialMetodo" className="text-sm text-brand-ciruela">
+                <label className="text-sm text-brand-ciruela">
                   Método de pago del abono inicial
                 </label>
-                <select
-                  id="abonoInicialMetodo"
+                <PaymentMethodPicker
+                  options={METODOS_ABONO_OPTIONS}
                   value={abonoInicialMetodo}
-                  onChange={(e) =>
-                    setAbonoInicialMetodo(e.target.value as (typeof METODOS_ABONO)[number] | "")
-                  }
-                  className="w-full rounded-md border border-brand-rosa-claro bg-white px-3 py-2 text-sm"
-                >
-                  <option value="">Selecciona un método</option>
-                  {METODOS_ABONO.map((metodo) => (
-                    <option key={metodo} value={metodo}>
-                      {metodo}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setAbonoInicialMetodo}
+                  compact
+                />
               </div>
             )}
           </div>
