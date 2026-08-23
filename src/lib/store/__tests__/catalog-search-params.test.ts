@@ -10,7 +10,17 @@ describe("parseCatalogSearchParams", () => {
       maxPrice: undefined,
       sort: { key: "destacados", column: "is_featured", ascending: false },
       q: "",
+      ofertas: false,
     });
+  });
+
+  it("activa ofertas cuando el parametro es '1'", () => {
+    expect(parseCatalogSearchParams({ ofertas: "1" }).ofertas).toBe(true);
+  });
+
+  it("mantiene ofertas desactivado con cualquier otro valor", () => {
+    expect(parseCatalogSearchParams({ ofertas: "0" }).ofertas).toBe(false);
+    expect(parseCatalogSearchParams({ ofertas: "true" }).ofertas).toBe(false);
   });
 
   it("convierte un solo valor de talla/color en array", () => {

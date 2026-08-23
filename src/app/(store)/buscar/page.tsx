@@ -16,6 +16,7 @@ export default async function BuscarPage({
     maxPrice,
     sort,
     q,
+    ofertas,
   } = parseCatalogSearchParams(search);
 
   const supabase = await createClient();
@@ -37,6 +38,7 @@ export default async function BuscarPage({
       colores: coloresSeleccionadas,
       sort,
       userId: user?.id ?? null,
+      soloPromociones: ofertas,
     });
     productos = resultado.productos;
     tallas = resultado.tallas;
@@ -75,6 +77,7 @@ export default async function BuscarPage({
             tallas={tallas}
             colores={colores}
             sortKey={sort.key}
+            ofertas={ofertas}
             q={q}
           />
           <div className="flex-1">

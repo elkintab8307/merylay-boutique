@@ -19,6 +19,7 @@ export default async function ProductosPage({
     minPrice,
     maxPrice,
     sort,
+    ofertas,
   } = parseCatalogSearchParams(search);
 
   const { productos, tallas, colores, favoritosSet } = await fetchCatalogProducts(supabase, {
@@ -28,6 +29,7 @@ export default async function ProductosPage({
     colores: coloresSeleccionadas,
     sort,
     userId: user?.id ?? null,
+    soloPromociones: ofertas,
   });
 
   return (
@@ -42,6 +44,7 @@ export default async function ProductosPage({
           tallas={tallas}
           colores={colores}
           sortKey={sort.key}
+          ofertas={ofertas}
         />
         <div className="flex-1">
           <ProductGrid

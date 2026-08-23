@@ -8,6 +8,7 @@ export function CatalogFilterSidebar({
   tallas,
   colores,
   sortKey,
+  ofertas,
   q,
 }: {
   minPrice: number | undefined;
@@ -17,12 +18,26 @@ export function CatalogFilterSidebar({
   tallas: string[];
   colores: string[];
   sortKey: SortKey;
+  ofertas?: boolean;
   q?: string;
 }) {
   return (
     <aside className="w-full shrink-0 md:w-56">
       <form method="get" className="flex flex-col gap-6">
         {q !== undefined && <input type="hidden" name="q" value={q} />}
+        <div>
+          <label className="flex w-fit cursor-pointer items-center gap-2 rounded-full border border-brand-rosa-claro px-3 py-1 text-sm text-brand-ciruela has-[:checked]:border-brand-rosa has-[:checked]:bg-brand-rosa has-[:checked]:text-brand-crema has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand-oro has-[:focus-visible]:ring-offset-2">
+            <input
+              type="checkbox"
+              name="ofertas"
+              value="1"
+              defaultChecked={ofertas}
+              className="sr-only"
+            />
+            Solo en promoción
+          </label>
+        </div>
+
         <div>
           <h2 className="mb-2 font-heading text-sm text-brand-ciruela">Precio</h2>
           <div className="flex gap-2">
