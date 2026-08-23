@@ -91,12 +91,13 @@ export function ProductCardPos({
       {seleccionando && hasVariants && (
         <div className="flex flex-col gap-2 rounded-md border border-brand-rosa-claro bg-brand-crema p-2">
           {tallas.length > 0 && (
-            <div className="flex flex-wrap gap-1">
+            <div role="group" aria-label="Talla" className="flex flex-wrap gap-1">
               {tallas.map((t) => (
                 <button
                   key={t}
                   type="button"
                   onClick={() => setTalla(t)}
+                  aria-pressed={talla === t}
                   className={`rounded-full border px-2 py-0.5 text-xs ${
                     talla === t
                       ? "border-brand-rosa bg-brand-rosa text-brand-crema"
@@ -109,12 +110,13 @@ export function ProductCardPos({
             </div>
           )}
           {colores.length > 0 && (
-            <div className="flex flex-wrap gap-1">
+            <div role="group" aria-label="Color" className="flex flex-wrap gap-1">
               {colores.map((c) => (
                 <button
                   key={c}
                   type="button"
                   onClick={() => setColor(c)}
+                  aria-pressed={color === c}
                   className={`rounded-full border px-2 py-0.5 text-xs ${
                     color === c
                       ? "border-brand-rosa bg-brand-rosa text-brand-crema"
