@@ -14,7 +14,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="es"
       className={`${greatVibes.variable} ${playfairDisplay.variable} ${montserrat.variable} ${cinzel.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col overflow-x-hidden bg-brand-crema font-body text-brand-ciruela">
+      <body className="min-h-full flex flex-col touch-manipulation overflow-x-hidden bg-brand-crema font-body text-brand-ciruela">
         {children}
       </body>
     </html>
