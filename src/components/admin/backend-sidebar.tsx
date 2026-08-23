@@ -70,9 +70,15 @@ function NavLinks({
 export function BackendSidebar({
   sections,
   homeHref,
+  open,
+  onOpenChange,
+  ocultarTriggerMovil = false,
 }: {
   sections: SidebarSection[];
   homeHref: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  ocultarTriggerMovil?: boolean;
 }) {
   const pathname = usePathname();
 
@@ -84,34 +90,36 @@ export function BackendSidebar({
         </Link>
         <NavLinks sections={sections} currentPath={pathname} />
       </aside>
-      <div className="border-b border-brand-rosa-claro bg-white px-4 py-3 md:hidden print:hidden">
-        <Sheet>
-          <SheetTrigger
-            aria-label="Menú"
-            className="inline-flex items-center justify-center rounded-md p-2 text-brand-ciruela hover:bg-brand-rosa-claro/30"
-          >
-            <Menu className="h-6 w-6" />
-          </SheetTrigger>
-          <SheetContent side="left" className="bg-brand-crema">
-            <SheetHeader>
-              <SheetTitle className="font-script text-2xl text-brand-rosa">
-                MeryLay
-              </SheetTitle>
-            </SheetHeader>
-            <div className="px-2 pb-4">
-              <NavLinks
-                sections={sections}
-                currentPath={pathname}
-                onNavigate={(item, className, content) => (
-                  <SheetClose render={<Link href={item.href} />} className={className}>
-                    {content}
-                  </SheetClose>
-                )}
-              />
-            </div>
-          </SheetContent>
-        </Sheet>
-      </div>
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        {!ocultarTriggerMovil && (
+          <div className="border-b border-brand-rosa-claro bg-white px-4 py-3 md:hidden print:hidden">
+            <SheetTrigger
+              aria-label="Menú"
+              className="inline-flex items-center justify-center rounded-md p-2 text-brand-ciruela hover:bg-brand-rosa-claro/30"
+            >
+              <Menu className="h-6 w-6" />
+            </SheetTrigger>
+          </div>
+        )}
+        <SheetContent side="left" className="bg-brand-crema">
+          <SheetHeader>
+            <SheetTitle className="font-script text-2xl text-brand-rosa">
+              MeryLay
+            </SheetTitle>
+          </SheetHeader>
+          <div className="px-2 pb-4">
+            <NavLinks
+              sections={sections}
+              currentPath={pathname}
+              onNavigate={(item, className, content) => (
+                <SheetClose render={<Link href={item.href} />} className={className}>
+                  {content}
+                </SheetClose>
+              )}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
     </>
   );
 }

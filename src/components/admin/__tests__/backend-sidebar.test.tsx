@@ -33,4 +33,25 @@ describe("BackendSidebar", () => {
     );
     expect(screen.getAllByText("Inicio").length).toBeGreaterThan(0);
   });
+
+  it("muestra el trigger movil propio por defecto (ocultarTriggerMovil sin pasar)", () => {
+    render(
+      <BackendSidebar
+        sections={[{ label: "POS", items: [{ href: "/pos", label: "Terminal" }] }]}
+        homeHref="/pos"
+      />,
+    );
+    expect(screen.getByLabelText("Menú")).toBeInTheDocument();
+  });
+
+  it("oculta el trigger movil propio cuando ocultarTriggerMovil es true", () => {
+    render(
+      <BackendSidebar
+        sections={[{ label: "POS", items: [{ href: "/pos", label: "Terminal" }] }]}
+        homeHref="/pos"
+        ocultarTriggerMovil
+      />,
+    );
+    expect(screen.queryByLabelText("Menú")).not.toBeInTheDocument();
+  });
 });
