@@ -141,7 +141,7 @@ export function VentaItemsEditor({
   return (
     <>
       <div className="grid gap-8 md:grid-cols-2">
-        <div className={mobileVistaDoble && mostrandoCarritoMovil ? "hidden md:block" : "block"}>
+        <div className={mobileVistaDoble && mostrandoCarritoMovil ? "hidden md:contents" : "block md:contents"}>
           <ProductBrowser onAdd={handleAdd} />
         </div>
 
