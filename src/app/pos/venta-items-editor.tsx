@@ -11,8 +11,7 @@ import {
   computeSubtotal,
   type LocalCartItem,
 } from "@/lib/cart/local-cart";
-import { searchProducts, type PosSearchResult } from "./search-action";
-import { ProductSearchResult } from "./product-search-result";
+import { ProductBrowser } from "./product-browser";
 import type { Database } from "@/lib/supabase/database.types";
 import type { CreditoVentaInput } from "@/lib/validation/credito";
 import { ClienteSelector, type ClienteSeleccionado } from "./cliente-selector";
@@ -52,8 +51,6 @@ export function VentaItemsEditor({
     customerId: string | null,
   ) => Promise<{ error?: string } | void>;
 }) {
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<PosSearchResult[]>([]);
   const [items, setItems] = useState<LocalCartItem[]>(itemsIniciales);
   const [discount, setDiscount] = useState(discountInicial);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(paymentMethodInicial);
@@ -64,19 +61,11 @@ export function VentaItemsEditor({
     (typeof METODOS_ABONO)[number] | ""
   >("");
   const [error, setError] = useState<string | null>(null);
-  const [isSearching, startSearch] = useTransition();
   const [isSubmitting, startSubmit] = useTransition();
 
   const subtotal = computeSubtotal(items);
   const total = Math.max(subtotal - discount, 0);
   const esCredito = paymentMethod === "credito" && permitirCredito;
-
-  const handleSearch = () => {
-    startSearch(async () => {
-      const found = await searchProducts(query);
-      setResults(found);
-    });
-  };
 
   const handleAdd = (item: LocalCartItem) => {
     setItems((prev) => mergeCartItem(prev, item));
@@ -125,33 +114,7 @@ export function VentaItemsEditor({
 
   return (
     <div className="grid gap-8 md:grid-cols-2">
-      <div className="flex flex-col gap-4 rounded-lg border border-brand-rosa-claro bg-white p-4 shadow-brand-sm">
-        <h2 className="font-heading text-xl text-brand-ciruela">Buscar producto</h2>
-        <div className="flex gap-2">
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Nombre o SKU"
-            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-          />
-          <Button
-            type="button"
-            onClick={handleSearch}
-            disabled={isSearching}
-            className="bg-brand-rosa text-brand-crema hover:bg-brand-rosa/90"
-          >
-            {isSearching ? "Buscando..." : "Buscar"}
-          </Button>
-        </div>
-        <div className="flex flex-col">
-          {results.map((product) => (
-            <ProductSearchResult key={product.id} product={product} onAdd={handleAdd} />
-          ))}
-          {results.length === 0 && query && !isSearching && (
-            <p className="text-sm text-brand-ciruela/60">Sin resultados.</p>
-          )}
-        </div>
-      </div>
+      <ProductBrowser onAdd={handleAdd} />
 
       <div className="flex flex-col gap-4 rounded-lg border border-brand-rosa-claro bg-white p-4 shadow-brand-sm">
         <h2 className="font-heading text-xl text-brand-ciruela">Venta actual</h2>
