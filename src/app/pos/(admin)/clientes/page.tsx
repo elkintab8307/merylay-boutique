@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Table, TableHeader, TableRow, TableCell, TableHeaderCell } from "@/components/ui/table";
+import { sanitizarQueryBusqueda } from "@/lib/search/sanitize";
 
 export default async function ClientesPage({
   searchParams,
 }: PageProps<"/pos/clientes">) {
   const { q } = await searchParams;
-  const query = typeof q === "string" ? q.trim().replace(/[%,()]/g, "") : "";
+  const query = typeof q === "string" ? sanitizarQueryBusqueda(q) : "";
 
   const supabase = await createClient();
   const base = supabase
