@@ -15,7 +15,12 @@ Hoy:
 - Cada línea del carrito es solo texto: nombre, precio, stepper de
   cantidad, botón "Quitar". Sin imagen, aunque `LocalCartItem.imageUrl`
   (`src/lib/cart/local-cart.ts`) ya viene poblado correctamente desde
-  el sub-proyecto 3 (antes siempre era `null`).
+  el sub-proyecto 3 **cuando el ítem se agrega vía `ProductBrowser`**
+  (antes siempre era `null` en ese camino). Los dos flujos de EDICIÓN
+  (`/pos/venta/[id]/editar` y `/admin/pedidos/[id]/editar`) construyen
+  sus `itemsIniciales` directamente desde la base de datos con
+  `imageUrl: null` hardcodeado (`page.tsx` de cada uno) — este
+  sub-proyecto no corrige eso; ver "Fuera de alcance".
 - El método de pago es un `<select>` de texto plano con seis opciones
   (`efectivo`, `tarjeta`, `transferencia`, `nequi`, `daviplata`,
   `credito`, esta última solo si `permitirCredito`).
@@ -171,6 +176,15 @@ consumidores lo heredan automáticamente:
 - Íconos específicos de marca para Nequi/Daviplata (ej. logos reales)
   — se usa `Smartphone` genérico para ambos; un ícono de marca real
   requeriría assets propios fuera del alcance de este sub-proyecto.
+- **Poblar `imageUrl` en los flujos de edición** (`/pos/venta/[id]/editar`
+  y `/admin/pedidos/[id]/editar`) — hallazgo real de la revisión final:
+  ambos `page.tsx` construyen `itemsIniciales` con `imageUrl: null`
+  hardcodeado, así que la miniatura del carrito de este sub-proyecto
+  solo se ve poblada para ítems agregados en la sesión actual vía
+  `ProductBrowser`; los ítems pre-cargados en esas dos páginas muestran
+  el cuadro rosa vacío. Corregirlo requiere traer la imagen principal
+  del producto en la consulta de cada `page.tsx` — fuera del alcance
+  de 2 archivos declarado aquí. Follow-up recomendado, no bloqueante.
 
 ## Testing
 
