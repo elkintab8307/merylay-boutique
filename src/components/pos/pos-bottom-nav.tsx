@@ -27,7 +27,7 @@ export function PosBottomNav({
   return (
     <nav
       aria-label="Navegación principal"
-      className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-around border-t border-brand-rosa-claro bg-white px-2 py-1.5 md:hidden print:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 flex items-center border-t border-brand-rosa-claro bg-white px-1 py-1.5 md:hidden print:hidden"
     >
       {tabs.map((tab) => {
         const active = pathname === tab.href;
@@ -37,22 +37,22 @@ export function PosBottomNav({
             key={tab.href}
             href={tab.href}
             className={cn(
-              "flex flex-col items-center gap-0.5 rounded-md px-3 py-1 text-xs",
+              "flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-md px-1 py-1 text-xs",
               active ? "text-brand-rosa" : "text-brand-ciruela",
             )}
           >
-            <Icon className="h-5 w-5" />
-            {tab.label}
+            <Icon className="h-5 w-5 shrink-0" />
+            <span className="w-full truncate text-center">{tab.label}</span>
           </Link>
         );
       })}
       <button
         type="button"
         onClick={onAbrirMas}
-        className="flex flex-col items-center gap-0.5 rounded-md px-3 py-1 text-xs text-brand-ciruela"
+        className="flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-md px-1 py-1 text-xs text-brand-ciruela"
       >
-        <Menu className="h-5 w-5" />
-        Más
+        <Menu className="h-5 w-5 shrink-0" />
+        <span className="w-full truncate text-center">Más</span>
       </button>
     </nav>
   );
