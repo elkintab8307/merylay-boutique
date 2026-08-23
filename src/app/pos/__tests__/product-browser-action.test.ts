@@ -170,7 +170,7 @@ describe("listarCategoriasPos", () => {
 
   it("filtra activas, sin parent_id, ordenadas por sort_order", async () => {
     const supabase = crearSupabaseMock({
-      categories: [{ id: "cat-1", name: "Pijamas" }],
+      categories: [{ id: "cat-1", name: "Pijamas", image_url: "https://cdn.example.com/cat.jpg" }],
     });
     vi.mocked(createClient).mockResolvedValue(supabase as never);
 
@@ -180,7 +180,21 @@ describe("listarCategoriasPos", () => {
     expect(supabase.builders.categories.eq).toHaveBeenCalledWith("is_active", true);
     expect(supabase.builders.categories.is).toHaveBeenCalledWith("parent_id", null);
     expect(supabase.builders.categories.order).toHaveBeenCalledWith("sort_order");
-    expect(resultado).toEqual([{ id: "cat-1", name: "Pijamas" }]);
+    expect(resultado).toEqual([
+      { id: "cat-1", name: "Pijamas", imageUrl: "https://cdn.example.com/cat.jpg" },
+    ]);
+  });
+
+  it("mapea image_url null a imageUrl: null", async () => {
+    const supabase = crearSupabaseMock({
+      categories: [{ id: "cat-2", name: "Vestidos", image_url: null }],
+    });
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+
+    const { listarCategoriasPos } = await import("../product-browser-action");
+    const resultado = await listarCategoriasPos();
+
+    expect(resultado).toEqual([{ id: "cat-2", name: "Vestidos", imageUrl: null }]);
   });
 });
 
