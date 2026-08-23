@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from "react";
 import Image from "next/image";
+import { Banknote, CreditCard, Landmark, Smartphone, Wallet } from "lucide-react";
+import { PaymentMethodPicker, type PaymentMethodOption } from "./payment-method-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatPrice } from "@/lib/format";
@@ -67,6 +69,17 @@ export function VentaItemsEditor({
   const subtotal = computeSubtotal(items);
   const total = Math.max(subtotal - discount, 0);
   const esCredito = paymentMethod === "credito" && permitirCredito;
+
+  const metodosPagoPrincipal: PaymentMethodOption<PaymentMethod>[] = [
+    { value: "efectivo", label: "Efectivo", Icon: Banknote },
+    { value: "tarjeta", label: "Tarjeta", Icon: CreditCard },
+    { value: "transferencia", label: "Transferencia", Icon: Landmark },
+    { value: "nequi", label: "Nequi", Icon: Smartphone },
+    { value: "daviplata", label: "Daviplata", Icon: Smartphone },
+    ...(permitirCredito
+      ? [{ value: "credito" as PaymentMethod, label: "Crédito", Icon: Wallet }]
+      : []),
+  ];
 
   const handleAdd = (item: LocalCartItem) => {
     setItems((prev) => mergeCartItem(prev, item));
@@ -183,22 +196,12 @@ export function VentaItemsEditor({
 
         {mostrarMetodoPago && (
           <div>
-            <label htmlFor="paymentMethod" className="text-sm text-brand-ciruela">
-              Método de pago
-            </label>
-            <select
-              id="paymentMethod"
+            <label className="text-sm text-brand-ciruela">Método de pago</label>
+            <PaymentMethodPicker
+              options={metodosPagoPrincipal}
               value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-              className="w-full rounded-md border border-brand-rosa-claro bg-white px-3 py-2 text-sm"
-            >
-              <option value="efectivo">Efectivo</option>
-              <option value="tarjeta">Tarjeta</option>
-              <option value="transferencia">Transferencia</option>
-              <option value="nequi">Nequi</option>
-              <option value="daviplata">Daviplata</option>
-              {permitirCredito && <option value="credito">Crédito</option>}
-            </select>
+              onChange={setPaymentMethod}
+            />
           </div>
         )}
 
