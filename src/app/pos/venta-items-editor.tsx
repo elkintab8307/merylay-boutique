@@ -156,14 +156,14 @@ export function VentaItemsEditor({
                     <Image src={item.imageUrl} alt={item.name} fill className="object-contain" />
                   )}
                 </div>
-                <div className="flex-1">
-                  <p className="text-sm text-brand-ciruela">{item.name}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm text-brand-ciruela">{item.name}</p>
                   <p className="text-xs text-brand-ciruela/60">{formatPrice(item.unitPrice)}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => handleUpdateQty(item.productId, item.variantId, item.qty - 1)}
-                  className="h-11 w-11 rounded-md border border-brand-rosa-claro text-brand-ciruela"
+                  className="h-11 w-11 shrink-0 rounded-md border border-brand-rosa-claro text-brand-ciruela"
                 >
                   -
                 </button>
@@ -171,7 +171,7 @@ export function VentaItemsEditor({
                 <button
                   type="button"
                   onClick={() => handleUpdateQty(item.productId, item.variantId, item.qty + 1)}
-                  className="h-11 w-11 rounded-md border border-brand-rosa-claro text-brand-ciruela"
+                  className="h-11 w-11 shrink-0 rounded-md border border-brand-rosa-claro text-brand-ciruela"
                 >
                   +
                 </button>
@@ -209,6 +209,7 @@ export function VentaItemsEditor({
               options={metodosPagoPrincipal}
               value={paymentMethod}
               onChange={setPaymentMethod}
+              groupLabel="Método de pago"
             />
           </div>
         )}
@@ -263,6 +264,7 @@ export function VentaItemsEditor({
                   value={abonoInicialMetodo}
                   onChange={setAbonoInicialMetodo}
                   compact
+                  groupLabel="Método de pago del abono inicial"
                 />
               </div>
             )}
