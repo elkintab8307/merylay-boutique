@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatPrice } from "@/lib/format";
@@ -129,6 +130,11 @@ export function VentaItemsEditor({
                 key={`${item.productId}-${item.variantId ?? "base"}`}
                 className="flex items-center gap-2 py-2"
               >
+                <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-md bg-brand-rosa-claro">
+                  {item.imageUrl && (
+                    <Image src={item.imageUrl} alt={item.name} fill className="object-contain" />
+                  )}
+                </div>
                 <div className="flex-1">
                   <p className="text-sm text-brand-ciruela">{item.name}</p>
                   <p className="text-xs text-brand-ciruela/60">{formatPrice(item.unitPrice)}</p>
