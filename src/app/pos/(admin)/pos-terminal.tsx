@@ -6,6 +6,7 @@ import { registrarVenta } from "@/app/pos/sale-action";
 export function PosTerminal() {
   return (
     <VentaItemsEditor
+      mobileVistaDoble
       textoBoton="Registrar venta"
       textoBotonEnviando="Registrando..."
       onGuardar={(items, paymentMethod, discount, credito, customerId) =>

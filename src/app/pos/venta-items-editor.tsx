@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Image from "next/image";
-import { Banknote, CreditCard, Landmark, Smartphone, Wallet } from "lucide-react";
+import { ArrowLeft, Banknote, CreditCard, Landmark, ShoppingCart, Smartphone, Wallet } from "lucide-react";
 import { PaymentMethodPicker, type PaymentMethodOption } from "./payment-method-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +40,7 @@ export function VentaItemsEditor({
   mostrarMetodoPago = true,
   mostrarCliente = true,
   permitirCredito = true,
+  mobileVistaDoble = false,
   textoBoton,
   textoBotonEnviando,
   onGuardar,
@@ -52,6 +53,7 @@ export function VentaItemsEditor({
   mostrarMetodoPago?: boolean;
   mostrarCliente?: boolean;
   permitirCredito?: boolean;
+  mobileVistaDoble?: boolean;
   textoBoton: string;
   textoBotonEnviando: string;
   onGuardar: (
@@ -73,10 +75,12 @@ export function VentaItemsEditor({
   >("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, startSubmit] = useTransition();
+  const [mostrandoCarritoMovil, setMostrandoCarritoMovil] = useState(false);
 
   const subtotal = computeSubtotal(items);
   const total = Math.max(subtotal - discount, 0);
   const esCredito = paymentMethod === "credito" && permitirCredito;
+  const totalItems = items.reduce((sum, i) => sum + i.qty, 0);
 
   const metodosPagoPrincipal: PaymentMethodOption<PaymentMethod>[] = [
     { value: "efectivo", label: "Efectivo", Icon: Banknote },
@@ -135,170 +139,210 @@ export function VentaItemsEditor({
   };
 
   return (
-    <div className="grid gap-8 md:grid-cols-2">
-      <ProductBrowser onAdd={handleAdd} />
-
-      <div className="flex flex-col gap-4 rounded-lg border border-brand-rosa-claro bg-white p-4 shadow-brand-sm">
-        <h2 className="font-heading text-xl text-brand-ciruela">Venta actual</h2>
-        {items.length === 0 ? (
-          <p className="text-sm text-brand-ciruela/60">
-            Todavía no hay productos en la venta.
-          </p>
-        ) : (
-          <div className="flex flex-col divide-y divide-brand-rosa-claro">
-            {items.map((item) => (
-              <div
-                key={`${item.productId}-${item.variantId ?? "base"}`}
-                className="flex items-center gap-2 py-2"
-              >
-                <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-md bg-brand-rosa-claro">
-                  {item.imageUrl && (
-                    <Image src={item.imageUrl} alt={item.name} fill className="object-contain" />
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-brand-ciruela">{item.name}</p>
-                  <p className="text-xs text-brand-ciruela/60">{formatPrice(item.unitPrice)}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleUpdateQty(item.productId, item.variantId, item.qty - 1)}
-                  className="h-11 w-11 shrink-0 rounded-md border border-brand-rosa-claro text-brand-ciruela"
-                >
-                  -
-                </button>
-                <span className="w-6 text-center text-sm">{item.qty}</span>
-                <button
-                  type="button"
-                  onClick={() => handleUpdateQty(item.productId, item.variantId, item.qty + 1)}
-                  className="h-11 w-11 shrink-0 rounded-md border border-brand-rosa-claro text-brand-ciruela"
-                >
-                  +
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleRemove(item.productId, item.variantId)}
-                  className="ml-2 text-sm text-red-600 hover:underline"
-                >
-                  Quitar
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {mostrarDescuento && (
-          <div>
-            <label htmlFor="discount" className="text-sm text-brand-ciruela">
-              Descuento (pesos)
-            </label>
-            <Input
-              id="discount"
-              type="number"
-              min={0}
-              value={discount}
-              onChange={(e) => setDiscount(Math.max(0, Number(e.target.value) || 0))}
-            />
-          </div>
-        )}
-
-        {mostrarMetodoPago && (
-          <div>
-            <label className="text-sm text-brand-ciruela">Método de pago</label>
-            <PaymentMethodPicker
-              options={metodosPagoPrincipal}
-              value={paymentMethod}
-              onChange={setPaymentMethod}
-              groupLabel="Método de pago"
-            />
-          </div>
-        )}
-
-        {mostrarCliente && (
-          <ClienteSelector
-            cliente={cliente}
-            onChange={setCliente}
-            requerido={esCredito}
-          />
-        )}
-
-        {esCredito && (
-          <div className="flex flex-col gap-3 rounded-md border border-brand-oro/50 bg-brand-oro/10 p-3">
-            <div className="flex items-center gap-2">
-              <Wallet className="h-4 w-4 text-brand-ciruela" />
-              <p className="text-sm font-semibold text-brand-ciruela">Datos del crédito</p>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="numCuotas" className="text-sm text-brand-ciruela">
-                  Número de cuotas
-                </label>
-                <Input
-                  id="numCuotas"
-                  type="number"
-                  min={1}
-                  value={numCuotas}
-                  onChange={(e) => setNumCuotas(Math.max(1, Number(e.target.value) || 1))}
-                />
-              </div>
-              <div>
-                <label htmlFor="abonoInicial" className="text-sm text-brand-ciruela">
-                  Abono inicial (opcional)
-                </label>
-                <Input
-                  id="abonoInicial"
-                  type="number"
-                  min={0}
-                  value={abonoInicial}
-                  onChange={(e) => setAbonoInicial(Math.max(0, Number(e.target.value) || 0))}
-                />
-              </div>
-            </div>
-            {abonoInicial > 0 && (
-              <div>
-                <label className="text-sm text-brand-ciruela">
-                  Método de pago del abono inicial
-                </label>
-                <PaymentMethodPicker
-                  options={METODOS_ABONO_OPTIONS}
-                  value={abonoInicialMetodo}
-                  onChange={setAbonoInicialMetodo}
-                  compact
-                  groupLabel="Método de pago del abono inicial"
-                />
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="flex flex-col gap-1 border-t border-brand-rosa-claro pt-3 text-sm text-brand-ciruela">
-          <div className="flex justify-between">
-            <span>Subtotal</span>
-            <span>{formatPrice(subtotal)}</span>
-          </div>
-          {mostrarDescuento && (
-            <div className="flex justify-between">
-              <span>Descuento</span>
-              <span>-{formatPrice(discount)}</span>
-            </div>
-          )}
-          <div className="flex justify-between font-heading text-lg text-brand-rosa">
-            <span>Total</span>
-            <span>{formatPrice(total)}</span>
-          </div>
+    <>
+      <div className="grid gap-8 md:grid-cols-2">
+        <div className={mobileVistaDoble && mostrandoCarritoMovil ? "hidden md:block" : "block"}>
+          <ProductBrowser onAdd={handleAdd} />
         </div>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
-
-        <Button
-          type="button"
-          onClick={handleSubmit}
-          disabled={items.length === 0 || isSubmitting}
-          className="bg-brand-rosa text-brand-crema hover:bg-brand-rosa/90"
+        <div
+          className={`flex-col gap-4 rounded-lg border border-brand-rosa-claro bg-white p-4 shadow-brand-sm ${
+            mobileVistaDoble && !mostrandoCarritoMovil ? "hidden md:flex" : "flex"
+          }`}
         >
-          {isSubmitting ? textoBotonEnviando : textoBoton}
-        </Button>
+          {mobileVistaDoble && (
+            <div className="flex items-center gap-2 md:hidden">
+              <button
+                type="button"
+                onClick={() => setMostrandoCarritoMovil(false)}
+                aria-label="Volver a productos"
+                className="rounded-md p-1 text-brand-ciruela hover:bg-brand-rosa-claro/30"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+              <h2 className="font-heading text-xl text-brand-ciruela">Carrito de Compra</h2>
+            </div>
+          )}
+          <h2
+            className={`font-heading text-xl text-brand-ciruela ${
+              mobileVistaDoble ? "hidden md:block" : ""
+            }`}
+          >
+            Venta actual
+          </h2>
+          {items.length === 0 ? (
+            <p className="text-sm text-brand-ciruela/60">
+              Todavía no hay productos en la venta.
+            </p>
+          ) : (
+            <div className="flex flex-col divide-y divide-brand-rosa-claro">
+              {items.map((item) => (
+                <div
+                  key={`${item.productId}-${item.variantId ?? "base"}`}
+                  className="flex items-center gap-2 py-2"
+                >
+                  <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-md bg-brand-rosa-claro">
+                    {item.imageUrl && (
+                      <Image src={item.imageUrl} alt={item.name} fill className="object-contain" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm text-brand-ciruela">{item.name}</p>
+                    <p className="text-xs text-brand-ciruela/60">{formatPrice(item.unitPrice)}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateQty(item.productId, item.variantId, item.qty - 1)}
+                    className="h-11 w-11 shrink-0 rounded-md border border-brand-rosa-claro text-brand-ciruela"
+                  >
+                    -
+                  </button>
+                  <span className="w-6 text-center text-sm">{item.qty}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateQty(item.productId, item.variantId, item.qty + 1)}
+                    className="h-11 w-11 shrink-0 rounded-md border border-brand-rosa-claro text-brand-ciruela"
+                  >
+                    +
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRemove(item.productId, item.variantId)}
+                    className="ml-2 text-sm text-red-600 hover:underline"
+                  >
+                    Quitar
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {mostrarDescuento && (
+            <div>
+              <label htmlFor="discount" className="text-sm text-brand-ciruela">
+                Descuento (pesos)
+              </label>
+              <Input
+                id="discount"
+                type="number"
+                min={0}
+                value={discount}
+                onChange={(e) => setDiscount(Math.max(0, Number(e.target.value) || 0))}
+              />
+            </div>
+          )}
+
+          {mostrarMetodoPago && (
+            <div>
+              <label className="text-sm text-brand-ciruela">Método de pago</label>
+              <PaymentMethodPicker
+                options={metodosPagoPrincipal}
+                value={paymentMethod}
+                onChange={setPaymentMethod}
+                groupLabel="Método de pago"
+              />
+            </div>
+          )}
+
+          {mostrarCliente && (
+            <ClienteSelector
+              cliente={cliente}
+              onChange={setCliente}
+              requerido={esCredito}
+            />
+          )}
+
+          {esCredito && (
+            <div className="flex flex-col gap-3 rounded-md border border-brand-oro/50 bg-brand-oro/10 p-3">
+              <div className="flex items-center gap-2">
+                <Wallet className="h-4 w-4 text-brand-ciruela" />
+                <p className="text-sm font-semibold text-brand-ciruela">Datos del crédito</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="numCuotas" className="text-sm text-brand-ciruela">
+                    Número de cuotas
+                  </label>
+                  <Input
+                    id="numCuotas"
+                    type="number"
+                    min={1}
+                    value={numCuotas}
+                    onChange={(e) => setNumCuotas(Math.max(1, Number(e.target.value) || 1))}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="abonoInicial" className="text-sm text-brand-ciruela">
+                    Abono inicial (opcional)
+                  </label>
+                  <Input
+                    id="abonoInicial"
+                    type="number"
+                    min={0}
+                    value={abonoInicial}
+                    onChange={(e) => setAbonoInicial(Math.max(0, Number(e.target.value) || 0))}
+                  />
+                </div>
+              </div>
+              {abonoInicial > 0 && (
+                <div>
+                  <label className="text-sm text-brand-ciruela">
+                    Método de pago del abono inicial
+                  </label>
+                  <PaymentMethodPicker
+                    options={METODOS_ABONO_OPTIONS}
+                    value={abonoInicialMetodo}
+                    onChange={setAbonoInicialMetodo}
+                    compact
+                    groupLabel="Método de pago del abono inicial"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex flex-col gap-1 border-t border-brand-rosa-claro pt-3 text-sm text-brand-ciruela">
+            <div className="flex justify-between">
+              <span>Subtotal</span>
+              <span>{formatPrice(subtotal)}</span>
+            </div>
+            {mostrarDescuento && (
+              <div className="flex justify-between">
+                <span>Descuento</span>
+                <span>-{formatPrice(discount)}</span>
+              </div>
+            )}
+            <div className="flex justify-between font-heading text-lg text-brand-rosa">
+              <span>Total</span>
+              <span>{formatPrice(total)}</span>
+            </div>
+          </div>
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          <Button
+            type="button"
+            onClick={handleSubmit}
+            disabled={items.length === 0 || isSubmitting}
+            className="bg-brand-rosa text-brand-crema hover:bg-brand-rosa/90"
+          >
+            {isSubmitting ? textoBotonEnviando : textoBoton}
+          </Button>
+        </div>
       </div>
-    </div>
+      {mobileVistaDoble && items.length > 0 && !mostrandoCarritoMovil && (
+        <button
+          type="button"
+          onClick={() => setMostrandoCarritoMovil(true)}
+          aria-label={`Ver carrito (${totalItems} ${totalItems === 1 ? "producto" : "productos"})`}
+          className="fixed bottom-20 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-brand-rosa text-brand-crema shadow-lg md:hidden"
+        >
+          <ShoppingCart className="h-6 w-6" />
+          <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-brand-oro text-xs font-semibold text-brand-crema">
+            {totalItems}
+          </span>
+        </button>
+      )}
+    </>
   );
 }
