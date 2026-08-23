@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ScanBarcode } from "lucide-react";
+import Image from "next/image";
+import { LayoutGrid, ScanBarcode } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   buscarProductosPos,
@@ -70,10 +71,49 @@ export function ProductBrowser({ onAdd }: { onAdd: (item: LocalCartItem) => void
     <div className="flex flex-col gap-4 rounded-lg border border-brand-rosa-claro bg-white p-4 shadow-brand-sm">
       <h2 className="font-heading text-xl text-brand-ciruela">Productos</h2>
 
-      <div className="flex flex-wrap gap-2">
+      <div role="group" aria-label="Categorías" className="flex gap-3 overflow-x-auto pb-1 md:hidden">
         <button
           type="button"
           onClick={() => setCategoryId(null)}
+          aria-pressed={categoryId === null}
+          className="flex shrink-0 flex-col items-center gap-1"
+        >
+          <span
+            className={`flex h-14 w-14 items-center justify-center rounded-full border-2 bg-brand-rosa-claro ${
+              categoryId === null ? "border-brand-rosa" : "border-transparent"
+            }`}
+          >
+            <LayoutGrid className="h-6 w-6 text-brand-ciruela" />
+          </span>
+          <span className="text-xs text-brand-ciruela">Todos</span>
+        </button>
+        {categorias.map((cat) => (
+          <button
+            key={cat.id}
+            type="button"
+            onClick={() => setCategoryId(cat.id)}
+            aria-pressed={categoryId === cat.id}
+            className="flex shrink-0 flex-col items-center gap-1"
+          >
+            <span
+              className={`relative h-14 w-14 overflow-hidden rounded-full border-2 bg-brand-rosa-claro ${
+                categoryId === cat.id ? "border-brand-rosa" : "border-transparent"
+              }`}
+            >
+              {cat.imageUrl && (
+                <Image src={cat.imageUrl} alt={cat.name} fill className="object-cover" />
+              )}
+            </span>
+            <span className="max-w-[4rem] truncate text-xs text-brand-ciruela">{cat.name}</span>
+          </button>
+        ))}
+      </div>
+
+      <div role="group" aria-label="Categorías" className="hidden flex-wrap gap-2 md:flex">
+        <button
+          type="button"
+          onClick={() => setCategoryId(null)}
+          aria-pressed={categoryId === null}
           className={`rounded-full border px-3 py-1 text-sm ${
             categoryId === null
               ? "border-brand-rosa bg-brand-rosa text-brand-crema"
@@ -87,6 +127,7 @@ export function ProductBrowser({ onAdd }: { onAdd: (item: LocalCartItem) => void
             key={cat.id}
             type="button"
             onClick={() => setCategoryId(cat.id)}
+            aria-pressed={categoryId === cat.id}
             className={`rounded-full border px-3 py-1 text-sm ${
               categoryId === cat.id
                 ? "border-brand-rosa bg-brand-rosa text-brand-crema"

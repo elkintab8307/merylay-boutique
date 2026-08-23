@@ -13,14 +13,16 @@ export function PaymentMethodPicker<T extends string>({
   value,
   onChange,
   compact = false,
+  groupLabel,
 }: {
   options: PaymentMethodOption<T>[];
   value: T | "";
   onChange: (value: T) => void;
   compact?: boolean;
+  groupLabel: string;
 }) {
   return (
-    <div className="grid grid-cols-3 gap-2">
+    <div role="group" aria-label={groupLabel} className="grid grid-cols-2 gap-2 md:grid-cols-3">
       {options.map(({ value: optionValue, label, Icon }) => {
         const active = value === optionValue;
         return (
@@ -28,6 +30,7 @@ export function PaymentMethodPicker<T extends string>({
             key={optionValue}
             type="button"
             onClick={() => onChange(optionValue)}
+            aria-pressed={active}
             className={`flex flex-col items-center justify-center gap-1 rounded-md border ${
               compact ? "px-2 py-1.5" : "px-3 py-2.5"
             } ${

@@ -26,7 +26,7 @@ export function PosStatusBar({ nombreVendedor }: { nombreVendedor: string }) {
   }, []);
 
   return (
-    <footer className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border-t border-brand-rosa-claro bg-white px-6 py-2 text-xs text-brand-ciruela/80 print:hidden">
+    <footer className="sticky bottom-0 hidden flex-wrap items-center justify-between gap-3 border-t border-brand-rosa-claro bg-white px-6 py-2 text-xs text-brand-ciruela/80 md:flex print:hidden">
       <span>
         Caja actual: <strong className="text-brand-ciruela">Caja Principal</strong>
       </span>

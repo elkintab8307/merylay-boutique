@@ -2,7 +2,8 @@ import { Store, Receipt, CreditCard, Users, LayoutDashboard } from "lucide-react
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/get-current-user";
 import { buildLowStockItems, obtenerUmbralStockBajo } from "@/lib/admin/low-stock";
-import { BackendSidebar, type SidebarSection } from "@/components/admin/backend-sidebar";
+import type { SidebarSection } from "@/components/admin/backend-sidebar";
+import { PosMobileShell } from "@/components/pos/pos-mobile-shell";
 import { PosTopBar } from "@/components/pos/pos-top-bar";
 import { PosStatusBar } from "@/components/pos/pos-status-bar";
 
@@ -58,14 +59,14 @@ export default async function PosAdminLayout({
 
   return (
     <div className="flex min-h-screen flex-col md:flex-row bg-brand-crema">
-      <BackendSidebar sections={sections} homeHref="/pos" />
+      <PosMobileShell sections={sections} rolVendedor={rolVendedor} stockBajo={stockBajo} />
       <div className="flex flex-1 flex-col">
         <PosTopBar
           nombreVendedor={nombreVendedor}
           rolVendedor={rolVendedor}
           stockBajo={stockBajo}
         />
-        <main className="flex-1 px-6 py-8">{children}</main>
+        <main className="flex-1 px-6 py-8 pb-20 md:pb-8">{children}</main>
         <PosStatusBar nombreVendedor={nombreVendedor} />
       </div>
     </div>

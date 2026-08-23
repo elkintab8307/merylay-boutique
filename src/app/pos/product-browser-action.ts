@@ -85,19 +85,20 @@ export async function buscarProductosPos(params: {
 export type PosCategoriaResult = {
   id: string;
   name: string;
+  imageUrl: string | null;
 };
 
 export async function listarCategoriasPos(): Promise<PosCategoriaResult[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("categories")
-    .select("id, name")
+    .select("id, name, image_url")
     .eq("is_active", true)
     .is("parent_id", null)
     .order("sort_order");
 
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map((c) => ({ id: c.id, name: c.name, imageUrl: c.image_url }));
 }
 
 export async function obtenerUmbralStockBajoPos(): Promise<number> {

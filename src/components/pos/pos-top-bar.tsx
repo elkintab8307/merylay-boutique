@@ -20,7 +20,7 @@ export function PosTopBar({
   stockBajo: LowStockItem[];
 }) {
   return (
-    <header className="flex flex-wrap items-center justify-between gap-4 border-b border-brand-rosa-claro bg-white px-6 py-4 print:hidden">
+    <header className="hidden flex-wrap items-center justify-between gap-4 border-b border-brand-rosa-claro bg-white px-6 py-4 md:flex print:hidden">
       <div>
         <h1 className="font-heading text-xl text-brand-ciruela">Punto de Venta</h1>
         <p className="text-sm text-brand-ciruela/70">¡Bienvenida/o, {nombreVendedor}!</p>
