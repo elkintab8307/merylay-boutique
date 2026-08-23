@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Image from "next/image";
+import { Banknote, CreditCard, Landmark, Smartphone, Wallet } from "lucide-react";
+import { PaymentMethodPicker, type PaymentMethodOption } from "./payment-method-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatPrice } from "@/lib/format";
@@ -19,6 +22,14 @@ import { ClienteSelector, type ClienteSeleccionado } from "./cliente-selector";
 type PaymentMethod = Database["public"]["Enums"]["payment_method"];
 
 const METODOS_ABONO = ["efectivo", "tarjeta", "transferencia", "nequi", "daviplata"] as const;
+
+const METODOS_ABONO_OPTIONS: PaymentMethodOption<(typeof METODOS_ABONO)[number]>[] = [
+  { value: "efectivo", label: "Efectivo", Icon: Banknote },
+  { value: "tarjeta", label: "Tarjeta", Icon: CreditCard },
+  { value: "transferencia", label: "Transferencia", Icon: Landmark },
+  { value: "nequi", label: "Nequi", Icon: Smartphone },
+  { value: "daviplata", label: "Daviplata", Icon: Smartphone },
+];
 
 export function VentaItemsEditor({
   itemsIniciales = [],
@@ -66,6 +77,17 @@ export function VentaItemsEditor({
   const subtotal = computeSubtotal(items);
   const total = Math.max(subtotal - discount, 0);
   const esCredito = paymentMethod === "credito" && permitirCredito;
+
+  const metodosPagoPrincipal: PaymentMethodOption<PaymentMethod>[] = [
+    { value: "efectivo", label: "Efectivo", Icon: Banknote },
+    { value: "tarjeta", label: "Tarjeta", Icon: CreditCard },
+    { value: "transferencia", label: "Transferencia", Icon: Landmark },
+    { value: "nequi", label: "Nequi", Icon: Smartphone },
+    { value: "daviplata", label: "Daviplata", Icon: Smartphone },
+    ...(permitirCredito
+      ? [{ value: "credito" as PaymentMethod, label: "Crédito", Icon: Wallet }]
+      : []),
+  ];
 
   const handleAdd = (item: LocalCartItem) => {
     setItems((prev) => mergeCartItem(prev, item));
@@ -129,6 +151,11 @@ export function VentaItemsEditor({
                 key={`${item.productId}-${item.variantId ?? "base"}`}
                 className="flex items-center gap-2 py-2"
               >
+                <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-md bg-brand-rosa-claro">
+                  {item.imageUrl && (
+                    <Image src={item.imageUrl} alt={item.name} fill className="object-contain" />
+                  )}
+                </div>
                 <div className="flex-1">
                   <p className="text-sm text-brand-ciruela">{item.name}</p>
                   <p className="text-xs text-brand-ciruela/60">{formatPrice(item.unitPrice)}</p>
@@ -177,22 +204,12 @@ export function VentaItemsEditor({
 
         {mostrarMetodoPago && (
           <div>
-            <label htmlFor="paymentMethod" className="text-sm text-brand-ciruela">
-              Método de pago
-            </label>
-            <select
-              id="paymentMethod"
+            <label className="text-sm text-brand-ciruela">Método de pago</label>
+            <PaymentMethodPicker
+              options={metodosPagoPrincipal}
               value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-              className="w-full rounded-md border border-brand-rosa-claro bg-white px-3 py-2 text-sm"
-            >
-              <option value="efectivo">Efectivo</option>
-              <option value="tarjeta">Tarjeta</option>
-              <option value="transferencia">Transferencia</option>
-              <option value="nequi">Nequi</option>
-              <option value="daviplata">Daviplata</option>
-              {permitirCredito && <option value="credito">Crédito</option>}
-            </select>
+              onChange={setPaymentMethod}
+            />
           </div>
         )}
 
@@ -206,51 +223,47 @@ export function VentaItemsEditor({
 
         {esCredito && (
           <div className="flex flex-col gap-3 rounded-md border border-brand-oro/50 bg-brand-oro/10 p-3">
-            <p className="text-sm font-semibold text-brand-ciruela">Datos del crédito</p>
-            <div>
-              <label htmlFor="numCuotas" className="text-sm text-brand-ciruela">
-                Número de cuotas
-              </label>
-              <Input
-                id="numCuotas"
-                type="number"
-                min={1}
-                value={numCuotas}
-                onChange={(e) => setNumCuotas(Math.max(1, Number(e.target.value) || 1))}
-              />
+            <div className="flex items-center gap-2">
+              <Wallet className="h-4 w-4 text-brand-ciruela" />
+              <p className="text-sm font-semibold text-brand-ciruela">Datos del crédito</p>
             </div>
-            <div>
-              <label htmlFor="abonoInicial" className="text-sm text-brand-ciruela">
-                Abono inicial (opcional)
-              </label>
-              <Input
-                id="abonoInicial"
-                type="number"
-                min={0}
-                value={abonoInicial}
-                onChange={(e) => setAbonoInicial(Math.max(0, Number(e.target.value) || 0))}
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="numCuotas" className="text-sm text-brand-ciruela">
+                  Número de cuotas
+                </label>
+                <Input
+                  id="numCuotas"
+                  type="number"
+                  min={1}
+                  value={numCuotas}
+                  onChange={(e) => setNumCuotas(Math.max(1, Number(e.target.value) || 1))}
+                />
+              </div>
+              <div>
+                <label htmlFor="abonoInicial" className="text-sm text-brand-ciruela">
+                  Abono inicial (opcional)
+                </label>
+                <Input
+                  id="abonoInicial"
+                  type="number"
+                  min={0}
+                  value={abonoInicial}
+                  onChange={(e) => setAbonoInicial(Math.max(0, Number(e.target.value) || 0))}
+                />
+              </div>
             </div>
             {abonoInicial > 0 && (
               <div>
-                <label htmlFor="abonoInicialMetodo" className="text-sm text-brand-ciruela">
+                <label className="text-sm text-brand-ciruela">
                   Método de pago del abono inicial
                 </label>
-                <select
-                  id="abonoInicialMetodo"
+                <PaymentMethodPicker
+                  options={METODOS_ABONO_OPTIONS}
                   value={abonoInicialMetodo}
-                  onChange={(e) =>
-                    setAbonoInicialMetodo(e.target.value as (typeof METODOS_ABONO)[number] | "")
-                  }
-                  className="w-full rounded-md border border-brand-rosa-claro bg-white px-3 py-2 text-sm"
-                >
-                  <option value="">Selecciona un método</option>
-                  {METODOS_ABONO.map((metodo) => (
-                    <option key={metodo} value={metodo}>
-                      {metodo}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setAbonoInicialMetodo}
+                  compact
+                />
               </div>
             )}
           </div>
