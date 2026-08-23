@@ -20,26 +20,31 @@ export function ProductBrowser({ onAdd }: { onAdd: (item: LocalCartItem) => void
   const [productos, setProductos] = useState<PosProductoResult[]>([]);
   const [umbralStockBajo, setUmbralStockBajo] = useState(5);
   const [cargando, setCargando] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Errores separados por flujo: la carga inicial (categorías/umbral) y la
+  // búsqueda en vivo se disparan de forma independiente y no deben borrarse
+  // entre sí — si uno falla, el otro sigue pudiendo limpiar/mostrar el suyo
+  // sin descartar el mensaje del otro.
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
+  const [errorBusqueda, setErrorBusqueda] = useState<string | null>(null);
 
   useEffect(() => {
     listarCategoriasPos()
       .then(setCategorias)
       .catch((err) => {
         console.error("Error al cargar categorías:", err);
-        setError("No se pudieron cargar las categorías. Intenta de nuevo.");
+        setErrorCarga("No se pudieron cargar las categorías. Intenta de nuevo.");
       });
     obtenerUmbralStockBajoPos()
       .then(setUmbralStockBajo)
       .catch((err) => {
         console.error("Error al obtener umbral de stock bajo:", err);
-        setError("No se pudo obtener la configuración de stock. Intenta de nuevo.");
+        setErrorCarga("No se pudo obtener la configuración de stock. Intenta de nuevo.");
       });
   }, []);
 
   useEffect(() => {
     setCargando(true);
-    setError(null);
+    setErrorBusqueda(null);
     let cancelled = false;
     const timeout = setTimeout(() => {
       buscarProductosPos({ query, categoryId })
@@ -51,7 +56,7 @@ export function ProductBrowser({ onAdd }: { onAdd: (item: LocalCartItem) => void
         .catch((err) => {
           if (cancelled) return;
           console.error("Error al buscar productos:", err);
-          setError("No se pudieron cargar los productos. Intenta de nuevo.");
+          setErrorBusqueda("No se pudieron cargar los productos. Intenta de nuevo.");
           setCargando(false);
         });
     }, 300);
@@ -110,8 +115,11 @@ export function ProductBrowser({ onAdd }: { onAdd: (item: LocalCartItem) => void
         </button>
       </div>
 
-      {error && (
-        <p className="text-sm text-red-600">{error}</p>
+      {errorCarga && (
+        <p className="text-sm text-red-600">{errorCarga}</p>
+      )}
+      {errorBusqueda && (
+        <p className="text-sm text-red-600">{errorBusqueda}</p>
       )}
 
       <div className="grid grid-cols-2 gap-3">

@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { sanitizarQueryBusqueda } from "@/lib/search/sanitize";
 
 export type PosCustomerResult = {
   id: string;
@@ -13,7 +14,7 @@ function normalizarTelefono(telefono: string): string {
 }
 
 export async function buscarClientes(query: string): Promise<PosCustomerResult[]> {
-  const trimmed = query.trim().replace(/[%,()]/g, "");
+  const trimmed = sanitizarQueryBusqueda(query);
   if (!trimmed) return [];
 
   const supabase = await createClient();

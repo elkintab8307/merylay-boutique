@@ -28,14 +28,29 @@ export function ProductCardPos({
     : null;
   const stockDisponible = hasVariants ? (variantSeleccionada?.stock ?? 0) : product.stock;
   const unitPrice = variantSeleccionada?.priceOverride ?? product.price;
+  // Gate especifico de la variante seleccionada: solo aplica al boton "Confirmar"
+  // dentro del selector expandido, donde ya se eligio una combinacion concreta.
   const agotado = stockDisponible <= 0;
 
+  // Disponibilidad agregada del producto (maxima entre variantes, o stock del
+  // producto si no tiene variantes). Usada para el gate/badge en estado
+  // COLAPSADO: no debe depender de que variante cae en variants[0], que es
+  // arbitrario sin un ORDER BY estable en la consulta.
+  const stockColapsado = hasVariants
+    ? Math.max(0, ...product.variants.map((v) => v.stock))
+    : product.stock;
+  const hayStockEnAlgunaVariante = hasVariants
+    ? product.variants.some((v) => v.stock > 0)
+    : product.stock > 0;
+  const agotadoColapsado = !hayStockEnAlgunaVariante;
+
+  const stockMostrado = seleccionando ? stockDisponible : stockColapsado;
   const stockBadge =
-    stockDisponible === 0
+    stockMostrado === 0
       ? { variant: "danger" as const, label: "Agotado" }
-      : stockDisponible <= umbralStockBajo
-        ? { variant: "warning" as const, label: `${stockDisponible} unidades` }
-        : { variant: "neutral" as const, label: `${stockDisponible} unidades` };
+      : stockMostrado <= umbralStockBajo
+        ? { variant: "warning" as const, label: `${stockMostrado} unidades` }
+        : { variant: "neutral" as const, label: `${stockMostrado} unidades` };
 
   const confirmarAgregar = () => {
     const variantLabel = [talla, color].filter(Boolean).join(" / ");
@@ -125,7 +140,7 @@ export function ProductCardPos({
       {!seleccionando && (
         <button
           type="button"
-          disabled={agotado}
+          disabled={agotadoColapsado}
           onClick={handleAgregarClick}
           className="rounded-md bg-brand-rosa px-2 py-1 text-xs text-brand-crema hover:bg-brand-rosa/90 disabled:opacity-50"
         >

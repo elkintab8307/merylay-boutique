@@ -605,21 +605,50 @@ export function ProductBrowser({ onAdd }: { onAdd: (item: LocalCartItem) => void
   const [productos, setProductos] = useState<PosProductoResult[]>([]);
   const [umbralStockBajo, setUmbralStockBajo] = useState(5);
   const [cargando, setCargando] = useState(true);
+  // Errores separados por flujo: la carga inicial (categorías/umbral) y la
+  // búsqueda en vivo se disparan de forma independiente y no deben borrarse
+  // entre sí — si uno falla, el otro sigue pudiendo limpiar/mostrar el suyo
+  // sin descartar el mensaje del otro.
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
+  const [errorBusqueda, setErrorBusqueda] = useState<string | null>(null);
 
   useEffect(() => {
-    listarCategoriasPos().then(setCategorias);
-    obtenerUmbralStockBajoPos().then(setUmbralStockBajo);
+    listarCategoriasPos()
+      .then(setCategorias)
+      .catch((err) => {
+        console.error("Error al cargar categorías:", err);
+        setErrorCarga("No se pudieron cargar las categorías. Intenta de nuevo.");
+      });
+    obtenerUmbralStockBajoPos()
+      .then(setUmbralStockBajo)
+      .catch((err) => {
+        console.error("Error al obtener umbral de stock bajo:", err);
+        setErrorCarga("No se pudo obtener la configuración de stock. Intenta de nuevo.");
+      });
   }, []);
 
   useEffect(() => {
     setCargando(true);
+    setErrorBusqueda(null);
+    let cancelled = false;
     const timeout = setTimeout(() => {
-      buscarProductosPos({ query, categoryId }).then((resultado) => {
-        setProductos(resultado);
-        setCargando(false);
-      });
+      buscarProductosPos({ query, categoryId })
+        .then((resultado) => {
+          if (cancelled) return;
+          setProductos(resultado);
+          setCargando(false);
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          console.error("Error al buscar productos:", err);
+          setErrorBusqueda("No se pudieron cargar los productos. Intenta de nuevo.");
+          setCargando(false);
+        });
     }, 300);
-    return () => clearTimeout(timeout);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
   }, [query, categoryId]);
 
   return (
@@ -671,6 +700,13 @@ export function ProductBrowser({ onAdd }: { onAdd: (item: LocalCartItem) => void
         </button>
       </div>
 
+      {errorCarga && (
+        <p className="text-sm text-red-600">{errorCarga}</p>
+      )}
+      {errorBusqueda && (
+        <p className="text-sm text-red-600">{errorBusqueda}</p>
+      )}
+
       <div className="grid grid-cols-2 gap-3">
         {productos.map((product) => (
           <ProductCardPos
@@ -681,7 +717,7 @@ export function ProductBrowser({ onAdd }: { onAdd: (item: LocalCartItem) => void
           />
         ))}
       </div>
-      {!cargando && productos.length === 0 && (
+      {(query || categoryId) && !cargando && productos.length === 0 && (
         <p className="text-sm text-brand-ciruela/60">Sin resultados.</p>
       )}
     </div>

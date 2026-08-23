@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { VariantOption } from "@/lib/store/variants";
 import { precioEfectivo } from "@/lib/store/discount";
 import { obtenerUmbralStockBajo } from "@/lib/admin/low-stock";
+import { sanitizarQueryBusqueda } from "@/lib/search/sanitize";
 
 export type PosProductoResult = {
   id: string;
@@ -19,13 +20,14 @@ export async function buscarProductosPos(params: {
   query: string;
   categoryId: string | null;
 }): Promise<PosProductoResult[]> {
-  const trimmed = params.query.trim().replace(/[%,()]/g, "");
+  const trimmed = sanitizarQueryBusqueda(params.query);
 
   const supabase = await createClient();
   let productsQuery = supabase
     .from("products")
     .select("id, name, sku, price, promo_price, stock, category_id")
     .eq("is_active", true)
+    .order("name")
     .limit(60);
 
   if (trimmed) {
@@ -35,21 +37,28 @@ export async function buscarProductosPos(params: {
     productsQuery = productsQuery.eq("category_id", params.categoryId);
   }
 
-  const { data: products } = await productsQuery;
+  const { data: products, error: productsError } = await productsQuery;
+  if (productsError) throw productsError;
   if (!products || products.length === 0) return [];
 
   const productIds = products.map((p) => p.id);
-  const [{ data: variants }, { data: images }] = await Promise.all([
+  const [
+    { data: variants, error: variantsError },
+    { data: images, error: imagesError },
+  ] = await Promise.all([
     supabase
       .from("product_variants")
       .select("id, product_id, talla, color, sku, stock, price_override")
-      .in("product_id", productIds),
+      .in("product_id", productIds)
+      .order("talla"),
     supabase
       .from("product_images")
       .select("product_id, url")
       .in("product_id", productIds)
       .eq("is_primary", true),
   ]);
+  if (variantsError) throw variantsError;
+  if (imagesError) throw imagesError;
 
   const imagenPorProducto = new Map((images ?? []).map((img) => [img.product_id, img.url]));
 
@@ -80,13 +89,14 @@ export type PosCategoriaResult = {
 
 export async function listarCategoriasPos(): Promise<PosCategoriaResult[]> {
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("categories")
     .select("id, name")
     .eq("is_active", true)
     .is("parent_id", null)
     .order("sort_order");
 
+  if (error) throw error;
   return data ?? [];
 }
 
