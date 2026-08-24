@@ -6,21 +6,29 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
 }));
 
-function crearSupabaseMock(profileId: string | null = null) {
-  const limit = vi.fn(() => Promise.resolve({ data: [], error: null }));
-  const or = vi.fn(() => ({ limit }));
-  const select = vi.fn(() => ({ or }));
+function crearSupabaseMock(
+  profileId: string | null = null,
+  rpcResults: Record<string, unknown> = {},
+) {
   const single = vi.fn(() =>
     Promise.resolve({ data: { id: "cust-1", nombre: "Ana", telefono: "3001234567" }, error: null }),
   );
   const insertSelect = vi.fn(() => ({ single }));
   const insert = vi.fn(() => ({ select: insertSelect }));
   const from = vi.fn((table: string) => {
-    if (table === "pos_customers") return { select, insert };
-    return { select };
+    if (table === "pos_customers") return { insert };
+    return {};
   });
-  const rpc = vi.fn(() => Promise.resolve({ data: profileId, error: null }));
-  return { from, rpc, _spies: { select, or, limit, insert, insertSelect, single, rpc } };
+  const rpc = vi.fn((fnName: string) => {
+    if (fnName === "buscar_profile_por_telefono") {
+      return Promise.resolve({ data: profileId, error: null });
+    }
+    if (fnName in rpcResults) {
+      return Promise.resolve(rpcResults[fnName] as { data: unknown; error: unknown });
+    }
+    return Promise.resolve({ data: null, error: null });
+  });
+  return { from, rpc, _spies: { insert, insertSelect, single, rpc } };
 }
 
 describe("buscarClientes", () => {
@@ -40,20 +48,32 @@ describe("buscarClientes", () => {
     const resultado = await buscarClientes("   ");
 
     expect(resultado).toEqual([]);
-    expect(supabase.from).not.toHaveBeenCalled();
+    expect(supabase.rpc).not.toHaveBeenCalled();
   });
 
-  it("busca por nombre o telefono con ilike", async () => {
-    const supabase = crearSupabaseMock();
+  it("busca clientes unificados (POS + portal) via listar_clientes_pos y mapea el resultado", async () => {
+    const supabase = crearSupabaseMock(null, {
+      listar_clientes_pos: {
+        data: [
+          { origen: "pos", id: "cust-1", profile_id: null, nombre: "Ana Ruiz", telefono: "3001234567" },
+          { origen: "portal", id: "profile-9", profile_id: "profile-9", nombre: "Luisa Gómez", telefono: "3007654321" },
+        ],
+        error: null,
+      },
+    });
     vi.mocked(createClient).mockResolvedValue(supabase as never);
 
     const { buscarClientes } = await import("../customer-actions");
-    await buscarClientes("Ana");
+    const resultado = await buscarClientes("Ana");
 
-    expect(supabase.from).toHaveBeenCalledWith("pos_customers");
-    expect(supabase._spies.or).toHaveBeenCalledWith(
-      expect.stringContaining("nombre.ilike.%Ana%"),
-    );
+    expect(supabase.rpc).toHaveBeenCalledWith("listar_clientes_pos", {
+      p_query: "Ana",
+      p_limit: 10,
+    });
+    expect(resultado).toEqual([
+      { id: "cust-1", nombre: "Ana Ruiz", telefono: "3001234567", origen: "pos", profileId: null },
+      { id: "profile-9", nombre: "Luisa Gómez", telefono: "3007654321", origen: "portal", profileId: "profile-9" },
+    ]);
   });
 });
 
@@ -121,6 +141,53 @@ describe("crearCliente", () => {
     );
     expect(resultado).toEqual({
       cliente: { id: "cust-1", nombre: "Ana", telefono: "3001234567" },
+    });
+  });
+});
+
+describe("vincularClientePortal", () => {
+  beforeEach(() => {
+    vi.mocked(createClient).mockReset();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("vincula el cliente del portal via el RPC y retorna el pos_customer resultante", async () => {
+    const supabase = crearSupabaseMock(null, {
+      vincular_cliente_portal: {
+        data: { id: "cust-9", nombre: "Luisa Gómez", telefono: "3007654321" },
+        error: null,
+      },
+    });
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+
+    const { vincularClientePortal } = await import("../customer-actions");
+    const resultado = await vincularClientePortal("profile-9");
+
+    expect(supabase.rpc).toHaveBeenCalledWith("vincular_cliente_portal", {
+      p_profile_id: "profile-9",
+    });
+    expect(resultado).toEqual({
+      cliente: { id: "cust-9", nombre: "Luisa Gómez", telefono: "3007654321" },
+    });
+  });
+
+  it("propaga el error si el RPC falla", async () => {
+    const supabase = crearSupabaseMock(null, {
+      vincular_cliente_portal: {
+        data: null,
+        error: { message: "Este cliente no tiene un telefono valido registrado." },
+      },
+    });
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+
+    const { vincularClientePortal } = await import("../customer-actions");
+    const resultado = await vincularClientePortal("profile-9");
+
+    expect(resultado).toEqual({
+      error: "Este cliente no tiene un telefono valido registrado.",
     });
   });
 });

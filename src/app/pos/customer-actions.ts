@@ -9,22 +9,32 @@ export type PosCustomerResult = {
   telefono: string;
 };
 
+export type PosCustomerSearchResult = PosCustomerResult & {
+  origen: "pos" | "portal";
+  profileId: string | null;
+};
+
 function normalizarTelefono(telefono: string): string {
   return telefono.replace(/\D/g, "");
 }
 
-export async function buscarClientes(query: string): Promise<PosCustomerResult[]> {
+export async function buscarClientes(query: string): Promise<PosCustomerSearchResult[]> {
   const trimmed = sanitizarQueryBusqueda(query);
   if (!trimmed) return [];
 
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("pos_customers")
-    .select("id, nombre, telefono")
-    .or(`nombre.ilike.%${trimmed}%,telefono.ilike.%${trimmed}%`)
-    .limit(10);
+  const { data } = await supabase.rpc("listar_clientes_pos", {
+    p_query: trimmed,
+    p_limit: 10,
+  });
 
-  return data ?? [];
+  return (data ?? []).map((fila) => ({
+    id: fila.id,
+    nombre: fila.nombre,
+    telefono: fila.telefono,
+    origen: fila.origen as "pos" | "portal",
+    profileId: fila.profile_id,
+  }));
 }
 
 export async function crearCliente(
@@ -64,4 +74,19 @@ export async function crearCliente(
   }
 
   return { cliente: data };
+}
+
+export async function vincularClientePortal(
+  profileId: string,
+): Promise<{ cliente?: PosCustomerResult; error?: string }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("vincular_cliente_portal", {
+    p_profile_id: profileId,
+  });
+
+  if (error || !data) {
+    return { error: error?.message ?? "No se pudo vincular el cliente." };
+  }
+
+  return { cliente: { id: data.id, nombre: data.nombre, telefono: data.telefono } };
 }

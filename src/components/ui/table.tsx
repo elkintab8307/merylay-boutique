@@ -27,13 +27,19 @@ export function TableRow({ children }: { children: React.ReactNode }) {
 export function TableCell({
   children,
   className,
+  colSpan,
 }: {
   children: React.ReactNode;
   className?: string;
+  colSpan?: number;
 }) {
-  return <td className={cn("px-4 py-3", className)}>{children}</td>;
+  return (
+    <td className={cn("px-4 py-3", className)} colSpan={colSpan}>
+      {children}
+    </td>
+  );
 }
 
-export function TableHeaderCell({ children }: { children: React.ReactNode }) {
+export function TableHeaderCell({ children }: { children?: React.ReactNode }) {
   return <th className="px-4 py-3 font-medium">{children}</th>;
 }
