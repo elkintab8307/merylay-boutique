@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Menu, Music2 } from "lucide-react";
@@ -14,6 +15,7 @@ import {
 import { logout } from "@/lib/auth/logout-action";
 import { destinoPorRol } from "@/lib/auth/destino-por-rol";
 import type { CurrentUser } from "@/lib/auth/get-current-user";
+import { SiteLogo } from "./site-logo";
 
 type CategoriaConConteo = { id: string; name: string; slug: string; count: number };
 type Redes = {
@@ -29,12 +31,16 @@ export function SiteMenuSheet({
   categorias,
   totalProductos,
   redes,
+  trigger,
+  triggerClassName,
 }: {
   nombreTienda: string;
   currentUser: CurrentUser | null;
   categorias: CategoriaConConteo[];
   totalProductos: number;
   redes: Redes;
+  trigger?: ReactNode;
+  triggerClassName?: string;
 }) {
   const hayRedes = redes.whatsapp || redes.instagram || redes.tiktok || redes.facebook;
   const destino = currentUser ? destinoPorRol(currentUser.profile.role) : null;
@@ -43,22 +49,17 @@ export function SiteMenuSheet({
     <Sheet>
       <SheetTrigger
         aria-label="Menú"
-        className="inline-flex h-10 w-10 items-center justify-center rounded-full text-brand-ciruela hover:bg-brand-rosa-claro/30"
+        className={
+          triggerClassName ??
+          "inline-flex h-10 w-10 items-center justify-center rounded-full text-brand-ciruela hover:bg-brand-rosa-claro/30"
+        }
       >
-        <Menu className="h-5 w-5" />
+        {trigger ?? <Menu className="h-5 w-5" />}
       </SheetTrigger>
       <SheetContent side="right" className="flex flex-col gap-6 overflow-y-auto bg-brand-crema">
         <SheetHeader className="items-center text-center">
-          <Image
-            src="/brand/logo-principal.png"
-            alt={nombreTienda}
-            width={64}
-            height={64}
-            className="rounded-full"
-          />
-          <SheetTitle className="font-heading text-xl text-brand-ciruela">
-            {nombreTienda}
-          </SheetTitle>
+          <SiteLogo size="sheet" />
+          <SheetTitle className="sr-only">{nombreTienda}</SheetTitle>
         </SheetHeader>
 
         <div className="flex flex-col gap-1 px-4">

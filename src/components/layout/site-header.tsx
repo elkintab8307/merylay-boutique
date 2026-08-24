@@ -1,44 +1,18 @@
-import Image from "next/image";
 import Link from "next/link";
-import { Search, ShoppingBag } from "lucide-react";
-import { getCurrentProfile } from "@/lib/auth/get-current-user";
+import { ChevronDown, Heart, Search, ShoppingBag, User } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { CartBadge } from "@/components/store/cart-badge";
+import { destinoPorRol } from "@/lib/auth/destino-por-rol";
+import { logout } from "@/lib/auth/logout-action";
+import { getMenuData } from "@/lib/layout/get-menu-data";
 import { SiteMenuSheet } from "./site-menu-sheet";
+import { SiteLogo } from "./site-logo";
+import { SiteNavLinks } from "./site-nav-links";
 
 export async function SiteHeader() {
+  const { currentUser, categorias, totalProductos, nombreTienda, redes } = await getMenuData();
+
   const supabase = await createClient();
-  const [currentUser, { data: categorias }, { data: productosActivos }, { data: settingsRows }] =
-    await Promise.all([
-      getCurrentProfile(),
-      supabase
-        .from("categories")
-        .select("id, name, slug")
-        .eq("is_active", true)
-        .order("sort_order"),
-      supabase.from("products").select("category_id").eq("is_active", true),
-      supabase
-        .from("store_settings")
-        .select("key, value")
-        .in("key", [
-          "nombre_tienda",
-          "redes_instagram",
-          "redes_facebook",
-          "redes_tiktok",
-          "redes_whatsapp",
-        ]),
-    ]);
-
-  const conteoPorCategoria = new Map<string, number>();
-  for (const producto of productosActivos ?? []) {
-    if (!producto.category_id) continue;
-    conteoPorCategoria.set(
-      producto.category_id,
-      (conteoPorCategoria.get(producto.category_id) ?? 0) + 1,
-    );
-  }
-  const totalProductos = (productosActivos ?? []).length;
-
   let cartInitialCount = 0;
   if (currentUser) {
     const { data: cart } = await supabase
@@ -55,32 +29,64 @@ export async function SiteHeader() {
     }
   }
 
-  const settingsByKey = new Map((settingsRows ?? []).map((r) => [r.key, r.value]));
-  const nombreTienda = String(settingsByKey.get("nombre_tienda") ?? "MeryLay Boutique");
-  const redesWhatsapp = settingsByKey.get("redes_whatsapp");
-  const redesInstagram = settingsByKey.get("redes_instagram");
-  const redesTiktok = settingsByKey.get("redes_tiktok");
-  const redesFacebook = settingsByKey.get("redes_facebook");
+  const destino = currentUser ? destinoPorRol(currentUser.profile.role) : null;
 
   return (
-    <header className="sticky top-0 z-40 border-b border-brand-rosa-claro bg-brand-crema/90 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
-        <Link href="/" className="flex items-center gap-2">
-          <Image
-            src="/brand/logo-principal.png"
-            alt={nombreTienda}
-            width={36}
-            height={36}
-            className="rounded-full"
+    <header className="border-b border-brand-rosa-claro bg-brand-crema/95 backdrop-blur">
+      <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3 sm:px-6">
+        <div className="md:hidden">
+          <SiteMenuSheet
+            nombreTienda={nombreTienda}
+            currentUser={currentUser}
+            categorias={categorias}
+            totalProductos={totalProductos}
+            redes={redes}
           />
+        </div>
+
+        <Link href="/" className="shrink-0">
+          <SiteLogo />
         </Link>
-        <div className="flex items-center gap-1">
+
+        <SiteNavLinks categorias={categorias} />
+
+        <form
+          action="/buscar"
+          method="get"
+          className="hidden max-w-xs flex-1 items-center md:flex"
+        >
+          <div className="relative w-full">
+            <input
+              type="search"
+              name="q"
+              placeholder="Buscar productos..."
+              aria-label="Buscar productos"
+              className="w-full rounded-full border border-brand-rosa-claro bg-white px-4 py-2 pr-10 text-sm text-brand-ciruela placeholder:text-brand-ciruela/50 focus:outline-none focus:ring-2 focus:ring-brand-oro"
+            />
+            <button
+              type="submit"
+              aria-label="Buscar"
+              className="absolute right-1 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-brand-ciruela hover:bg-brand-rosa-claro/30"
+            >
+              <Search className="h-4 w-4" />
+            </button>
+          </div>
+        </form>
+
+        <div className="ml-auto flex items-center gap-1">
           <Link
             href="/buscar"
             aria-label="Buscar productos"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-brand-ciruela hover:bg-brand-rosa-claro/30"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-brand-ciruela hover:bg-brand-rosa-claro/30 md:hidden"
           >
             <Search className="h-5 w-5" />
+          </Link>
+          <Link
+            href="/favoritos"
+            aria-label="Ver favoritos"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-brand-ciruela hover:bg-brand-rosa-claro/30"
+          >
+            <Heart className="h-5 w-5" />
           </Link>
           <Link
             href="/carrito"
@@ -90,23 +96,57 @@ export async function SiteHeader() {
             <ShoppingBag className="h-5 w-5" />
             <CartBadge initialCount={cartInitialCount} currentUserId={currentUser?.id ?? null} />
           </Link>
-          <SiteMenuSheet
-            nombreTienda={nombreTienda}
-            currentUser={currentUser}
-            categorias={(categorias ?? []).map((c) => ({
-              id: c.id,
-              name: c.name,
-              slug: c.slug,
-              count: conteoPorCategoria.get(c.id) ?? 0,
-            }))}
-            totalProductos={totalProductos}
-            redes={{
-              whatsapp: redesWhatsapp ? String(redesWhatsapp) : null,
-              instagram: redesInstagram ? String(redesInstagram) : null,
-              tiktok: redesTiktok ? String(redesTiktok) : null,
-              facebook: redesFacebook ? String(redesFacebook) : null,
-            }}
-          />
+
+          <details className="group relative hidden md:block">
+            <summary className="flex cursor-pointer list-none items-center gap-1 whitespace-nowrap rounded-full px-3 py-2 text-sm text-brand-ciruela hover:bg-brand-rosa-claro/30 [&::-webkit-details-marker]:hidden">
+              <User className="h-4 w-4" />
+              Mi cuenta
+              <ChevronDown className="h-3 w-3 transition group-open:rotate-180" />
+            </summary>
+            <div className="absolute right-0 z-50 mt-2 flex w-48 flex-col gap-0.5 rounded-lg border border-brand-rosa-claro bg-white p-2 shadow-brand-md">
+              {currentUser ? (
+                <>
+                  {destino && destino !== "/" && (
+                    <Link
+                      href={destino}
+                      className="rounded-md px-3 py-2 text-sm text-brand-ciruela hover:bg-brand-rosa-claro/30"
+                    >
+                      Panel ({currentUser.profile.username})
+                    </Link>
+                  )}
+                  <Link
+                    href="/cuenta/pedidos"
+                    className="rounded-md px-3 py-2 text-sm text-brand-ciruela hover:bg-brand-rosa-claro/30"
+                  >
+                    Mis pedidos
+                  </Link>
+                  <form action={logout}>
+                    <button
+                      type="submit"
+                      className="w-full rounded-md px-3 py-2 text-left text-sm text-brand-ciruela hover:bg-brand-rosa-claro/30"
+                    >
+                      Cerrar sesión
+                    </button>
+                  </form>
+                </>
+              ) : (
+                <>
+                  <Link
+                    href="/login"
+                    className="rounded-md px-3 py-2 text-sm text-brand-ciruela hover:bg-brand-rosa-claro/30"
+                  >
+                    Iniciar sesión
+                  </Link>
+                  <Link
+                    href="/registro"
+                    className="rounded-md px-3 py-2 text-sm text-brand-ciruela hover:bg-brand-rosa-claro/30"
+                  >
+                    Crear cuenta
+                  </Link>
+                </>
+              )}
+            </div>
+          </details>
         </div>
       </div>
     </header>

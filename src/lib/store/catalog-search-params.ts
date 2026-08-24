@@ -17,6 +17,7 @@ export type CatalogSearchParams = {
   maxPrice: number | undefined;
   sort: ReturnType<typeof resolveSort>;
   q: string;
+  ofertas: boolean;
 };
 
 export function parseCatalogSearchParams(
@@ -32,6 +33,7 @@ export function parseCatalogSearchParams(
 
   const sort = resolveSort(firstValue(search.sort));
   const q = (firstValue(search.q) ?? "").trim();
+  const ofertas = firstValue(search.ofertas) === "1";
 
   return {
     tallas,
@@ -40,5 +42,6 @@ export function parseCatalogSearchParams(
     maxPrice: maxPriceNum !== undefined && Number.isNaN(maxPriceNum) ? undefined : maxPriceNum,
     sort,
     q,
+    ofertas,
   };
 }

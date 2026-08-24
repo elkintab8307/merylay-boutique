@@ -21,7 +21,7 @@ export async function WhatsappFloatingButton() {
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Escríbenos por WhatsApp"
-      className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-white shadow-brand-lg transition hover:scale-105"
+      className="fixed bottom-20 right-5 z-50 flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-white shadow-brand-lg transition hover:scale-105 md:bottom-5"
     >
       <Image src="/brand/whatsapp.png" alt="" width={56} height={56} />
     </a>
