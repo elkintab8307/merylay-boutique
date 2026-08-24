@@ -19,11 +19,12 @@ export async function registrarVenta(
     return { error: "Agrega al menos un producto a la venta." };
   }
 
+  if (!customerId) {
+    return { error: "Selecciona el cliente para la venta." };
+  }
+
   let creditoValidado: CreditoVentaInput | null = null;
   if (paymentMethod === "credito") {
-    if (!customerId) {
-      return { error: "Selecciona el cliente para la venta a crédito." };
-    }
     const parsed = creditoVentaSchema.safeParse(credito);
     if (!parsed.success) {
       return { error: parsed.error.issues[0]?.message ?? "Revisa los datos del crédito." };

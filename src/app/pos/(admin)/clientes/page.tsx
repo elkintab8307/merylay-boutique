@@ -10,14 +10,10 @@ export default async function ClientesPage({
   const query = typeof q === "string" ? sanitizarQueryBusqueda(q) : "";
 
   const supabase = await createClient();
-  const base = supabase
-    .from("pos_customers")
-    .select("id, nombre, telefono, profile_id")
-    .order("nombre");
-
-  const { data: clientes } = query
-    ? await base.or(`nombre.ilike.%${query}%,telefono.ilike.%${query}%`)
-    : await base.limit(50);
+  const { data: clientes } = await supabase.rpc("listar_clientes_pos", {
+    p_query: query || undefined,
+    p_limit: 50,
+  });
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-12">
@@ -45,19 +41,36 @@ export default async function ClientesPage({
             <TableRow>
               <TableHeaderCell>Nombre</TableHeaderCell>
               <TableHeaderCell>Teléfono</TableHeaderCell>
-              <TableHeaderCell>Cuenta vinculada</TableHeaderCell>
+              <TableHeaderCell>Origen</TableHeaderCell>
             </TableRow>
           </TableHeader>
           <tbody>
             {(clientes ?? []).map((cliente) => (
-              <TableRow key={cliente.id}>
+              <TableRow key={`${cliente.origen}-${cliente.id}`}>
                 <TableCell>
-                  <Link href={`/pos/clientes/${cliente.id}`} className="text-brand-rosa hover:underline">
+                  <Link
+                    href={
+                      cliente.origen === "pos"
+                        ? `/pos/clientes/${cliente.id}`
+                        : `/pos/clientes/portal/${cliente.profile_id}`
+                    }
+                    className="text-brand-rosa hover:underline"
+                  >
                     {cliente.nombre}
                   </Link>
                 </TableCell>
                 <TableCell>{cliente.telefono}</TableCell>
-                <TableCell>{cliente.profile_id ? "Sí" : "No"}</TableCell>
+                <TableCell>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                      cliente.origen === "pos"
+                        ? "bg-brand-rosa-claro/40 text-brand-ciruela"
+                        : "bg-brand-oro/20 text-brand-oro"
+                    }`}
+                  >
+                    {cliente.origen === "pos" ? "POS" : "Portal"}
+                  </span>
+                </TableCell>
               </TableRow>
             ))}
           </tbody>

@@ -7,6 +7,7 @@ export function PosTerminal() {
   return (
     <VentaItemsEditor
       mobileVistaDoble
+      clienteObligatorio
       textoBoton="Registrar venta"
       textoBotonEnviando="Registrando..."
       onGuardar={(items, paymentMethod, discount, credito, customerId) =>

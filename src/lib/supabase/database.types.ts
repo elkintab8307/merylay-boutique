@@ -1195,6 +1195,16 @@ export type Database = {
       is_admin: { Args: never; Returns: boolean }
       is_staff_or_above: { Args: never; Returns: boolean }
       is_superadmin: { Args: never; Returns: boolean }
+      listar_clientes_pos: {
+        Args: { p_limit?: number; p_query?: string }
+        Returns: {
+          id: string
+          nombre: string
+          origen: string
+          profile_id: string
+          telefono: string
+        }[]
+      }
       registrar_abono_credito: {
         Args: {
           p_amount: number
@@ -1260,6 +1270,24 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "pos_sales"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      vincular_cliente_portal: {
+        Args: { p_profile_id: string }
+        Returns: {
+          cedula: string | null
+          created_at: string
+          direccion: string | null
+          id: string
+          nombre: string
+          profile_id: string | null
+          telefono: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "pos_customers"
           isOneToOne: true
           isSetofReturn: false
         }

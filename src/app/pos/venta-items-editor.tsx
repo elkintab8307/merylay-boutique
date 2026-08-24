@@ -39,6 +39,7 @@ export function VentaItemsEditor({
   mostrarDescuento = true,
   mostrarMetodoPago = true,
   mostrarCliente = true,
+  clienteObligatorio = false,
   permitirCredito = true,
   mobileVistaDoble = false,
   textoBoton,
@@ -52,6 +53,7 @@ export function VentaItemsEditor({
   mostrarDescuento?: boolean;
   mostrarMetodoPago?: boolean;
   mostrarCliente?: boolean;
+  clienteObligatorio?: boolean;
   permitirCredito?: boolean;
   mobileVistaDoble?: boolean;
   textoBoton: string;
@@ -80,6 +82,7 @@ export function VentaItemsEditor({
   const subtotal = computeSubtotal(items);
   const total = Math.max(subtotal - discount, 0);
   const esCredito = paymentMethod === "credito" && permitirCredito;
+  const clienteRequerido = esCredito || clienteObligatorio;
   const totalItems = items.reduce((sum, i) => sum + i.qty, 0);
 
   const metodosPagoPrincipal: PaymentMethodOption<PaymentMethod>[] = [
@@ -108,11 +111,16 @@ export function VentaItemsEditor({
   const handleSubmit = () => {
     setError(null);
 
+    if (clienteRequerido && !cliente) {
+      setError(
+        esCredito
+          ? "Selecciona el cliente para la venta a crédito."
+          : "Selecciona el cliente para la venta.",
+      );
+      return;
+    }
+
     if (esCredito) {
-      if (!cliente) {
-        setError("Selecciona el cliente para la venta a crédito.");
-        return;
-      }
       if (numCuotas < 1) {
         setError("El número de cuotas debe ser al menos 1.");
         return;
@@ -248,7 +256,7 @@ export function VentaItemsEditor({
             <ClienteSelector
               cliente={cliente}
               onChange={setCliente}
-              requerido={esCredito}
+              requerido={clienteRequerido}
             />
           )}
 

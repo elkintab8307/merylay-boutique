@@ -53,25 +53,15 @@ describe("registrarVenta", () => {
     expect(supabase.rpc).not.toHaveBeenCalled();
   });
 
-  it("venta normal sin cliente: envia p_customer_id null y los campos de credito en null/0", async () => {
+  it("venta normal sin cliente: rechaza sin llamar al RPC", async () => {
     const supabase = crearSupabaseMock();
     vi.mocked(createClient).mockResolvedValue(supabase as never);
 
     const { registrarVenta } = await import("../sale-action");
-    await expect(
-      registrarVenta(ITEMS, "efectivo", 0, null, null),
-    ).rejects.toThrow("NEXT_REDIRECT");
+    const resultado = await registrarVenta(ITEMS, "efectivo", 0, null, null);
 
-    expect(supabase.rpc).toHaveBeenCalledWith(
-      "create_pos_sale",
-      expect.objectContaining({
-        p_payment_method: "efectivo",
-        p_customer_id: null,
-        p_credit_num_cuotas: null,
-        p_credit_abono_inicial: 0,
-        p_credit_abono_metodo: null,
-      }),
-    );
+    expect(resultado).toEqual({ error: expect.any(String) });
+    expect(supabase.rpc).not.toHaveBeenCalled();
   });
 
   it("venta normal con cliente: envia p_customer_id", async () => {
