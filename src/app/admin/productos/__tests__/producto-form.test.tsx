@@ -13,6 +13,10 @@ vi.mock("../actions", () => ({
   setPrimaryProductImage: vi.fn(),
 }));
 
+vi.mock("@/lib/admin/upload-product-images-client", () => ({
+  subirImagenesProductoCliente: vi.fn(),
+}));
+
 describe("ProductoForm", () => {
   it("muestra el mensaje de error cuando dos variantes tienen la misma talla y color", async () => {
     render(
@@ -48,9 +52,17 @@ describe("ProductoForm", () => {
     });
   });
 
-  it("envia las imagenes de cada variante en el indice correcto al guardar", async () => {
+  it("sube las imagenes de cada variante desde el navegador y envia las URLs en el indice correcto al guardar", async () => {
     const { createProducto } = await import("../actions");
+    const { subirImagenesProductoCliente } = await import(
+      "@/lib/admin/upload-product-images-client"
+    );
     vi.mocked(createProducto).mockResolvedValue({});
+    vi.mocked(subirImagenesProductoCliente).mockImplementation(async (files) =>
+      files.length === 0
+        ? { urls: [] }
+        : { urls: files.map((f) => `https://storage.test/${f.name}`) },
+    );
 
     render(
       <ProductoForm
@@ -85,8 +97,8 @@ describe("ProductoForm", () => {
     });
 
     const llamada = vi.mocked(createProducto).mock.calls[0];
-    const variantImageFilesArg = llamada[2];
-    expect(variantImageFilesArg[0]).toEqual([]);
-    expect(variantImageFilesArg[1]).toEqual([archivoVarianteL]);
+    const variantImageUrlsArg = llamada[2];
+    expect(variantImageUrlsArg[0]).toEqual([]);
+    expect(variantImageUrlsArg[1]).toEqual(["https://storage.test/variante-l.jpg"]);
   });
 });

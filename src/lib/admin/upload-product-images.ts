@@ -2,12 +2,19 @@
 
 import { createClient } from "@/lib/supabase/server";
 
-export async function uploadProductImages(
+/**
+ * Registra en product_images las URLs de imagenes ya subidas al bucket
+ * "product-images" desde el navegador (ver upload-product-images-client.ts).
+ * Este paso solo escribe un puñado de filas — el payload nunca incluye
+ * los bytes de la imagen, asi que no choca con el limite de payload de
+ * las funciones serverless de Vercel.
+ */
+export async function guardarImagenesProducto(
   productId: string,
-  files: File[],
+  urls: string[],
   variantId: string | null = null,
 ): Promise<{ error?: string }> {
-  if (files.length === 0) {
+  if (urls.length === 0) {
     return {};
   }
 
@@ -21,26 +28,11 @@ export async function uploadProductImages(
   let sortOrder = existing?.length ?? 0;
   const hasPrimaryAlready = (existing ?? []).some((img) => img.is_primary);
 
-  for (const [index, file] of files.entries()) {
-    const extension = file.name.split(".").pop() ?? "jpg";
-    const path = `${productId}/${crypto.randomUUID()}.${extension}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from("product-images")
-      .upload(path, file);
-
-    if (uploadError) {
-      return { error: "No se pudo subir una de las imágenes." };
-    }
-
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from("product-images").getPublicUrl(path);
-
+  for (const [index, url] of urls.entries()) {
     const { error: insertError } = await supabase.from("product_images").insert({
       product_id: productId,
       variant_id: variantId,
-      url: publicUrl,
+      url,
       sort_order: sortOrder,
       is_primary: !hasPrimaryAlready && index === 0,
     });

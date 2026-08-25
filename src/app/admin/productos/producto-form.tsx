@@ -13,6 +13,7 @@ import {
   deleteProductImage,
   setPrimaryProductImage,
 } from "./actions";
+import { subirImagenesProductoCliente } from "@/lib/admin/upload-product-images-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ImageUploadButton } from "@/components/admin/image-upload-button";
@@ -20,10 +21,11 @@ import { ImageUploadButton } from "@/components/admin/image-upload-button";
 type CategoriaOption = { id: string; name: string };
 type ProductImage = { id: string; url: string; is_primary: boolean; variant_id: string | null };
 
-// Deja margen bajo el limite del servidor (bodySizeLimit en
-// next.config.ts): el body de la Server Action tambien lleva el resto
-// del formulario mas la codificacion del envio, no solo las imagenes.
-const MAX_IMAGENES_MB = 15;
+// Las imagenes se suben directo desde el navegador a Supabase Storage
+// (ver upload-product-images-client.ts), no como parte del body de la
+// Server Action — este limite es solo para evitar subidas descuidadas
+// desde datos moviles, no para esquivar ningun limite de payload.
+const MAX_IMAGENES_MB = 50;
 
 export function ProductoForm({
   productoId,
@@ -82,9 +84,27 @@ export function ProductoForm({
   const onSubmit = async (data: ProductoInput) => {
     setServerError(null);
     try {
+      const resultadoGeneral = await subirImagenesProductoCliente(imageFiles);
+      if (resultadoGeneral.error) {
+        setServerError(resultadoGeneral.error);
+        return;
+      }
+
+      const resultadosVariantes = await Promise.all(
+        variantImageFiles.map((files) => subirImagenesProductoCliente(files)),
+      );
+      const errorVariante = resultadosVariantes.find((r) => r.error);
+      if (errorVariante) {
+        setServerError(errorVariante.error as string);
+        return;
+      }
+
+      const imageUrls = resultadoGeneral.urls ?? [];
+      const variantImageUrls = resultadosVariantes.map((r) => r.urls ?? []);
+
       const result = productoId
-        ? await updateProducto(productoId, data, imageFiles, variantImageFiles)
-        : await createProducto(data, imageFiles, variantImageFiles);
+        ? await updateProducto(productoId, data, imageUrls, variantImageUrls)
+        : await createProducto(data, imageUrls, variantImageUrls);
 
       if (result?.error) {
         setServerError(result.error);
@@ -94,10 +114,9 @@ export function ProductoForm({
       router.push("/admin/productos");
       router.refresh();
     } catch {
-      // Cubre fallos que no llegan a devolver {error}: por ejemplo el
-      // body de la Server Action superando bodySizeLimit (next.config.ts)
-      // o un corte de conexion — sin esto el formulario se quedaba
-      // "guardando" sin ningun aviso.
+      // Cubre fallos que no llegan a devolver {error}: por ejemplo un
+      // corte de conexion durante la subida — sin esto el formulario se
+      // quedaba "guardando" sin ningun aviso.
       setServerError(
         "No se pudo guardar el producto. Si subiste varias imágenes, intenta con menos a la vez o revisa tu conexión.",
       );
