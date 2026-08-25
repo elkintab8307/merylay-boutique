@@ -1,4 +1,5 @@
 export type ImagenProducto = {
+  id: string;
   url: string;
   alt: string | null;
   variantId: string | null;

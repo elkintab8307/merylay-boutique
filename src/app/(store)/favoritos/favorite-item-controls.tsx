@@ -24,7 +24,7 @@ export function FavoriteItemControls({
   const handleAddToCart = () => {
     setMessage(null);
     startTransition(async () => {
-      const result = await addToCart(productId, null, 1, unitPrice);
+      const result = await addToCart(productId, null, null, 1, unitPrice);
       setMessage(result?.error ?? "Agregado al carrito.");
       router.refresh();
     });

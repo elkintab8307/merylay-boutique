@@ -9,6 +9,7 @@ import {
 } from "@/lib/store/variants";
 import { getLocalCart, saveLocalCart, mergeCartItem, type LocalCartItem } from "@/lib/cart/local-cart";
 import { addToCart } from "@/app/(store)/carrito/actions";
+import { EstampadoPickerModal, type EstampadoOption } from "@/components/store/estampado-picker-modal";
 
 export function ProductVariantSelector({
   productId,
@@ -23,6 +24,7 @@ export function ProductVariantSelector({
   color,
   onTallaChange,
   onColorChange,
+  imagenesDeVarianteActual,
 }: {
   productId: string;
   productSlug: string;
@@ -36,9 +38,11 @@ export function ProductVariantSelector({
   color: string | null;
   onTallaChange: (talla: string | null) => void;
   onColorChange: (color: string | null) => void;
+  imagenesDeVarianteActual: EstampadoOption[];
 }) {
   const { tallas, colores } = useMemo(() => getVariantOptions(variants), [variants]);
   const [message, setMessage] = useState<string | null>(null);
+  const [modalAbierto, setModalAbierto] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const hasVariants = variants.length > 0;
@@ -51,30 +55,52 @@ export function ProductVariantSelector({
   const variantLabel = [talla, color].filter(Boolean).join(" / ");
   const displayName = hasVariants && variantLabel ? `${productName} (${variantLabel})` : productName;
 
-  const handleAddToCart = () => {
+  const agregarItems = (imageIds: (string | null)[]) => {
     setMessage(null);
-    const item: LocalCartItem = {
-      productId,
-      variantId: hasVariants ? (variantSeleccionada?.id ?? null) : null,
-      imageId: null,
-      slug: productSlug,
-      name: displayName,
-      unitPrice,
-      qty: 1,
-      imageUrl,
-      stock: stockDisponible,
-    };
+    const items: LocalCartItem[] = imageIds.map((imageId) => {
+      const imagenElegida = imageId
+        ? imagenesDeVarianteActual.find((img) => img.imageId === imageId)
+        : undefined;
+      return {
+        productId,
+        variantId: hasVariants ? (variantSeleccionada?.id ?? null) : null,
+        imageId: imageId ?? null,
+        slug: productSlug,
+        name: displayName,
+        unitPrice,
+        qty: 1,
+        imageUrl: imagenElegida?.url ?? imageUrl,
+        stock: stockDisponible,
+      };
+    });
 
     if (currentUserId) {
       startTransition(async () => {
-        const result = await addToCart(item.productId, item.variantId, 1, item.unitPrice);
-        setMessage(result?.error ?? "Agregado al carrito.");
+        for (const item of items) {
+          const result = await addToCart(item.productId, item.variantId, item.imageId, 1, item.unitPrice);
+          if (result?.error) {
+            setMessage(result.error);
+            return;
+          }
+        }
+        setMessage(items.length > 1 ? "Agregados al carrito." : "Agregado al carrito.");
       });
     } else {
-      const current = getLocalCart();
-      saveLocalCart(mergeCartItem(current, item));
-      setMessage("Agregado al carrito.");
+      let current = getLocalCart();
+      for (const item of items) {
+        current = mergeCartItem(current, item);
+      }
+      saveLocalCart(current);
+      setMessage(items.length > 1 ? "Agregados al carrito." : "Agregado al carrito.");
     }
+  };
+
+  const handleAddToCart = () => {
+    if (imagenesDeVarianteActual.length > 1) {
+      setModalAbierto(true);
+      return;
+    }
+    agregarItems([imagenesDeVarianteActual[0]?.imageId ?? null]);
   };
 
   return (
@@ -125,6 +151,18 @@ export function ProductVariantSelector({
         {isPending ? "Agregando..." : "Agregar al carrito"}
       </Button>
       {message && <p className="text-sm text-brand-oro">{message}</p>}
+
+      <EstampadoPickerModal
+        open={modalAbierto}
+        images={imagenesDeVarianteActual}
+        seleccionInicial={[]}
+        modoUnico={false}
+        onClose={() => setModalAbierto(false)}
+        onConfirm={(imageIds) => {
+          setModalAbierto(false);
+          agregarItems(imageIds);
+        }}
+      />
     </div>
   );
 }

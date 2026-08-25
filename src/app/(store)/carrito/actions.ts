@@ -7,6 +7,7 @@ import { getOrCreateCart } from "@/lib/cart/get-or-create-cart";
 export async function addToCart(
   productId: string,
   variantId: string | null,
+  imageId: string | null,
   qty: number,
   unitPrice: number,
 ): Promise<{ error?: string }> {
@@ -29,6 +30,9 @@ export async function addToCart(
   existingQuery = variantId
     ? existingQuery.eq("variant_id", variantId)
     : existingQuery.is("variant_id", null);
+  existingQuery = imageId
+    ? existingQuery.eq("image_id", imageId)
+    : existingQuery.is("image_id", null);
   const { data: existing } = await existingQuery.maybeSingle();
 
   if (existing) {
@@ -42,6 +46,7 @@ export async function addToCart(
       cart_id: cartId,
       product_id: productId,
       variant_id: variantId,
+      image_id: imageId,
       qty,
       unit_price: unitPrice,
     });
@@ -50,6 +55,20 @@ export async function addToCart(
 
   revalidatePath("/carrito");
   revalidatePath("/", "layout");
+  return {};
+}
+
+export async function updateCartItemImage(
+  cartItemId: string,
+  imageId: string,
+): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("cart_items")
+    .update({ image_id: imageId })
+    .eq("id", cartItemId);
+  if (error) return { error: "No se pudo cambiar el estampado." };
+  revalidatePath("/carrito");
   return {};
 }
 
