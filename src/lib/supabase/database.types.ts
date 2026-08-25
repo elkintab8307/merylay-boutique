@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.15"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
@@ -18,6 +18,7 @@ export type Database = {
         Row: {
           cart_id: string
           id: string
+          image_id: string | null
           product_id: string
           qty: number
           unit_price: number
@@ -26,6 +27,7 @@ export type Database = {
         Insert: {
           cart_id: string
           id?: string
+          image_id?: string | null
           product_id: string
           qty: number
           unit_price: number
@@ -34,6 +36,7 @@ export type Database = {
         Update: {
           cart_id?: string
           id?: string
+          image_id?: string | null
           product_id?: string
           qty?: number
           unit_price?: number
@@ -45,6 +48,13 @@ export type Database = {
             columns: ["cart_id"]
             isOneToOne: false
             referencedRelation: "carts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cart_items_image_id_fkey"
+            columns: ["image_id"]
+            isOneToOne: false
+            referencedRelation: "product_images"
             referencedColumns: ["id"]
           },
           {
@@ -324,6 +334,7 @@ export type Database = {
       order_items: {
         Row: {
           id: string
+          image_id: string | null
           line_total: number
           name_snapshot: string
           order_id: string
@@ -334,6 +345,7 @@ export type Database = {
         }
         Insert: {
           id?: string
+          image_id?: string | null
           line_total: number
           name_snapshot: string
           order_id: string
@@ -344,6 +356,7 @@ export type Database = {
         }
         Update: {
           id?: string
+          image_id?: string | null
           line_total?: number
           name_snapshot?: string
           order_id?: string
@@ -353,6 +366,13 @@ export type Database = {
           variant_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "order_items_image_id_fkey"
+            columns: ["image_id"]
+            isOneToOne: false
+            referencedRelation: "product_images"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "order_items_order_id_fkey"
             columns: ["order_id"]
@@ -467,6 +487,7 @@ export type Database = {
       pos_sale_items: {
         Row: {
           id: string
+          image_id: string | null
           line_total: number
           product_id: string | null
           qty: number
@@ -476,6 +497,7 @@ export type Database = {
         }
         Insert: {
           id?: string
+          image_id?: string | null
           line_total: number
           product_id?: string | null
           qty: number
@@ -485,6 +507,7 @@ export type Database = {
         }
         Update: {
           id?: string
+          image_id?: string | null
           line_total?: number
           product_id?: string | null
           qty?: number
@@ -493,6 +516,13 @@ export type Database = {
           variant_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "pos_sale_items_image_id_fkey"
+            columns: ["image_id"]
+            isOneToOne: false
+            referencedRelation: "product_images"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "pos_sale_items_product_id_fkey"
             columns: ["product_id"]
