@@ -238,12 +238,17 @@ acepta `imageId` opcional, el `insert into pos_sale_items` lo incluye.
 
 **`update_pos_sale`**: mismo tratamiento que `update_order_items`.
 
-Ninguna de las cuatro cambia su firma (siguen recibiendo jsonb) — el
-cambio es interno al shape esperado dentro del jsonb y a las columnas del
-insert. Los llamadores TypeScript (`sale-action.ts`, `checkout/actions.ts`,
-`wompi-actions.ts`, `venta/[id]/editar/actions.ts`,
-`admin/pedidos/[id]/editar/actions.ts`) agregan `imageId: item.imageId ??
-null` al construir cada elemento del array que ya arman hoy.
+`create_order`/`create_order_wompi` no reciben items como parámetro —
+leen `cart_items` directo, así que sus llamadores TypeScript
+(`checkout/actions.ts`, `wompi-actions.ts`) no cambian en absoluto; les
+basta con que `cart_items.image_id` ya esté poblado antes de llamarlos.
+`update_order_items`, `create_pos_sale` y `update_pos_sale` sí reciben
+`p_items` jsonb armado en TypeScript a partir de `LocalCartItem[]`
+(`admin/pedidos/[id]/editar/actions.ts`, `pos/sale-action.ts`,
+`pos/venta/[id]/editar/actions.ts`) — como `LocalCartItem` ya incluye
+`imageId` (sección Arquitectura, `local-cart.ts`), esos tres llamadores
+solo necesitan agregar `imageId: item.imageId` al objeto que ya arman por
+ítem al construir `p_items`; ninguno cambia su firma pública.
 
 ### Visualización en detalle/recibo
 
