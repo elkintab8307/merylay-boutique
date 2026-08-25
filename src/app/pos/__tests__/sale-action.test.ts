@@ -18,6 +18,7 @@ const ITEMS: LocalCartItem[] = [
   {
     productId: "prod-1",
     variantId: null,
+    imageId: null,
     slug: "pijama",
     name: "Pijama Rosa",
     unitPrice: 50000,

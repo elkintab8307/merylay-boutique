@@ -57,6 +57,7 @@ export function ProductCardPos({
     onAdd({
       productId: product.id,
       variantId: hasVariants ? (variantSeleccionada?.id ?? null) : null,
+      imageId: null,
       slug: "",
       name: hasVariants && variantLabel ? `${product.name} (${variantLabel})` : product.name,
       unitPrice,

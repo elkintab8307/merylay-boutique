@@ -26,14 +26,19 @@ export function GuestCart() {
     setLoaded(true);
   }, []);
 
-  const handleUpdate = (productId: string, variantId: string | null, qty: number) => {
-    const next = updateItemQty(items, productId, variantId, qty);
+  const handleUpdate = (
+    productId: string,
+    variantId: string | null,
+    imageId: string | null,
+    qty: number,
+  ) => {
+    const next = updateItemQty(items, productId, variantId, imageId, qty);
     setItems(next);
     saveLocalCart(next);
   };
 
-  const handleRemove = (productId: string, variantId: string | null) => {
-    const next = removeItem(items, productId, variantId);
+  const handleRemove = (productId: string, variantId: string | null, imageId: string | null) => {
+    const next = removeItem(items, productId, variantId, imageId);
     setItems(next);
     saveLocalCart(next);
   };
@@ -58,7 +63,7 @@ export function GuestCart() {
       <div className="flex flex-col divide-y divide-brand-rosa-claro">
         {items.map((item) => (
           <div
-            key={`${item.productId}-${item.variantId ?? "base"}`}
+            key={`${item.productId}-${item.variantId ?? "base"}-${item.imageId ?? "sin-estampado"}`}
             className="flex items-center gap-4 py-4"
           >
             <div className="flex-1">
@@ -73,7 +78,7 @@ export function GuestCart() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => handleUpdate(item.productId, item.variantId, item.qty - 1)}
+                onClick={() => handleUpdate(item.productId, item.variantId, item.imageId, item.qty - 1)}
                 className="h-8 w-8 rounded-md border border-brand-rosa-claro text-brand-ciruela hover:border-brand-rosa"
               >
                 -
@@ -81,14 +86,14 @@ export function GuestCart() {
               <span className="w-6 text-center text-sm text-brand-ciruela">{item.qty}</span>
               <button
                 type="button"
-                onClick={() => handleUpdate(item.productId, item.variantId, item.qty + 1)}
+                onClick={() => handleUpdate(item.productId, item.variantId, item.imageId, item.qty + 1)}
                 className="h-8 w-8 rounded-md border border-brand-rosa-claro text-brand-ciruela hover:border-brand-rosa"
               >
                 +
               </button>
               <button
                 type="button"
-                onClick={() => handleRemove(item.productId, item.variantId)}
+                onClick={() => handleRemove(item.productId, item.variantId, item.imageId)}
                 className="ml-2 text-sm text-red-600 hover:underline"
               >
                 Quitar

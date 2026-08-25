@@ -81,6 +81,7 @@ export default async function EditarVentaPage({
     return {
       productId: item.product_id ?? "",
       variantId: item.variant_id,
+      imageId: null,
       slug: "",
       name: varianteLabel ? `${nombreBase} (${varianteLabel})` : nombreBase,
       unitPrice: item.unit_price,

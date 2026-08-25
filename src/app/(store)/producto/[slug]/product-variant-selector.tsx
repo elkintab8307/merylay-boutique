@@ -56,6 +56,7 @@ export function ProductVariantSelector({
     const item: LocalCartItem = {
       productId,
       variantId: hasVariants ? (variantSeleccionada?.id ?? null) : null,
+      imageId: null,
       slug: productSlug,
       name: displayName,
       unitPrice,
