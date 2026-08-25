@@ -5,7 +5,7 @@ import { requireAdmin } from "@/lib/admin/require-admin";
 import { createClient } from "@/lib/supabase/server";
 import { productoSchema, type ProductoInput } from "@/lib/validation/producto";
 import { slugify } from "@/lib/slug";
-import { uploadProductImages } from "@/lib/admin/upload-product-images";
+import { guardarImagenesProducto } from "@/lib/admin/upload-product-images";
 import { generarSkuVariante } from "@/lib/sku";
 import { diffVariantes } from "@/lib/admin/variant-diff";
 
@@ -32,8 +32,8 @@ function nombreVariante(talla?: string, color?: string) {
 
 export async function createProducto(
   input: ProductoInput,
-  imageFiles: File[],
-  variantImageFiles: File[][],
+  imageUrls: string[],
+  variantImageUrls: string[][],
 ): Promise<{ error?: string }> {
   await requireAdmin();
 
@@ -119,20 +119,20 @@ export async function createProducto(
     }
   }
 
-  if (imageFiles.length > 0) {
-    const uploadResult = await uploadProductImages(producto.id, imageFiles, null);
-    if (uploadResult.error) {
-      return { error: uploadResult.error };
+  if (imageUrls.length > 0) {
+    const guardarResult = await guardarImagenesProducto(producto.id, imageUrls, null);
+    if (guardarResult.error) {
+      return { error: guardarResult.error };
     }
   }
 
-  for (const [index, files] of variantImageFiles.entries()) {
-    if (files.length === 0) continue;
+  for (const [index, urls] of variantImageUrls.entries()) {
+    if (urls.length === 0) continue;
     const variantId = variantIdPorIndice[index];
     if (!variantId) continue;
-    const uploadResult = await uploadProductImages(producto.id, files, variantId);
-    if (uploadResult.error) {
-      return { error: uploadResult.error };
+    const guardarResult = await guardarImagenesProducto(producto.id, urls, variantId);
+    if (guardarResult.error) {
+      return { error: guardarResult.error };
     }
   }
 
@@ -143,8 +143,8 @@ export async function createProducto(
 export async function updateProducto(
   id: string,
   input: ProductoInput,
-  newImageFiles: File[],
-  variantImageFiles: File[][],
+  newImageUrls: string[],
+  variantImageUrls: string[][],
 ): Promise<{ error?: string }> {
   await requireAdmin();
 
@@ -288,20 +288,20 @@ export async function updateProducto(
     }
   }
 
-  if (newImageFiles.length > 0) {
-    const uploadResult = await uploadProductImages(id, newImageFiles, null);
-    if (uploadResult.error) {
-      return { error: uploadResult.error };
+  if (newImageUrls.length > 0) {
+    const guardarResult = await guardarImagenesProducto(id, newImageUrls, null);
+    if (guardarResult.error) {
+      return { error: guardarResult.error };
     }
   }
 
-  for (const [index, files] of variantImageFiles.entries()) {
-    if (files.length === 0) continue;
+  for (const [index, urls] of variantImageUrls.entries()) {
+    if (urls.length === 0) continue;
     const variantId = variantIdPorIndice[index];
     if (!variantId) continue;
-    const uploadResult = await uploadProductImages(id, files, variantId);
-    if (uploadResult.error) {
-      return { error: uploadResult.error };
+    const guardarResult = await guardarImagenesProducto(id, urls, variantId);
+    if (guardarResult.error) {
+      return { error: guardarResult.error };
     }
   }
 
