@@ -5,7 +5,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { formatPrice } from "@/lib/format";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/client";
+import { productoAgotado } from "@/lib/store/stock";
 import {
   getLocalFavorites,
   saveLocalFavorites,
@@ -19,6 +21,7 @@ export function GuestFavorites() {
   const [loaded, setLoaded] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [productosConVariantes, setProductosConVariantes] = useState<Set<string>>(new Set());
+  const [productosAgotados, setProductosAgotados] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const localItems = getLocalFavorites();
@@ -28,16 +31,33 @@ export function GuestFavorites() {
 
     if (localItems.length === 0) return;
     const supabase = createClient();
+    const productIds = localItems.map((i) => i.productId);
+
     supabase
       .from("product_variants")
       .select("product_id")
-      .in(
-        "product_id",
-        localItems.map((i) => i.productId),
-      )
+      .in("product_id", productIds)
       .then(({ data }) => {
         setProductosConVariantes(new Set((data ?? []).map((v) => v.product_id)));
       });
+
+    Promise.all([
+      supabase.from("products").select("id, stock").in("id", productIds),
+      supabase.from("product_variants").select("product_id, stock").in("product_id", productIds),
+    ]).then(([{ data: productos }, { data: variantes }]) => {
+      const stocksVariantesPorProducto = new Map<string, number[]>();
+      for (const v of variantes ?? []) {
+        const actuales = stocksVariantesPorProducto.get(v.product_id) ?? [];
+        actuales.push(v.stock);
+        stocksVariantesPorProducto.set(v.product_id, actuales);
+      }
+      const agotados = new Set(
+        (productos ?? [])
+          .filter((p) => productoAgotado(p.stock, stocksVariantesPorProducto.get(p.id) ?? []))
+          .map((p) => p.id),
+      );
+      setProductosAgotados(agotados);
+    });
   }, []);
 
   const handleRemove = (item: LocalFavoriteItem) => {
@@ -100,6 +120,11 @@ export function GuestFavorites() {
                 {item.name}
               </Link>
               <p className="text-sm text-brand-rosa">{formatPrice(item.price)}</p>
+              {productosAgotados.has(item.productId) && (
+                <div className="mt-1">
+                  <Badge variant="danger">Agotado</Badge>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2">
               {productosConVariantes.has(item.productId) ? (
