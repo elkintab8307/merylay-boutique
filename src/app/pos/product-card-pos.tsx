@@ -24,9 +24,9 @@ export function ProductCardPos({
   const [talla, setTalla] = useState<string | null>(null);
   const [color, setColor] = useState<string | null>(null);
 
-  // Stock total de cada talla, sumando todas sus variantes de color -- se
-  // muestra junto a cada boton de talla para que el vendedor vea de un
-  // vistazo cuales tienen existencias sin necesidad de elegir primero.
+  // Stock total de cada talla, sumando todas sus variantes de color -- no se
+  // muestra en la tarjeta, solo se usa para decidir que tallas ocultar (sin
+  // stock) y para la insignia de stock una vez se elige una talla.
   const stockPorTalla = new Map<string, number>();
   for (const v of product.variants) {
     if (!v.talla) continue;
@@ -54,8 +54,11 @@ export function ProductCardPos({
 
   const variantSeleccionada = hasVariants ? findMatchingVariant(product.variants, talla, color) : null;
 
+  // Antes de elegir una talla, la insignia debe mostrar el total real de
+  // unidades del producto (sumando todas las variantes) -- no el maximo de
+  // una sola variante, que parece un total pero no lo es.
   const stockColapsado = hasVariants
-    ? Math.max(0, ...product.variants.map((v) => v.stock))
+    ? product.variants.reduce((sum, v) => sum + v.stock, 0)
     : product.stock;
 
   const stockDisponible = !hasVariants
@@ -137,7 +140,7 @@ export function ProductCardPos({
                       : "border-brand-rosa-claro text-brand-ciruela"
                   }`}
                 >
-                  {t} · {stockPorTalla.get(t) ?? 0}
+                  {t}
                 </button>
               ))}
             </div>
