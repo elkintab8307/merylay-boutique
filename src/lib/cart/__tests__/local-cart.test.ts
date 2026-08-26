@@ -1,12 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   mergeCartItem,
   updateItemQty,
   removeItem,
   computeSubtotal,
   stockUsadoPorVariante,
+  getLocalCart,
 } from "../local-cart";
 import type { LocalCartItem } from "../local-cart";
+
+const STORAGE_KEY = "merylay-cart";
 
 const baseItem: LocalCartItem = {
   productId: "p1",
@@ -68,6 +71,18 @@ describe("mergeCartItem", () => {
     // Cupo restante = 5 (stock total) - 4 (ya usado por img-a) = 1
     expect(result).toHaveLength(2);
     expect(result[1].qty).toBe(1);
+  });
+
+  it("no agrega una linea nueva si la variante ya tiene todo su stock repartido entre otras lineas", () => {
+    const result = mergeCartItem(
+      [{ ...baseItem, variantId: "v1", imageId: "img-a", qty: 5, stock: 5 }],
+      { ...baseItem, variantId: "v1", imageId: "img-b", qty: 1, stock: 5 },
+    );
+    // Cupo restante = 5 (stock total) - 5 (ya usado por img-a) = 0: no hay
+    // espacio para una linea nueva, y una linea con qty 0 rompe
+    // create_pos_sale/create_order (exigen qty > 0).
+    expect(result).toHaveLength(1);
+    expect(result).toEqual([{ ...baseItem, variantId: "v1", imageId: "img-a", qty: 5, stock: 5 }]);
   });
 
   it("al fusionar en una linea existente, tambien respeta lo que ocupan otras lineas de la misma variante", () => {
@@ -155,6 +170,38 @@ describe("removeItem", () => {
     ];
     const result = removeItem(items, "p1", "v1", "img-a");
     expect(result).toEqual([items[1]]);
+  });
+});
+
+describe("getLocalCart", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("normaliza a null el imageId de un item guardado antes de esta funcionalidad (sin la clave imageId)", () => {
+    // Simula un carrito guardado en localStorage antes de que existiera
+    // imageId: el JSON no trae la clave en absoluto, asi que al leerlo
+    // vuelve `undefined`, no `null`.
+    const itemSinImageId = {
+      productId: "p1",
+      variantId: "v1",
+      slug: "producto-1",
+      name: "Producto 1",
+      unitPrice: 10000,
+      qty: 1,
+      imageUrl: null,
+      stock: 5,
+    };
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify([itemSinImageId]));
+
+    const result = getLocalCart();
+
+    expect(result[0].imageId).toBe(null);
+    expect(result[0].imageId).not.toBe(undefined);
   });
 });
 

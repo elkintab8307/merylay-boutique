@@ -35,6 +35,10 @@ export function mergeCartItem(items: LocalCartItem[], newItem: LocalCartItem): L
       ? stockUsadoPorVariante(items, newItem.variantId)
       : 0;
     const cupoDisponible = Math.max(newItem.stock - usadoPorOtrasLineas, 0);
+    // Sin cupo restante no se agrega una linea vacia: una linea con qty 0
+    // es invisible para el usuario pero rompe create_pos_sale/create_order,
+    // que exigen qty > 0.
+    if (cupoDisponible <= 0) return items;
     return [...items, { ...newItem, qty: Math.min(newItem.qty, cupoDisponible) }];
   }
 
@@ -83,7 +87,18 @@ export function getLocalCart(): LocalCartItem[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as LocalCartItem[]) : [];
+    if (!raw) return [];
+    // Un carrito guardado antes de esta funcionalidad no trae la clave
+    // imageId (queda `undefined` al leerlo), mientras que toda linea nueva
+    // o actualizada ahora guarda explicitamente `null`. Normalizar aqui
+    // evita que ambos valores convivan: `undefined !== null` los trataria
+    // como lineas distintas (sameItem) y, ademas, `?? "sin-estampado"` en
+    // la key de React colapsa `undefined` y `null` al mismo sufijo, asi
+    // que sin esto una linea heredada y una nueva podrian compartir key.
+    return (JSON.parse(raw) as LocalCartItem[]).map((item) => ({
+      ...item,
+      imageId: item.imageId ?? null,
+    }));
   } catch {
     return [];
   }
