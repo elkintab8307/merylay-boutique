@@ -82,8 +82,13 @@ export function VentaItemsEditor({
   const [discount, setDiscount] = useState(discountInicial);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(paymentMethodInicial);
   const [cliente, setCliente] = useState<ClienteSeleccionado | null>(clienteInicial ?? null);
-  const [numCuotas, setNumCuotas] = useState(1);
-  const [abonoInicial, setAbonoInicial] = useState(0);
+  // Se guardan como texto (no numero) para poder dejar el campo vacio
+  // mientras se edita -- si el estado fuera numerico, cada onChange
+  // convertia "" en 0/1 al instante y el campo nunca se veia vacio.
+  const [numCuotasInput, setNumCuotasInput] = useState("1");
+  const [abonoInicialInput, setAbonoInicialInput] = useState("");
+  const numCuotas = Number(numCuotasInput) || 0;
+  const abonoInicial = Math.max(0, Number(abonoInicialInput) || 0);
   const [abonoInicialMetodo, setAbonoInicialMetodo] = useState<
     (typeof METODOS_ABONO)[number] | ""
   >("");
@@ -154,8 +159,8 @@ export function VentaItemsEditor({
     }
 
     if (esCredito) {
-      if (numCuotas < 1) {
-        setError("El número de cuotas debe ser al menos 1.");
+      if (numCuotasInput.trim() === "" || numCuotas < 1) {
+        setError("Ingresa el número de cuotas.");
         return;
       }
       if (abonoInicial > 0 && !abonoInicialMetodo) {
@@ -334,8 +339,8 @@ export function VentaItemsEditor({
                     id="numCuotas"
                     type="number"
                     min={1}
-                    value={numCuotas}
-                    onChange={(e) => setNumCuotas(Math.max(1, Number(e.target.value) || 1))}
+                    value={numCuotasInput}
+                    onChange={(e) => setNumCuotasInput(e.target.value)}
                   />
                 </div>
                 <div>
@@ -346,8 +351,8 @@ export function VentaItemsEditor({
                     id="abonoInicial"
                     type="number"
                     min={0}
-                    value={abonoInicial}
-                    onChange={(e) => setAbonoInicial(Math.max(0, Number(e.target.value) || 0))}
+                    value={abonoInicialInput}
+                    onChange={(e) => setAbonoInicialInput(e.target.value)}
                   />
                 </div>
               </div>
