@@ -30,9 +30,15 @@ export function ProductCardPos({
     : null;
   const stockDisponible = hasVariants ? (variantSeleccionada?.stock ?? 0) : product.stock;
   const unitPrice = variantSeleccionada?.priceOverride ?? product.price;
+  // Gate especifico de la variante seleccionada: solo aplica al boton "Confirmar"
+  // dentro del selector expandido, donde ya se eligio una combinacion concreta.
   const agotado = stockDisponible <= 0;
   const imagenesDeVariante = variantSeleccionada?.images ?? [];
 
+  // Disponibilidad agregada del producto (maxima entre variantes, o stock del
+  // producto si no tiene variantes). Usada para el gate/badge en estado
+  // COLAPSADO: no debe depender de que variante cae en variants[0], que es
+  // arbitrario sin un ORDER BY estable en la consulta.
   const stockColapsado = hasVariants
     ? Math.max(0, ...product.variants.map((v) => v.stock))
     : product.stock;
