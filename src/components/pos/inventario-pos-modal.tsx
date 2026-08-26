@@ -237,7 +237,7 @@ export function InventarioPosModal({
                     stock: 0,
                     isActive: true,
                     isFeatured: false,
-                    variantes: [{ talla: "", color: "", priceOverride: null, stock: 0 }],
+                    variantes: [{ talla: "", color: "", priceOverride: null }],
                   }}
                   categoriasDisponibles={categorias}
                   onGuardado={handleGuardado}

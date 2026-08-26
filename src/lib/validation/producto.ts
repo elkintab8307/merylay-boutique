@@ -7,7 +7,6 @@ export const varianteSchema = z
     talla: z.string().trim().optional(),
     color: z.string().trim().optional(),
     priceOverride: z.number().min(0).nullable(),
-    stock: z.number().int().min(0),
   })
   .refine((data) => Boolean(data.talla) || Boolean(data.color), {
     message: "Ingresa talla, color, o ambos",

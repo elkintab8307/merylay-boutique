@@ -36,8 +36,8 @@ describe("ProductoForm", () => {
           isActive: true,
           isFeatured: false,
           variantes: [
-            { talla: "M", color: "Rosa", priceOverride: null, stock: 1 },
-            { talla: "M", color: "Rosa", priceOverride: null, stock: 2 },
+            { talla: "M", color: "Rosa", priceOverride: null },
+            { talla: "M", color: "Rosa", priceOverride: null },
           ],
         }}
         categoriasDisponibles={[]}
@@ -81,8 +81,8 @@ describe("ProductoForm", () => {
           isActive: true,
           isFeatured: false,
           variantes: [
-            { talla: "M", color: "Rosa", priceOverride: null, stock: 1 },
-            { talla: "L", color: "Rosa", priceOverride: null, stock: 2 },
+            { talla: "M", color: "Rosa", priceOverride: null },
+            { talla: "L", color: "Rosa", priceOverride: null },
           ],
         }}
         categoriasDisponibles={[]}

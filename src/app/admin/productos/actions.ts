@@ -93,7 +93,6 @@ export async function createProducto(
           color: variante.color || null,
           sku: generarSkuVariante(skuGenerado, variante.talla || null, variante.color || null),
           price_override: variante.priceOverride,
-          stock: variante.stock,
         })),
       )
       .select("id");
@@ -233,7 +232,6 @@ export async function updateProducto(
           item.variante.color || null,
         ),
         price_override: item.variante.priceOverride,
-        stock: item.variante.stock,
       })),
       { onConflict: "id" },
     );
@@ -262,7 +260,6 @@ export async function updateProducto(
             item.variante.color || null,
           ),
           price_override: item.variante.priceOverride,
-          stock: item.variante.stock,
         })),
       )
       .select("id");

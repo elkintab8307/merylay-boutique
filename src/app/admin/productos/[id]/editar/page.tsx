@@ -34,7 +34,7 @@ export default async function EditarProductoPage({
       .eq("product_id", id),
     supabase
       .from("product_images")
-      .select("id, url, is_primary, variant_id")
+      .select("id, url, is_primary, variant_id, vendida")
       .eq("product_id", id)
       .order("sort_order"),
     supabase
@@ -70,7 +70,6 @@ export default async function EditarProductoPage({
             talla: v.talla ?? "",
             color: v.color ?? "",
             priceOverride: v.price_override,
-            stock: v.stock,
           })),
         }}
         categoriasDisponibles={categorias ?? []}
