@@ -419,3 +419,24 @@ export async function setPrimaryProductImage(
   revalidatePath(`/admin/productos/${productId}/editar`);
   return {};
 }
+
+export async function toggleImagenVendida(
+  imageId: string,
+  vendida: boolean,
+  productId: string,
+): Promise<{ error?: string }> {
+  await requireAdmin();
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("product_images")
+    .update({ vendida })
+    .eq("id", imageId);
+
+  if (error) {
+    return { error: "No se pudo actualizar la disponibilidad de la foto." };
+  }
+
+  revalidatePath(`/admin/productos/${productId}/editar`);
+  return {};
+}

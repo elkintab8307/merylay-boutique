@@ -12,6 +12,7 @@ import {
   updateProducto,
   deleteProductImage,
   setPrimaryProductImage,
+  toggleImagenVendida,
 } from "./actions";
 import { subirImagenesProductoCliente } from "@/lib/admin/upload-product-images-client";
 import { Button } from "@/components/ui/button";
@@ -176,6 +177,16 @@ export function ProductoForm({
     if (!result.error) {
       setExistingImages((prev) =>
         prev.map((img) => ({ ...img, is_primary: img.id === imageId })),
+      );
+    }
+  };
+
+  const handleToggleVendida = async (imageId: string, vendidaActual: boolean) => {
+    if (!productoId) return;
+    const result = await toggleImagenVendida(imageId, !vendidaActual, productoId);
+    if (!result.error) {
+      setExistingImages((prev) =>
+        prev.map((img) => (img.id === imageId ? { ...img, vendida: !vendidaActual } : img)),
       );
     }
   };
@@ -445,6 +456,13 @@ export function ProductoForm({
                             className="text-red-600 hover:underline"
                           >
                             Eliminar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleVendida(image.id, image.vendida)}
+                            className="text-brand-rosa hover:underline"
+                          >
+                            {image.vendida ? "Marcar disponible" : "Marcar vendida"}
                           </button>
                         </div>
                       </div>
