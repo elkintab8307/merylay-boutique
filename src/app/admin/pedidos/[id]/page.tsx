@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 import { formatPrice } from "@/lib/format";
 import { EstadoPedidoSelect } from "../estado-pedido-select";
@@ -38,8 +39,17 @@ export default async function AdminPedidoDetallePage({
 
   const { data: items, error: itemsError } = await supabase
     .from("order_items")
-    .select("name_snapshot, qty, unit_price, line_total")
+    .select("name_snapshot, qty, unit_price, line_total, image_id")
     .eq("order_id", pedido.id);
+
+  const imageIds = (items ?? [])
+    .map((i) => i.image_id)
+    .filter((v): v is string => Boolean(v));
+  const { data: imagenes } =
+    imageIds.length > 0
+      ? await supabase.from("product_images").select("id, url").in("id", imageIds)
+      : { data: [] as { id: string; url: string }[] };
+  const urlPorImagen = new Map((imagenes ?? []).map((img) => [img.id, img.url]));
 
   const direccion = pedido.shipping_address as ShippingAddress | null;
 
@@ -72,17 +82,25 @@ export default async function AdminPedidoDetallePage({
           </p>
         ) : (
           <>
-            {(items ?? []).map((item, index) => (
-              <div
-                key={index}
-                className="flex justify-between py-2 text-sm text-brand-ciruela"
-              >
-                <span>
-                  {item.name_snapshot} × {item.qty}
-                </span>
-                <span>{formatPrice(item.line_total)}</span>
-              </div>
-            ))}
+            {(items ?? []).map((item, index) => {
+              const miniatura = item.image_id ? urlPorImagen.get(item.image_id) : null;
+              return (
+                <div
+                  key={index}
+                  className="flex items-center justify-between py-2 text-sm text-brand-ciruela"
+                >
+                  <span className="flex items-center gap-2">
+                    {miniatura && (
+                      <span className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md border border-brand-rosa-claro">
+                        <Image src={miniatura} alt="" fill className="object-cover" />
+                      </span>
+                    )}
+                    {item.name_snapshot} × {item.qty}
+                  </span>
+                  <span>{formatPrice(item.line_total)}</span>
+                </div>
+              );
+            })}
             <div className="flex justify-between pt-2 font-heading text-brand-rosa">
               <span>Total</span>
               <span>{formatPrice(pedido.total)}</span>
