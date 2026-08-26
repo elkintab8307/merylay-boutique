@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Image from "next/image";
 import { ArrowLeft, Banknote, CreditCard, Landmark, ShoppingCart, Smartphone, Wallet } from "lucide-react";
 import { PaymentMethodPicker, type PaymentMethodOption } from "./payment-method-picker";
@@ -14,6 +14,11 @@ import {
   computeSubtotal,
   type LocalCartItem,
 } from "@/lib/cart/local-cart";
+import {
+  getVentaEnCurso,
+  guardarVentaEnCurso,
+  limpiarVentaEnCurso,
+} from "@/lib/cart/local-pos-sale";
 import { ProductBrowser } from "./product-browser";
 import type { Database } from "@/lib/supabase/database.types";
 import type { CreditoVentaInput } from "@/lib/validation/credito";
@@ -42,6 +47,7 @@ export function VentaItemsEditor({
   clienteObligatorio = false,
   permitirCredito = true,
   mobileVistaDoble = false,
+  persistirVentaEnCurso = false,
   textoBoton,
   textoBotonEnviando,
   onGuardar,
@@ -56,6 +62,12 @@ export function VentaItemsEditor({
   clienteObligatorio?: boolean;
   permitirCredito?: boolean;
   mobileVistaDoble?: boolean;
+  // Solo la pantalla de "nueva venta" del POS activa esto: guarda los items
+  // en localStorage para no perderlos si se recarga la pagina. Los
+  // formularios de EDITAR una venta/pedido ya existente no lo pasan -- ahi
+  // itemsIniciales siempre refleja el estado real guardado en la base de
+  // datos, y no debe mezclarse con una venta nueva en curso.
+  persistirVentaEnCurso?: boolean;
   textoBoton: string;
   textoBotonEnviando: string;
   onGuardar: (
@@ -79,6 +91,16 @@ export function VentaItemsEditor({
   const [isSubmitting, startSubmit] = useTransition();
   const [mostrandoCarritoMovil, setMostrandoCarritoMovil] = useState(false);
 
+  useEffect(() => {
+    if (!persistirVentaEnCurso) return;
+    const guardados = getVentaEnCurso();
+    if (guardados.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setItems(guardados);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const subtotal = computeSubtotal(items);
   const total = Math.max(subtotal - discount, 0);
   const esCredito = paymentMethod === "credito" && permitirCredito;
@@ -97,7 +119,9 @@ export function VentaItemsEditor({
   ];
 
   const handleAdd = (item: LocalCartItem) => {
-    setItems((prev) => mergeCartItem(prev, item));
+    const next = mergeCartItem(items, item);
+    setItems(next);
+    if (persistirVentaEnCurso) guardarVentaEnCurso(next);
   };
 
   const handleUpdateQty = (
@@ -106,11 +130,15 @@ export function VentaItemsEditor({
     imageId: string | null,
     qty: number,
   ) => {
-    setItems((prev) => updateItemQty(prev, productId, variantId, imageId, qty));
+    const next = updateItemQty(items, productId, variantId, imageId, qty);
+    setItems(next);
+    if (persistirVentaEnCurso) guardarVentaEnCurso(next);
   };
 
   const handleRemove = (productId: string, variantId: string | null, imageId: string | null) => {
-    setItems((prev) => removeItem(prev, productId, variantId, imageId));
+    const next = removeItem(items, productId, variantId, imageId);
+    setItems(next);
+    if (persistirVentaEnCurso) guardarVentaEnCurso(next);
   };
 
   const handleSubmit = () => {
@@ -144,9 +172,31 @@ export function VentaItemsEditor({
             abonoInicialMetodo: abonoInicialMetodo || null,
           }
         : null;
-      const result = await onGuardar(items, paymentMethod, discount, credito, cliente?.id ?? null);
-      if (result?.error) {
-        setError(result.error);
+      try {
+        const result = await onGuardar(
+          items,
+          paymentMethod,
+          discount,
+          credito,
+          cliente?.id ?? null,
+        );
+        if (result?.error) {
+          setError(result.error);
+          return;
+        }
+        // onGuardar normalmente nunca llega aqui -- registrarVenta/actualizarVenta
+        // redirigen al exito, lo que hace que el await de arriba rechace (ver
+        // el catch abajo). Se deja por si algun onGuardar futuro no redirige.
+        if (persistirVentaEnCurso) limpiarVentaEnCurso();
+      } catch (err) {
+        // Un redirect exitoso de Next.js se propaga como un error especial
+        // ("NEXT_REDIRECT") que hay que dejar seguir su curso para que la
+        // navegacion ocurra -- aqui solo se aprovecha para limpiar la venta
+        // en curso antes de que el componente se desmonte.
+        if (persistirVentaEnCurso && String(err).includes("NEXT_REDIRECT")) {
+          limpiarVentaEnCurso();
+        }
+        throw err;
       }
     });
   };
