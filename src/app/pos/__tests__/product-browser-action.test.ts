@@ -182,6 +182,50 @@ describe("buscarProductosPos", () => {
     ]);
   });
 
+  it("excluye un producto sin variantes cuyo stock es 0", async () => {
+    const supabase = crearSupabaseMock({
+      products: [{ ...PRODUCTO_BASE, id: "prod-agotado", stock: 0 }, PRODUCTO_BASE],
+    });
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+
+    const { buscarProductosPos } = await import("../product-browser-action");
+    const resultado = await buscarProductosPos({ query: "", categoryId: null });
+
+    expect(resultado.map((p) => p.id)).toEqual(["prod-1"]);
+  });
+
+  it("excluye un producto con variantes cuando TODAS sus variantes tienen stock 0", async () => {
+    const supabase = crearSupabaseMock({
+      products: [PRODUCTO_BASE],
+      product_variants: [
+        { id: "var-1", product_id: "prod-1", talla: "M", color: "Rosa", sku: "PIJ-001-M-ROS", stock: 0, price_override: null },
+        { id: "var-2", product_id: "prod-1", talla: "L", color: "Rosa", sku: "PIJ-001-L-ROS", stock: 0, price_override: null },
+      ],
+    });
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+
+    const { buscarProductosPos } = await import("../product-browser-action");
+    const resultado = await buscarProductosPos({ query: "", categoryId: null });
+
+    expect(resultado).toEqual([]);
+  });
+
+  it("incluye un producto con variantes si al menos una tiene stock, aunque el stock del producto sea 0", async () => {
+    const supabase = crearSupabaseMock({
+      products: [{ ...PRODUCTO_BASE, stock: 0 }],
+      product_variants: [
+        { id: "var-1", product_id: "prod-1", talla: "M", color: "Rosa", sku: "PIJ-001-M-ROS", stock: 0, price_override: null },
+        { id: "var-2", product_id: "prod-1", talla: "L", color: "Rosa", sku: "PIJ-001-L-ROS", stock: 3, price_override: null },
+      ],
+    });
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+
+    const { buscarProductosPos } = await import("../product-browser-action");
+    const resultado = await buscarProductosPos({ query: "", categoryId: null });
+
+    expect(resultado.map((p) => p.id)).toEqual(["prod-1"]);
+  });
+
   it("sin productos, retorna [] sin consultar variantes ni imagenes", async () => {
     const supabase = crearSupabaseMock({ products: [] });
     vi.mocked(createClient).mockResolvedValue(supabase as never);

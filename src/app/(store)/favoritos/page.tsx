@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { productoAgotado } from "@/lib/store/stock";
 import { GuestFavorites } from "./guest-favorites";
 import { AuthenticatedFavorites, type FavoriteItemView } from "./authenticated-favorites";
 
@@ -24,11 +25,11 @@ export default async function FavoritosPage() {
 
   const productIds = (favoritos ?? []).map((f) => f.product_id);
 
-  const [{ data: productos }, { data: imagenes }] = await Promise.all([
+  const [{ data: productos }, { data: imagenes }, { data: variantesFavoritos }] = await Promise.all([
     productIds.length > 0
-      ? supabase.from("products").select("id, name, slug, price").in("id", productIds)
+      ? supabase.from("products").select("id, name, slug, price, stock").in("id", productIds)
       : Promise.resolve({
-          data: [] as { id: string; name: string; slug: string; price: number }[],
+          data: [] as { id: string; name: string; slug: string; price: number; stock: number }[],
         }),
     productIds.length > 0
       ? supabase
@@ -37,15 +38,20 @@ export default async function FavoritosPage() {
           .in("product_id", productIds)
           .eq("is_primary", true)
       : Promise.resolve({ data: [] as { product_id: string; url: string }[] }),
+    productIds.length > 0
+      ? supabase.from("product_variants").select("product_id, stock").in("product_id", productIds)
+      : Promise.resolve({ data: [] as { product_id: string; stock: number }[] }),
   ]);
 
   const imagenPorProducto = new Map((imagenes ?? []).map((img) => [img.product_id, img.url]));
 
-  const { data: variantesFavoritos } =
-    productIds.length > 0
-      ? await supabase.from("product_variants").select("product_id").in("product_id", productIds)
-      : { data: [] as { product_id: string }[] };
   const productosConVariantes = new Set((variantesFavoritos ?? []).map((v) => v.product_id));
+  const stocksVariantesPorProducto = new Map<string, number[]>();
+  for (const v of variantesFavoritos ?? []) {
+    const actuales = stocksVariantesPorProducto.get(v.product_id) ?? [];
+    actuales.push(v.stock);
+    stocksVariantesPorProducto.set(v.product_id, actuales);
+  }
 
   const items: FavoriteItemView[] = (productos ?? []).map((p) => ({
     productId: p.id,
@@ -54,6 +60,7 @@ export default async function FavoritosPage() {
     price: p.price,
     imageUrl: imagenPorProducto.get(p.id) ?? null,
     hasVariants: productosConVariantes.has(p.id),
+    agotado: productoAgotado(p.stock, stocksVariantesPorProducto.get(p.id) ?? []),
   }));
 
   return (

@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { formatPrice } from "@/lib/format";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { FavoriteItemControls } from "./favorite-item-controls";
 
 export type FavoriteItemView = {
@@ -11,6 +12,7 @@ export type FavoriteItemView = {
   price: number;
   imageUrl: string | null;
   hasVariants: boolean;
+  agotado: boolean;
 };
 
 export function AuthenticatedFavorites({ items }: { items: FavoriteItemView[] }) {
@@ -44,6 +46,11 @@ export function AuthenticatedFavorites({ items }: { items: FavoriteItemView[] })
               {item.name}
             </Link>
             <p className="text-sm text-brand-rosa">{formatPrice(item.price)}</p>
+            {item.agotado && (
+              <div className="mt-1">
+                <Badge variant="danger">Agotado</Badge>
+              </div>
+            )}
           </div>
           <FavoriteItemControls
             productId={item.productId}

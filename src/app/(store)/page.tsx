@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { ProductCard, type ProductCardData } from "@/components/store/product-card";
+import { productoAgotado } from "@/lib/store/stock";
 import { HeroSection } from "@/components/store/hero-section";
 import { BenefitsBar } from "@/components/store/benefits-bar";
 import { FeaturedCategories } from "@/components/store/featured-categories";
@@ -19,7 +20,7 @@ export default async function HomePage() {
   ] = await Promise.all([
     supabase
       .from("products")
-      .select("id, name, slug, price, promo_price")
+      .select("id, name, slug, price, promo_price, stock")
       .eq("is_active", true)
       .eq("is_featured", true)
       .order("created_at", { ascending: false })
@@ -46,16 +47,35 @@ export default async function HomePage() {
   if (productosBase.length === 0) {
     const { data: recientes } = await supabase
       .from("products")
-      .select("id, name, slug, price, promo_price")
+      .select("id, name, slug, price, promo_price, stock")
       .eq("is_active", true)
       .order("created_at", { ascending: false })
       .limit(8);
     productosBase = recientes ?? [];
   }
 
+  const idsBase = productosBase.map((p) => p.id);
+  const { data: variantesBase } =
+    idsBase.length > 0
+      ? await supabase
+          .from("product_variants")
+          .select("product_id, talla, stock")
+          .in("product_id", idsBase)
+      : { data: [] as { product_id: string; talla: string | null; stock: number }[] };
+
+  const stocksVariantesPorProducto = new Map<string, number[]>();
+  for (const v of variantesBase ?? []) {
+    const actuales = stocksVariantesPorProducto.get(v.product_id) ?? [];
+    actuales.push(v.stock);
+    stocksVariantesPorProducto.set(v.product_id, actuales);
+  }
+  productosBase = productosBase.filter(
+    (p) => !productoAgotado(p.stock, stocksVariantesPorProducto.get(p.id) ?? []),
+  );
+
   const productoIds = productosBase.map((p) => p.id);
 
-  const [{ data: imagenes }, { data: favoritos }, { data: variantes }] = await Promise.all([
+  const [{ data: imagenes }, { data: favoritos }] = await Promise.all([
     productoIds.length > 0
       ? supabase
           .from("product_images")
@@ -70,19 +90,13 @@ export default async function HomePage() {
           .eq("user_id", user.id)
           .in("product_id", productoIds)
       : Promise.resolve({ data: [] as { product_id: string }[] }),
-    productoIds.length > 0
-      ? supabase
-          .from("product_variants")
-          .select("product_id, talla")
-          .in("product_id", productoIds)
-      : Promise.resolve({ data: [] as { product_id: string; talla: string | null }[] }),
   ]);
 
   const imagenPorProducto = new Map((imagenes ?? []).map((img) => [img.product_id, img.url]));
   const favoritosSet = new Set((favoritos ?? []).map((f) => f.product_id));
 
   const tallasPorProducto = new Map<string, string[]>();
-  for (const variante of variantes ?? []) {
+  for (const variante of variantesBase ?? []) {
     if (!variante.talla) continue;
     const actuales = tallasPorProducto.get(variante.product_id) ?? [];
     if (!actuales.includes(variante.talla)) {

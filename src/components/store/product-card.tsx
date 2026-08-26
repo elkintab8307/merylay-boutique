@@ -65,7 +65,10 @@ export function ProductCard({
       </div>
       <span className="font-body text-sm text-brand-ciruela">{product.name}</span>
       {product.tallas.length > 0 && (
-        <span className="text-xs text-brand-ciruela/60">{product.tallas.join(" · ")}</span>
+        <span className="text-xs text-brand-ciruela/60">
+          {product.tallas.length > 1 ? "Tallas: " : "Talla: "}
+          {product.tallas.join(" · ")}
+        </span>
       )}
       <div className="flex items-baseline gap-2">
         <span className="font-heading text-brand-rosa">{formatPrice(precioMostrado)}</span>
