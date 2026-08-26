@@ -52,7 +52,7 @@ export function PosMobileShell({
         <Link href="/pos" className="font-script text-2xl text-brand-rosa">
           MeryLay
         </Link>
-        <NotificacionesStockBajo items={stockBajo} />
+        <NotificacionesStockBajo items={stockBajo} rolVendedor={rolVendedor} />
       </header>
       <PosBottomNav
         rolVendedor={rolVendedor}

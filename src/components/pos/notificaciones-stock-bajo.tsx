@@ -1,12 +1,24 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { Bell } from "lucide-react";
 import type { LowStockItem } from "@/lib/admin/low-stock";
 
-export function NotificacionesStockBajo({ items }: { items: LowStockItem[] }) {
+export function NotificacionesStockBajo({
+  items,
+  rolVendedor,
+}: {
+  items: LowStockItem[];
+  rolVendedor: string;
+}) {
   const [open, setOpen] = useState(false);
+  // Una vez el vendedor abre la campanita, se considera "vista" y la
+  // insignia con el numero deja de mostrarse -- vuelve a aparecer solo si
+  // la pagina se recarga/navega de nuevo y sigue habiendo stock bajo.
+  const [visto, setVisto] = useState(false);
   const contenedorRef = useRef<HTMLDivElement>(null);
+  const esAdminOSuperadmin = rolVendedor === "admin" || rolVendedor === "superadmin";
 
   useEffect(() => {
     if (!open) return;
@@ -23,12 +35,15 @@ export function NotificacionesStockBajo({ items }: { items: LowStockItem[] }) {
     <div ref={contenedorRef} className="relative">
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          setOpen((o) => !o);
+          setVisto(true);
+        }}
         aria-label="Notificaciones de stock bajo"
         className="relative rounded-full p-2 text-brand-ciruela hover:bg-brand-rosa-claro/30"
       >
         <Bell className="h-5 w-5" />
-        {items.length > 0 && (
+        {items.length > 0 && !visto && (
           <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-rosa px-1 text-[10px] font-medium text-white">
             {items.length}
           </span>
@@ -41,18 +56,34 @@ export function NotificacionesStockBajo({ items }: { items: LowStockItem[] }) {
             <p className="px-2 py-1 text-brand-ciruela/60">Sin alertas de stock.</p>
           ) : (
             <ul className="flex max-h-64 flex-col gap-0.5 overflow-y-auto">
-              {items.map((item) => (
-                <li
-                  key={`${item.productId}-${item.variantLabel ?? "base"}`}
-                  className="flex justify-between gap-2 rounded px-2 py-1.5 hover:bg-brand-rosa-claro/20"
-                >
-                  <span className="text-brand-ciruela">
-                    {item.productName}
-                    {item.variantLabel ? ` (${item.variantLabel})` : ""}
-                  </span>
-                  <span className="shrink-0 font-medium text-brand-rosa">{item.stock}</span>
-                </li>
-              ))}
+              {items.map((item) => {
+                const contenido = (
+                  <>
+                    <span className="text-brand-ciruela">
+                      {item.productName}
+                      {item.variantLabel ? ` (${item.variantLabel})` : ""}
+                    </span>
+                    <span className="shrink-0 font-medium text-brand-rosa">{item.stock}</span>
+                  </>
+                );
+                return (
+                  <li key={`${item.productId}-${item.variantLabel ?? "base"}`}>
+                    {esAdminOSuperadmin ? (
+                      <Link
+                        href={`/admin/productos/${item.productId}/editar`}
+                        onClick={() => setOpen(false)}
+                        className="flex justify-between gap-2 rounded px-2 py-1.5 hover:bg-brand-rosa-claro/20"
+                      >
+                        {contenido}
+                      </Link>
+                    ) : (
+                      <div className="flex justify-between gap-2 rounded px-2 py-1.5">
+                        {contenido}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
