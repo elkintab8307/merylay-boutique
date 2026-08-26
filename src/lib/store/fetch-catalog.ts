@@ -1,6 +1,7 @@
 import type { createClient } from "@/lib/supabase/server";
 import { getVariantOptions } from "./variants";
 import { calcularDescuento } from "./discount";
+import { productoAgotado } from "./stock";
 import type { ProductCardData } from "@/components/store/product-card";
 
 export type FetchCatalogParams = {
@@ -40,7 +41,7 @@ export async function fetchCatalogProducts(
 
   let query = supabase
     .from("products")
-    .select("id, name, slug, price, promo_price")
+    .select("id, name, slug, price, promo_price, stock")
     .eq("is_active", true);
 
   if (categoryId) {
@@ -73,9 +74,16 @@ export async function fetchCatalogProducts(
     productIds.length > 0
       ? await supabase
           .from("product_variants")
-          .select("product_id, talla, color")
+          .select("product_id, talla, color, stock")
           .in("product_id", productIds)
-      : { data: [] as { product_id: string; talla: string | null; color: string | null }[] };
+      : {
+          data: [] as {
+            product_id: string;
+            talla: string | null;
+            color: string | null;
+            stock: number;
+          }[],
+        };
 
   const { tallas, colores } = getVariantOptions(
     (variantes ?? []).map((v) => ({
@@ -88,7 +96,17 @@ export async function fetchCatalogProducts(
     })),
   );
 
-  let productosFiltrados = productosEnPromocion;
+  const stocksVariantesPorProducto = new Map<string, number[]>();
+  for (const v of variantes ?? []) {
+    const actuales = stocksVariantesPorProducto.get(v.product_id) ?? [];
+    actuales.push(v.stock);
+    stocksVariantesPorProducto.set(v.product_id, actuales);
+  }
+  const productosConStock = productosEnPromocion.filter(
+    (p) => !productoAgotado(p.stock, stocksVariantesPorProducto.get(p.id) ?? []),
+  );
+
+  let productosFiltrados = productosConStock;
   if (tallasSeleccionadas.length > 0 || coloresSeleccionadas.length > 0) {
     const idsConVariante = new Set(
       (variantes ?? [])

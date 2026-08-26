@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import type { VariantOption } from "@/lib/store/variants";
 import { precioEfectivo } from "@/lib/store/discount";
+import { productoAgotado } from "@/lib/store/stock";
 import { obtenerUmbralStockBajo } from "@/lib/admin/low-stock";
 import { sanitizarQueryBusqueda } from "@/lib/search/sanitize";
 
@@ -75,7 +76,14 @@ export async function buscarProductosPos(params: {
     }
   }
 
-  return products.map((p) => ({
+  const productosConStock = products.filter((p) => {
+    const stocksVariantes = (variants ?? [])
+      .filter((v) => v.product_id === p.id)
+      .map((v) => v.stock);
+    return !productoAgotado(p.stock, stocksVariantes);
+  });
+
+  return productosConStock.map((p) => ({
     id: p.id,
     name: p.name,
     sku: p.sku,
