@@ -34,7 +34,7 @@ export function PosTopBar({
           Clientes
         </Link>
         <ImprimirUltimoReciboButton />
-        <NotificacionesStockBajo items={stockBajo} />
+        <NotificacionesStockBajo items={stockBajo} rolVendedor={rolVendedor} />
         <div className="flex items-center gap-2 border-l border-brand-rosa-claro pl-3">
           <span className="text-sm font-medium text-brand-ciruela">{nombreVendedor}</span>
           <span className="text-xs text-brand-ciruela/60">

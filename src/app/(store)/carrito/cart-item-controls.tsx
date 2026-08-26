@@ -9,10 +9,12 @@ export function CartItemControls({
   cartItemId,
   qty,
   estampadosDisponibles,
+  imageId,
 }: {
   cartItemId: string;
   qty: number;
   estampadosDisponibles: EstampadoOption[];
+  imageId: string | null;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -54,7 +56,7 @@ export function CartItemControls({
         <span className="w-6 text-center text-sm text-brand-ciruela">{qty}</span>
         <button
           type="button"
-          disabled={isPending}
+          disabled={isPending || Boolean(imageId)}
           onClick={() => handleUpdate(qty + 1)}
           className="h-8 w-8 rounded-md border border-brand-rosa-claro text-brand-ciruela hover:border-brand-rosa"
         >

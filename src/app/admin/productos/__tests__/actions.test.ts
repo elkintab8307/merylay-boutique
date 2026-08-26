@@ -108,3 +108,40 @@ describe("eliminarProducto", () => {
     expect(supabase._spies.deleteEq).not.toHaveBeenCalled();
   });
 });
+
+describe("toggleImagenVendida", () => {
+  beforeEach(() => {
+    vi.mocked(createClient).mockReset();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("actualiza product_images.vendida y no falla si todo sale bien", async () => {
+    const eq = vi.fn(() => Promise.resolve({ error: null }));
+    const update = vi.fn(() => ({ eq }));
+    const supabase = { from: vi.fn(() => ({ update })) };
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+
+    const { toggleImagenVendida } = await import("../actions");
+    const resultado = await toggleImagenVendida("img-1", true, "prod-1");
+
+    expect(resultado).toEqual({});
+    expect(supabase.from).toHaveBeenCalledWith("product_images");
+    expect(update).toHaveBeenCalledWith({ vendida: true });
+    expect(eq).toHaveBeenCalledWith("id", "img-1");
+  });
+
+  it("retorna error si la actualizacion falla", async () => {
+    const eq = vi.fn(() => Promise.resolve({ error: { message: "boom" } }));
+    const update = vi.fn(() => ({ eq }));
+    const supabase = { from: vi.fn(() => ({ update })) };
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+
+    const { toggleImagenVendida } = await import("../actions");
+    const resultado = await toggleImagenVendida("img-1", false, "prod-1");
+
+    expect(resultado).toEqual({ error: expect.any(String) });
+  });
+});

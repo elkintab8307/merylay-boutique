@@ -55,7 +55,7 @@ export function ProductDetailInteractive({
   const imagenesGaleria = getImagesForVariant(images, variantSeleccionada?.id ?? null);
   const imagenesDeVarianteActual: EstampadoOption[] = variantSeleccionada
     ? images
-        .filter((img) => img.variantId === variantSeleccionada.id)
+        .filter((img) => img.variantId === variantSeleccionada.id && !img.vendida)
         .map((img) => ({ imageId: img.id, url: img.url, alt: img.alt }))
     : [];
   const descuento = calcularDescuento(price, promoPrice);

@@ -14,6 +14,7 @@ export type CartItemView = {
   unitPrice: number;
   imageUrl: string | null;
   estampadosDisponibles: EstampadoOption[];
+  imageId: string | null;
 };
 
 export function AuthenticatedCart({ items }: { items: CartItemView[] }) {
@@ -58,6 +59,7 @@ export function AuthenticatedCart({ items }: { items: CartItemView[] }) {
               cartItemId={item.id}
               qty={item.qty}
               estampadosDisponibles={item.estampadosDisponibles}
+              imageId={item.imageId}
             />
           </div>
         ))}

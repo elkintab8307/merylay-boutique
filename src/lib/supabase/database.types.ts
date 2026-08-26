@@ -632,6 +632,7 @@ export type Database = {
           sort_order: number
           url: string
           variant_id: string | null
+          vendida: boolean
         }
         Insert: {
           alt?: string | null
@@ -641,6 +642,7 @@ export type Database = {
           sort_order?: number
           url: string
           variant_id?: string | null
+          vendida?: boolean
         }
         Update: {
           alt?: string | null
@@ -650,6 +652,7 @@ export type Database = {
           sort_order?: number
           url?: string
           variant_id?: string | null
+          vendida?: boolean
         }
         Relationships: [
           {

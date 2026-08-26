@@ -12,6 +12,7 @@ import {
   updateProducto,
   deleteProductImage,
   setPrimaryProductImage,
+  toggleImagenVendida,
 } from "./actions";
 import { subirImagenesProductoCliente } from "@/lib/admin/upload-product-images-client";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import { ImageUploadButton } from "@/components/admin/image-upload-button";
 
 type CategoriaOption = { id: string; name: string };
-type ProductImage = { id: string; url: string; is_primary: boolean; variant_id: string | null };
+type ProductImage = { id: string; url: string; is_primary: boolean; variant_id: string | null; vendida: boolean };
 
 // Las imagenes se suben directo desde el navegador a Supabase Storage
 // (ver upload-product-images-client.ts), no como parte del body de la
@@ -74,7 +75,7 @@ export function ProductoForm({
   const variantesWatched = useWatch({ control, name: "variantes" }) ?? [];
 
   const handleAppendVariante = () => {
-    append({ talla: "", color: "", priceOverride: null, stock: 0 });
+    append({ talla: "", color: "", priceOverride: null });
     setVariantImageFiles((prev) => [...prev, []]);
   };
 
@@ -176,6 +177,16 @@ export function ProductoForm({
     if (!result.error) {
       setExistingImages((prev) =>
         prev.map((img) => ({ ...img, is_primary: img.id === imageId })),
+      );
+    }
+  };
+
+  const handleToggleVendida = async (imageId: string, vendidaActual: boolean) => {
+    if (!productoId) return;
+    const result = await toggleImagenVendida(imageId, !vendidaActual, productoId);
+    if (!result.error) {
+      setExistingImages((prev) =>
+        prev.map((img) => (img.id === imageId ? { ...img, vendida: !vendidaActual } : img)),
       );
     }
   };
@@ -387,13 +398,12 @@ export function ProductoForm({
                   <Input {...register(`variantes.${index}.color` as const)} />
                 </div>
                 <div>
-                  <label className="text-xs text-brand-ciruela">Stock</label>
-                  <Input
-                    type="number"
-                    {...register(`variantes.${index}.stock` as const, {
-                      valueAsNumber: true,
-                    })}
-                  />
+                  <label className="text-xs text-brand-ciruela">Disponibles</label>
+                  <p className="flex h-9 items-center text-sm text-brand-ciruela">
+                    {imagenesDeVariante.length > 0
+                      ? `${imagenesDeVariante.filter((img) => !img.vendida).length} disponibles`
+                      : "Sin fotos"}
+                  </p>
                 </div>
                 <Button
                   type="button"
@@ -446,6 +456,13 @@ export function ProductoForm({
                             className="text-red-600 hover:underline"
                           >
                             Eliminar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleVendida(image.id, image.vendida)}
+                            className="text-brand-rosa hover:underline"
+                          >
+                            {image.vendida ? "Marcar disponible" : "Marcar vendida"}
                           </button>
                         </div>
                       </div>

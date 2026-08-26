@@ -33,9 +33,12 @@ export async function mergeGuestCart(items: LocalCartItem[]): Promise<{ error?: 
     const { data: existing } = await existingQuery.maybeSingle();
 
     if (existing) {
+      // Una linea con estampado elegido es siempre 1 unidad fisica (esa foto
+      // puntual); no se suma a la cantidad existente.
+      const nuevaQty = item.imageId ? 1 : existing.qty + item.qty;
       await supabase
         .from("cart_items")
-        .update({ qty: existing.qty + item.qty })
+        .update({ qty: nuevaQty })
         .eq("id", existing.id);
     } else {
       await supabase.from("cart_items").insert({

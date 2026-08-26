@@ -93,7 +93,6 @@ export async function createProducto(
           color: variante.color || null,
           sku: generarSkuVariante(skuGenerado, variante.talla || null, variante.color || null),
           price_override: variante.priceOverride,
-          stock: variante.stock,
         })),
       )
       .select("id");
@@ -233,7 +232,6 @@ export async function updateProducto(
           item.variante.color || null,
         ),
         price_override: item.variante.priceOverride,
-        stock: item.variante.stock,
       })),
       { onConflict: "id" },
     );
@@ -262,7 +260,6 @@ export async function updateProducto(
             item.variante.color || null,
           ),
           price_override: item.variante.priceOverride,
-          stock: item.variante.stock,
         })),
       )
       .select("id");
@@ -417,6 +414,27 @@ export async function setPrimaryProductImage(
 
   if (error) {
     return { error: "No se pudo marcar la imagen como principal." };
+  }
+
+  revalidatePath(`/admin/productos/${productId}/editar`);
+  return {};
+}
+
+export async function toggleImagenVendida(
+  imageId: string,
+  vendida: boolean,
+  productId: string,
+): Promise<{ error?: string }> {
+  await requireAdmin();
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("product_images")
+    .update({ vendida })
+    .eq("id", imageId);
+
+  if (error) {
+    return { error: "No se pudo actualizar la disponibilidad de la foto." };
   }
 
   revalidatePath(`/admin/productos/${productId}/editar`);

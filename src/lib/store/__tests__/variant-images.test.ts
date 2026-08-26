@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { getImagesForVariant, type ImagenProducto } from "../variant-images";
 
 const generales: ImagenProducto[] = [
-  { id: "general-1", url: "general-1.jpg", alt: null, variantId: null },
-  { id: "general-2", url: "general-2.jpg", alt: null, variantId: null },
+  { id: "general-1", url: "general-1.jpg", alt: null, variantId: null, vendida: false },
+  { id: "general-2", url: "general-2.jpg", alt: null, variantId: null, vendida: false },
 ];
-const deM: ImagenProducto[] = [{ id: "m-1", url: "m-1.jpg", alt: null, variantId: "v-m" }];
-const deL: ImagenProducto[] = [{ id: "l-1", url: "l-1.jpg", alt: null, variantId: "v-l" }];
+const deM: ImagenProducto[] = [{ id: "m-1", url: "m-1.jpg", alt: null, variantId: "v-m", vendida: false }];
+const deL: ImagenProducto[] = [{ id: "l-1", url: "l-1.jpg", alt: null, variantId: "v-l", vendida: false }];
 const todas = [...generales, ...deM, ...deL];
 
 describe("getImagesForVariant", () => {

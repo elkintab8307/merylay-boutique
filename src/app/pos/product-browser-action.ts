@@ -54,7 +54,7 @@ export async function buscarProductosPos(params: {
       .order("talla"),
     supabase
       .from("product_images")
-      .select("id, product_id, variant_id, url, alt, is_primary")
+      .select("id, product_id, variant_id, url, alt, is_primary, vendida")
       .in("product_id", productIds)
       .order("sort_order"),
   ]);
@@ -100,7 +100,7 @@ export async function buscarProductosPos(params: {
         stock: v.stock,
         priceOverride: v.price_override,
         images: (images ?? [])
-          .filter((img) => img.variant_id === v.id)
+          .filter((img) => img.variant_id === v.id && !img.vendida)
           .map((img) => ({ imageId: img.id, url: img.url, alt: img.alt })),
       })),
   }));

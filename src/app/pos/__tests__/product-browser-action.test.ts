@@ -182,6 +182,35 @@ describe("buscarProductosPos", () => {
     ]);
   });
 
+  it("excluye del listado de estampados las fotos marcadas como vendidas", async () => {
+    const supabase = crearSupabaseMock({
+      products: [PRODUCTO_BASE],
+      product_variants: [
+        {
+          id: "var-1",
+          product_id: "prod-1",
+          talla: "M",
+          color: "Rosa",
+          sku: "PIJ-001-M-ROS",
+          stock: 1,
+          price_override: null,
+        },
+      ],
+      product_images: [
+        { id: "img-1", product_id: "prod-1", url: "https://cdn.example.com/1.jpg", alt: null, variant_id: "var-1", is_primary: true, vendida: false },
+        { id: "img-2", product_id: "prod-1", url: "https://cdn.example.com/2.jpg", alt: null, variant_id: "var-1", is_primary: false, vendida: true },
+      ],
+    });
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+
+    const { buscarProductosPos } = await import("../product-browser-action");
+    const resultado = await buscarProductosPos({ query: "", categoryId: null });
+
+    expect(resultado[0].variants[0].images).toEqual([
+      { imageId: "img-1", url: "https://cdn.example.com/1.jpg", alt: null },
+    ]);
+  });
+
   it("excluye un producto sin variantes cuyo stock es 0", async () => {
     const supabase = crearSupabaseMock({
       products: [{ ...PRODUCTO_BASE, id: "prod-agotado", stock: 0 }, PRODUCTO_BASE],

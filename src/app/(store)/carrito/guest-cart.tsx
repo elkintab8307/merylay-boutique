@@ -114,6 +114,7 @@ export function GuestCart() {
                 <span className="w-6 text-center text-sm text-brand-ciruela">{item.qty}</span>
                 <button
                   type="button"
+                  disabled={Boolean(item.imageId)}
                   onClick={() =>
                     handleUpdate(item.productId, item.variantId, item.imageId, item.qty + 1)
                   }

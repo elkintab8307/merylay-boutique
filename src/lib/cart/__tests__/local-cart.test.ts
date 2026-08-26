@@ -63,39 +63,60 @@ describe("mergeCartItem", () => {
     expect(result).toHaveLength(2);
   });
 
-  it("al agregar una linea nueva de una variante que ya tiene otra linea, capa la cantidad al cupo restante del stock compartido", () => {
+  it("al agregar una linea nueva con estampado de una variante que ya tiene otra linea, queda en qty 1 (una linea con imagen es siempre 1 unidad; no aplica cupo compartido)", () => {
     const result = mergeCartItem(
       [{ ...baseItem, variantId: "v1", imageId: "img-a", qty: 4, stock: 5 }],
       { ...baseItem, variantId: "v1", imageId: "img-b", qty: 3, stock: 5 },
     );
-    // Cupo restante = 5 (stock total) - 4 (ya usado por img-a) = 1
     expect(result).toHaveLength(2);
     expect(result[1].qty).toBe(1);
   });
 
-  it("no agrega una linea nueva si la variante ya tiene todo su stock repartido entre otras lineas", () => {
-    const result = mergeCartItem(
-      [{ ...baseItem, variantId: "v1", imageId: "img-a", qty: 5, stock: 5 }],
-      { ...baseItem, variantId: "v1", imageId: "img-b", qty: 1, stock: 5 },
-    );
-    // Cupo restante = 5 (stock total) - 5 (ya usado por img-a) = 0: no hay
-    // espacio para una linea nueva, y una linea con qty 0 rompe
-    // create_pos_sale/create_order (exigen qty > 0).
-    expect(result).toHaveLength(1);
-    expect(result).toEqual([{ ...baseItem, variantId: "v1", imageId: "img-a", qty: 5, stock: 5 }]);
+  it("no agrega una linea nueva sin estampado si no queda cupo de stock", () => {
+    const result = mergeCartItem([], { ...baseItem, variantId: null, imageId: null, qty: 1, stock: 0 });
+    // Sin cupo restante no se agrega una linea vacia: una linea con qty 0
+    // es invisible para el usuario pero rompe create_pos_sale/create_order,
+    // que exigen qty > 0.
+    expect(result).toHaveLength(0);
   });
 
-  it("al fusionar en una linea existente, tambien respeta lo que ocupan otras lineas de la misma variante", () => {
+  it("una linea nueva con estampado elegido se agrega en qty 1 aunque la variante ya tenga todo su stock repartido entre otras lineas (las lineas con imagen no comparten cupo)", () => {
+    const result = mergeCartItem(
+      [{ ...baseItem, variantId: "v1", imageId: "img-a", qty: 1, stock: 5 }],
+      { ...baseItem, variantId: "v1", imageId: "img-b", qty: 1, stock: 5 },
+    );
+    expect(result).toHaveLength(2);
+    expect(result.find((i) => i.imageId === "img-b")?.qty).toBe(1);
+  });
+
+  it("al fusionar en una linea existente con estampado elegido, no la limita el cupo que ocupan otras lineas de la misma variante (las lineas con imagen no comparten cupo)", () => {
     const result = mergeCartItem(
       [
-        { ...baseItem, variantId: "v1", imageId: "img-a", qty: 2, stock: 5 },
-        { ...baseItem, variantId: "v1", imageId: "img-b", qty: 2, stock: 5 },
+        { ...baseItem, variantId: "v1", imageId: "img-a", qty: 1, stock: 5 },
+        { ...baseItem, variantId: "v1", imageId: "img-b", qty: 1, stock: 5 },
       ],
-      { ...baseItem, variantId: "v1", imageId: "img-a", qty: 5, stock: 5 },
+      { ...baseItem, variantId: "v1", imageId: "img-a", qty: 1, stock: 5 },
     );
-    // img-a: 2 + 5 pedidos, pero cupo = 5 (total) - 2 (usado por img-b) = 3
     const lineaA = result.find((i) => i.imageId === "img-a");
-    expect(lineaA?.qty).toBe(3);
+    expect(lineaA?.qty).toBe(1);
+  });
+
+  it("una linea nueva con estampado elegido siempre queda en qty 1, sin importar la qty pedida ni el stock", () => {
+    const result = mergeCartItem(
+      [],
+      { ...baseItem, variantId: "v1", imageId: "img-a", qty: 2, stock: 5 },
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0].qty).toBe(1);
+  });
+
+  it("al fusionar en una linea existente con estampado elegido, la qty combinada siempre queda en 1", () => {
+    const result = mergeCartItem(
+      [{ ...baseItem, variantId: "v1", imageId: "img-a", qty: 1, stock: 5 }],
+      { ...baseItem, variantId: "v1", imageId: "img-a", qty: 2, stock: 5 },
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0].qty).toBe(1);
   });
 });
 
@@ -135,19 +156,28 @@ describe("updateItemQty", () => {
       { ...baseItem, variantId: "v1", imageId: "img-a", qty: 1 },
       { ...baseItem, variantId: "v1", imageId: "img-b", qty: 1 },
     ];
-    const result = updateItemQty(items, "p1", "v1", "img-a", 3);
-    expect(result.find((i) => i.imageId === "img-a")?.qty).toBe(3);
+    // qty 0 en img-a la elimina; si el codigo tocara la linea equivocada,
+    // seria img-b la que desaparece.
+    const result = updateItemQty(items, "p1", "v1", "img-a", 0);
+    expect(result.find((i) => i.imageId === "img-a")).toBeUndefined();
     expect(result.find((i) => i.imageId === "img-b")?.qty).toBe(1);
   });
 
-  it("capa la cantidad de una linea considerando lo que ya ocupan otras lineas de la misma variante", () => {
+  it("una linea con estampado elegido no la limita el cupo que ocupan otras lineas de la misma variante (las lineas con imagen no comparten cupo)", () => {
     const items: LocalCartItem[] = [
       { ...baseItem, variantId: "v1", imageId: "img-a", qty: 1, stock: 5 },
-      { ...baseItem, variantId: "v1", imageId: "img-b", qty: 3, stock: 5 },
+      { ...baseItem, variantId: "v1", imageId: "img-b", qty: 1, stock: 5 },
     ];
-    // img-a quiere subir a 10, pero cupo = 5 (total) - 3 (usado por img-b) = 2
-    const result = updateItemQty(items, "p1", "v1", "img-a", 10);
-    expect(result.find((i) => i.imageId === "img-a")?.qty).toBe(2);
+    const result = updateItemQty(items, "p1", "v1", "img-a", 1);
+    expect(result.find((i) => i.imageId === "img-a")?.qty).toBe(1);
+  });
+
+  it("una linea con estampado elegido siempre queda en qty 1, sin importar la qty pedida ni el stock de la variante", () => {
+    const items: LocalCartItem[] = [
+      { ...baseItem, variantId: "v1", imageId: "img-a", qty: 1, stock: 5 },
+    ];
+    const result = updateItemQty(items, "p1", "v1", "img-a", 5);
+    expect(result.find((i) => i.imageId === "img-a")?.qty).toBe(1);
   });
 });
 
