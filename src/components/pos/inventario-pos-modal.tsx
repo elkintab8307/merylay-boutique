@@ -95,7 +95,7 @@ export function InventarioPosModal({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="flex h-[92vh] flex-col">
+      <SheetContent side="bottom" className="flex max-h-[92dvh] flex-col overflow-hidden">
         <SheetHeader>
           <SheetTitle className="font-heading text-brand-ciruela">{titulo}</SheetTitle>
         </SheetHeader>
