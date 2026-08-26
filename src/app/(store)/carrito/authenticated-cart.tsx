@@ -1,7 +1,9 @@
 import Link from "next/link";
+import Image from "next/image";
 import { formatPrice } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { CartItemControls } from "./cart-item-controls";
+import type { EstampadoOption } from "@/components/store/estampado-picker-modal";
 
 export type CartItemView = {
   id: string;
@@ -10,6 +12,8 @@ export type CartItemView = {
   variantLabel: string | null;
   qty: number;
   unitPrice: number;
+  imageUrl: string | null;
+  estampadosDisponibles: EstampadoOption[];
 };
 
 export function AuthenticatedCart({ items }: { items: CartItemView[] }) {
@@ -33,6 +37,11 @@ export function AuthenticatedCart({ items }: { items: CartItemView[] }) {
       <div className="flex flex-col divide-y divide-brand-rosa-claro">
         {items.map((item) => (
           <div key={item.id} className="flex items-center gap-4 py-4">
+            {item.imageUrl && (
+              <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md border border-brand-rosa-claro">
+                <Image src={item.imageUrl} alt="" fill className="object-cover" />
+              </div>
+            )}
             <div className="flex-1">
               <Link
                 href={`/producto/${item.slug}`}
@@ -45,7 +54,11 @@ export function AuthenticatedCart({ items }: { items: CartItemView[] }) {
               )}
               <p className="text-sm text-brand-rosa">{formatPrice(item.unitPrice)}</p>
             </div>
-            <CartItemControls cartItemId={item.id} qty={item.qty} />
+            <CartItemControls
+              cartItemId={item.id}
+              qty={item.qty}
+              estampadosDisponibles={item.estampadosDisponibles}
+            />
           </div>
         ))}
       </div>
