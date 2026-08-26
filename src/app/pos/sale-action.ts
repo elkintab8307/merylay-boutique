@@ -42,6 +42,7 @@ export async function registrarVenta(
     p_items: items.map((item) => ({
       productId: item.productId,
       variantId: item.variantId ?? "",
+      imageId: item.imageId ?? "",
       qty: item.qty,
       unitPrice: item.unitPrice,
     })),
