@@ -7,6 +7,7 @@ import { obtenerUmbralStockBajo } from "@/lib/admin/low-stock";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ToggleProductoButton } from "./toggle-producto-button";
+import { EliminarProductoButton } from "./eliminar-producto-button";
 
 export default async function ProductosPage() {
   const supabase = await createClient();
@@ -32,6 +33,22 @@ export default async function ProductosPage() {
       : { data: [] as { product_id: string; url: string }[] };
   const imagenPorProducto = new Map(
     (imagenesPrincipales ?? []).map((img) => [img.product_id, img.url]),
+  );
+
+  // Un producto solo se puede borrar si nunca se ha vendido (ni en la
+  // tienda ni en el POS) -- si ya tiene ventas, la unica opcion es
+  // desactivarlo, para no perder el historial de esas ventas.
+  const [{ data: ventasOrderItems }, { data: ventasPosItems }] =
+    idsProductos.length > 0
+      ? await Promise.all([
+          supabase.from("order_items").select("product_id").in("product_id", idsProductos),
+          supabase.from("pos_sale_items").select("product_id").in("product_id", idsProductos),
+        ])
+      : [{ data: [] as { product_id: string | null }[] }, { data: [] as { product_id: string | null }[] }];
+  const productosConVentas = new Set(
+    [...(ventasOrderItems ?? []), ...(ventasPosItems ?? [])]
+      .map((v) => v.product_id)
+      .filter((id): id is string => Boolean(id)),
   );
 
   return (
@@ -111,6 +128,9 @@ export default async function ProductosPage() {
                     Editar
                   </Link>
                   <ToggleProductoButton id={producto.id} isActive={producto.is_active} />
+                  {!productosConVentas.has(producto.id) && (
+                    <EliminarProductoButton id={producto.id} nombre={producto.name} />
+                  )}
                 </div>
               </div>
             </div>

@@ -330,6 +330,53 @@ export async function toggleProductoActivo(
   return {};
 }
 
+// Borra un producto solo si nada mas depende de el: las llaves foraneas de
+// order_items/pos_sale_items/purchase_items/cart_items hacia products son
+// "NO ACTION" (no CASCADE), asi que un delete crudo fallaria con un error
+// de Postgres poco claro si el producto ya tiene alguna de estas
+// referencias. Se valida antes, con un mensaje explicando por que no se
+// puede y que se puede desactivar en su lugar.
+export async function eliminarProducto(id: string): Promise<{ error?: string }> {
+  await requireAdmin();
+
+  const supabase = await createClient();
+
+  const [{ data: ventaOrder }, { data: ventaPos }, { data: compra }, { data: enCarrito }] =
+    await Promise.all([
+      supabase.from("order_items").select("id").eq("product_id", id).limit(1),
+      supabase.from("pos_sale_items").select("id").eq("product_id", id).limit(1),
+      supabase.from("purchase_items").select("id").eq("product_id", id).limit(1),
+      supabase.from("cart_items").select("id").eq("product_id", id).limit(1),
+    ]);
+
+  if ((ventaOrder?.length ?? 0) > 0 || (ventaPos?.length ?? 0) > 0) {
+    return {
+      error:
+        "Este producto ya tiene ventas registradas y no se puede eliminar. Desactívalo en su lugar.",
+    };
+  }
+  if ((compra?.length ?? 0) > 0) {
+    return {
+      error:
+        "Este producto tiene compras registradas y no se puede eliminar. Desactívalo en su lugar.",
+    };
+  }
+  if ((enCarrito?.length ?? 0) > 0) {
+    return {
+      error:
+        "Este producto está en el carrito de un cliente en este momento y no se puede eliminar todavía. Desactívalo en su lugar.",
+    };
+  }
+
+  const { error } = await supabase.from("products").delete().eq("id", id);
+  if (error) {
+    return { error: "No se pudo eliminar el producto." };
+  }
+
+  revalidatePath("/admin/productos");
+  return {};
+}
+
 export async function deleteProductImage(
   imageId: string,
   productId: string,
