@@ -273,6 +273,7 @@ export function VentaItemsEditor({
                     onClick={() =>
                       handleUpdateQty(item.productId, item.variantId, item.imageId, item.qty + 1)
                     }
+                    disabled={Boolean(item.imageId)}
                     className="h-11 w-11 shrink-0 rounded-md border border-brand-rosa-claro text-brand-ciruela"
                   >
                     +
