@@ -17,6 +17,7 @@ export type InventarioProductoResumen = {
   categoryId: string | null;
   categoryName: string | null;
   imageUrl: string | null;
+  tieneVentas: boolean;
 };
 
 export type InventarioCategoria = { id: string; name: string };
@@ -53,6 +54,22 @@ export async function listarProductosInventario(): Promise<{
     (imagenesPrincipales ?? []).map((img) => [img.product_id, img.url]),
   );
 
+  const [{ data: ventasOrderItems }, { data: ventasPosItems }] =
+    idsProductos.length > 0
+      ? await Promise.all([
+          supabase.from("order_items").select("product_id").in("product_id", idsProductos),
+          supabase.from("pos_sale_items").select("product_id").in("product_id", idsProductos),
+        ])
+      : [
+          { data: [] as { product_id: string | null }[] },
+          { data: [] as { product_id: string | null }[] },
+        ];
+  const productosConVentas = new Set(
+    [...(ventasOrderItems ?? []), ...(ventasPosItems ?? [])]
+      .map((v) => v.product_id)
+      .filter((id): id is string => Boolean(id)),
+  );
+
   return {
     productos: (productos ?? []).map((p) => ({
       id: p.id,
@@ -65,6 +82,7 @@ export async function listarProductosInventario(): Promise<{
       categoryId: p.category_id,
       categoryName: p.category_id ? (categoriaPorId.get(p.category_id) ?? null) : null,
       imageUrl: imagenPorProducto.get(p.id) ?? null,
+      tieneVentas: productosConVentas.has(p.id),
     })),
     categorias: categorias ?? [],
     umbralStockBajo,

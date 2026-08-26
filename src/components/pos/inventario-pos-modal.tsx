@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatPrice } from "@/lib/format";
 import { calcularDescuento, precioEfectivo } from "@/lib/store/discount";
 import { ProductoForm } from "@/app/admin/productos/producto-form";
-import { toggleProductoActivo } from "@/app/admin/productos/actions";
+import { toggleProductoActivo, eliminarProducto } from "@/app/admin/productos/actions";
 import {
   listarProductosInventario,
   obtenerProductoParaEditar,
@@ -79,6 +79,17 @@ export function InventarioPosModal({
     setProductos((prev) =>
       prev.map((p) => (p.id === producto.id ? { ...p, isActive: !p.isActive } : p)),
     );
+  };
+
+  const handleEliminar = async (producto: InventarioProductoResumen) => {
+    if (!window.confirm(`¿Eliminar "${producto.name}"? Esta acción no se puede deshacer.`)) return;
+    setError(null);
+    const resultado = await eliminarProducto(producto.id);
+    if (resultado?.error) {
+      setError(resultado.error);
+      return;
+    }
+    setProductos((prev) => prev.filter((p) => p.id !== producto.id));
   };
 
   const handleGuardado = () => {
@@ -184,6 +195,15 @@ export function InventarioPosModal({
                             >
                               {producto.isActive ? "Desactivar" : "Activar"}
                             </button>
+                            {!producto.tieneVentas && (
+                              <button
+                                type="button"
+                                onClick={() => handleEliminar(producto)}
+                                className="text-red-600 hover:underline"
+                              >
+                                Eliminar
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
