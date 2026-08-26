@@ -3,6 +3,7 @@ export type ImagenProducto = {
   url: string;
   alt: string | null;
   variantId: string | null;
+  vendida: boolean;
 };
 
 export function getImagesForVariant(
