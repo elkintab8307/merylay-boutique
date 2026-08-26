@@ -18,7 +18,7 @@ export function ProductCardPos({
   umbralStockBajo: number;
   onAdd: (item: LocalCartItem) => void;
 }) {
-  const { tallas, colores } = getVariantOptions(product.variants);
+  const { tallas: tallasTodas, colores: coloresTodos } = getVariantOptions(product.variants);
   const hasVariants = product.variants.length > 0;
   const [modalAbierto, setModalAbierto] = useState(false);
   const [talla, setTalla] = useState<string | null>(null);
@@ -33,20 +33,23 @@ export function ProductCardPos({
     stockPorTalla.set(v.talla, (stockPorTalla.get(v.talla) ?? 0) + v.stock);
   }
 
-  const tieneTallaObligatoria = tallas.length > 0;
-  const coloresParaMostrar = tieneTallaObligatoria
+  // Una talla o un color sin stock no se muestra como opcion -- no tiene
+  // sentido dejar elegir algo que ya no se puede vender.
+  const tieneDimensionTalla = tallasTodas.length > 0;
+  const tallas = tallasTodas.filter((t) => (stockPorTalla.get(t) ?? 0) > 0);
+  const coloresParaMostrar = tieneDimensionTalla
     ? talla
       ? Array.from(
           new Set(
             product.variants
-              .filter((v) => v.talla === talla)
+              .filter((v) => v.talla === talla && v.stock > 0)
               .map((v) => v.color)
               .filter((c): c is string => Boolean(c)),
           ),
         )
       : []
-    : colores;
-  const tallaLista = !tieneTallaObligatoria || talla !== null;
+    : coloresTodos.filter((c) => product.variants.some((v) => v.color === c && v.stock > 0));
+  const tallaLista = !tieneDimensionTalla || talla !== null;
   const mostrarConfirmar = tallaLista && (coloresParaMostrar.length === 0 || color !== null);
 
   const variantSeleccionada = hasVariants ? findMatchingVariant(product.variants, talla, color) : null;
@@ -119,28 +122,24 @@ export function ProductCardPos({
         <div className="flex flex-col gap-2 rounded-md border border-brand-rosa-claro bg-brand-crema p-2">
           {tallas.length > 0 && (
             <div role="group" aria-label="Talla" className="flex flex-wrap gap-1">
-              {tallas.map((t) => {
-                const stockTalla = stockPorTalla.get(t) ?? 0;
-                return (
-                  <button
-                    key={t}
-                    type="button"
-                    disabled={stockTalla <= 0}
-                    onClick={() => {
-                      setTalla(t);
-                      setColor(null);
-                    }}
-                    aria-pressed={talla === t}
-                    className={`rounded-full border px-2 py-0.5 text-xs disabled:cursor-not-allowed disabled:opacity-40 ${
-                      talla === t
-                        ? "border-brand-rosa bg-brand-rosa text-brand-crema"
-                        : "border-brand-rosa-claro text-brand-ciruela"
-                    }`}
-                  >
-                    {t} · {stockTalla}
-                  </button>
-                );
-              })}
+              {tallas.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => {
+                    setTalla(t);
+                    setColor(null);
+                  }}
+                  aria-pressed={talla === t}
+                  className={`rounded-full border px-2 py-0.5 text-xs ${
+                    talla === t
+                      ? "border-brand-rosa bg-brand-rosa text-brand-crema"
+                      : "border-brand-rosa-claro text-brand-ciruela"
+                  }`}
+                >
+                  {t} · {stockPorTalla.get(t) ?? 0}
+                </button>
+              ))}
             </div>
           )}
           {tallaLista && coloresParaMostrar.length > 0 && (
