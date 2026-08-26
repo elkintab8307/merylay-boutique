@@ -127,7 +127,9 @@ describe("buscarProductosPos", () => {
           price_override: null,
         },
       ],
-      product_images: [{ product_id: "prod-1", url: "https://cdn.example.com/img.jpg" }],
+      product_images: [
+        { id: "img-0", product_id: "prod-1", url: "https://cdn.example.com/img.jpg", variant_id: null, is_primary: true },
+      ],
     });
     vi.mocked(createClient).mockResolvedValue(supabase as never);
 
@@ -143,7 +145,40 @@ describe("buscarProductosPos", () => {
         sku: "PIJ-001-M-ROS",
         stock: 5,
         priceOverride: null,
+        images: [],
       },
+    ]);
+  });
+
+  it("agrupa las imagenes de cada variante por variant_id", async () => {
+    const supabase = crearSupabaseMock({
+      products: [PRODUCTO_BASE],
+      product_variants: [
+        {
+          id: "var-1",
+          product_id: "prod-1",
+          talla: "M",
+          color: "Rosa",
+          sku: "PIJ-001-M-ROS",
+          stock: 5,
+          price_override: null,
+        },
+      ],
+      product_images: [
+        { id: "img-1", product_id: "prod-1", url: "https://cdn.example.com/1.jpg", alt: null, variant_id: "var-1", is_primary: true },
+        { id: "img-2", product_id: "prod-1", url: "https://cdn.example.com/2.jpg", alt: null, variant_id: "var-1", is_primary: false },
+        { id: "img-3", product_id: "prod-1", url: "https://cdn.example.com/3.jpg", alt: null, variant_id: null, is_primary: false },
+      ],
+    });
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+
+    const { buscarProductosPos } = await import("../product-browser-action");
+    const resultado = await buscarProductosPos({ query: "", categoryId: null });
+
+    expect(resultado[0].imageUrl).toBe("https://cdn.example.com/1.jpg");
+    expect(resultado[0].variants[0].images).toEqual([
+      { imageId: "img-1", url: "https://cdn.example.com/1.jpg", alt: null },
+      { imageId: "img-2", url: "https://cdn.example.com/2.jpg", alt: null },
     ]);
   });
 
