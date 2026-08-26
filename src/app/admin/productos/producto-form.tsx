@@ -35,6 +35,7 @@ export function ProductoForm({
   defaultValues,
   categoriasDisponibles,
   imagenesExistentes = [],
+  onGuardado,
 }: {
   productoId?: string;
   skuActual?: string;
@@ -43,6 +44,7 @@ export function ProductoForm({
   defaultValues: ProductoInput;
   categoriasDisponibles: CategoriaOption[];
   imagenesExistentes?: ProductImage[];
+  onGuardado?: () => void;
 }) {
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
@@ -111,8 +113,12 @@ export function ProductoForm({
         return;
       }
 
-      router.push("/admin/productos");
-      router.refresh();
+      if (onGuardado) {
+        onGuardado();
+      } else {
+        router.push("/admin/productos");
+        router.refresh();
+      }
     } catch {
       // Cubre fallos que no llegan a devolver {error}: por ejemplo un
       // corte de conexion durante la subida — sin esto el formulario se

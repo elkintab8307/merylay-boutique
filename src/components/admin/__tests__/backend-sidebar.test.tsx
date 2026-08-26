@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
-import { Store } from "lucide-react";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { Store, Package } from "lucide-react";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/pos",
@@ -53,5 +53,33 @@ describe("BackendSidebar", () => {
       />,
     );
     expect(screen.queryByLabelText("Menú")).not.toBeInTheDocument();
+  });
+
+  it("no muestra ningun item extra cuando no se pasa extraItem", () => {
+    render(
+      <BackendSidebar
+        sections={[{ label: "POS", items: [{ href: "/pos", label: "Terminal" }] }]}
+        homeHref="/pos"
+      />,
+    );
+    expect(screen.queryByText("Inventario")).not.toBeInTheDocument();
+  });
+
+  it("muestra extraItem como boton (no como enlace) y dispara su onClick", () => {
+    const onClick = vi.fn();
+    render(
+      <BackendSidebar
+        sections={[{ label: "POS", items: [{ href: "/pos", label: "Terminal" }] }]}
+        homeHref="/pos"
+        extraItem={{ label: "Inventario", icon: <Package className="h-4 w-4" />, onClick }}
+      />,
+    );
+
+    const botones = screen.getAllByRole("button", { name: /inventario/i });
+    expect(botones.length).toBeGreaterThan(0);
+    expect(screen.queryByRole("link", { name: /inventario/i })).not.toBeInTheDocument();
+
+    fireEvent.click(botones[0]);
+    expect(onClick).toHaveBeenCalledTimes(1);
   });
 });
