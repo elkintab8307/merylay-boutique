@@ -12,6 +12,7 @@ import { ShareButton } from "@/components/store/share-button";
 import { WhatsappProductButton } from "@/components/store/whatsapp-product-button";
 import { findMatchingVariant, type VariantOption } from "@/lib/store/variants";
 import { getImagesForVariant, type ImagenProducto } from "@/lib/store/variant-images";
+import type { EstampadoOption } from "@/components/store/estampado-picker-modal";
 
 export function ProductDetailInteractive({
   productId,
@@ -52,6 +53,11 @@ export function ProductDetailInteractive({
   const variantSeleccionada =
     variants.length > 0 ? findMatchingVariant(variants, talla, color) : null;
   const imagenesGaleria = getImagesForVariant(images, variantSeleccionada?.id ?? null);
+  const imagenesDeVarianteActual: EstampadoOption[] = variantSeleccionada
+    ? images
+        .filter((img) => img.variantId === variantSeleccionada.id)
+        .map((img) => ({ imageId: img.id, url: img.url, alt: img.alt }))
+    : [];
   const descuento = calcularDescuento(price, promoPrice);
   const precioMostrado = precioEfectivo(price, promoPrice);
 
@@ -110,6 +116,7 @@ export function ProductDetailInteractive({
           color={color}
           onTallaChange={setTalla}
           onColorChange={setColor}
+          imagenesDeVarianteActual={imagenesDeVarianteActual}
         />
         <div className="flex flex-wrap items-center gap-3">
           <WhatsappProductButton redesWhatsapp={redesWhatsapp} productName={productName} />

@@ -27,6 +27,9 @@ export async function mergeGuestCart(items: LocalCartItem[]): Promise<{ error?: 
     existingQuery = item.variantId
       ? existingQuery.eq("variant_id", item.variantId)
       : existingQuery.is("variant_id", null);
+    existingQuery = item.imageId
+      ? existingQuery.eq("image_id", item.imageId)
+      : existingQuery.is("image_id", null);
     const { data: existing } = await existingQuery.maybeSingle();
 
     if (existing) {
@@ -39,6 +42,7 @@ export async function mergeGuestCart(items: LocalCartItem[]): Promise<{ error?: 
         cart_id: cartId,
         product_id: item.productId,
         variant_id: item.variantId,
+        image_id: item.imageId,
         qty: item.qty,
         unit_price: item.unitPrice,
       });

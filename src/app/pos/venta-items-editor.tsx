@@ -100,12 +100,17 @@ export function VentaItemsEditor({
     setItems((prev) => mergeCartItem(prev, item));
   };
 
-  const handleUpdateQty = (productId: string, variantId: string | null, qty: number) => {
-    setItems((prev) => updateItemQty(prev, productId, variantId, qty));
+  const handleUpdateQty = (
+    productId: string,
+    variantId: string | null,
+    imageId: string | null,
+    qty: number,
+  ) => {
+    setItems((prev) => updateItemQty(prev, productId, variantId, imageId, qty));
   };
 
-  const handleRemove = (productId: string, variantId: string | null) => {
-    setItems((prev) => removeItem(prev, productId, variantId));
+  const handleRemove = (productId: string, variantId: string | null, imageId: string | null) => {
+    setItems((prev) => removeItem(prev, productId, variantId, imageId));
   };
 
   const handleSubmit = () => {
@@ -186,7 +191,7 @@ export function VentaItemsEditor({
             <div className="flex flex-col divide-y divide-brand-rosa-claro">
               {items.map((item) => (
                 <div
-                  key={`${item.productId}-${item.variantId ?? "base"}`}
+                  key={`${item.productId}-${item.variantId ?? "base"}-${item.imageId ?? "sin-estampado"}`}
                   className="flex items-center gap-2 py-2"
                 >
                   <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-md bg-brand-rosa-claro">
@@ -200,7 +205,9 @@ export function VentaItemsEditor({
                   </div>
                   <button
                     type="button"
-                    onClick={() => handleUpdateQty(item.productId, item.variantId, item.qty - 1)}
+                    onClick={() =>
+                      handleUpdateQty(item.productId, item.variantId, item.imageId, item.qty - 1)
+                    }
                     className="h-11 w-11 shrink-0 rounded-md border border-brand-rosa-claro text-brand-ciruela"
                   >
                     -
@@ -208,14 +215,16 @@ export function VentaItemsEditor({
                   <span className="w-6 text-center text-sm">{item.qty}</span>
                   <button
                     type="button"
-                    onClick={() => handleUpdateQty(item.productId, item.variantId, item.qty + 1)}
+                    onClick={() =>
+                      handleUpdateQty(item.productId, item.variantId, item.imageId, item.qty + 1)
+                    }
                     className="h-11 w-11 shrink-0 rounded-md border border-brand-rosa-claro text-brand-ciruela"
                   >
                     +
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleRemove(item.productId, item.variantId)}
+                    onClick={() => handleRemove(item.productId, item.variantId, item.imageId)}
                     className="ml-2 text-sm text-red-600 hover:underline"
                   >
                     Quitar

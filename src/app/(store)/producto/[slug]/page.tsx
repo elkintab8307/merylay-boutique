@@ -35,7 +35,7 @@ export default async function ProductoPage({
   ] = await Promise.all([
     supabase
       .from("product_images")
-      .select("url, alt, variant_id")
+      .select("id, url, alt, variant_id")
       .eq("product_id", producto.id)
       .order("sort_order"),
     supabase
@@ -181,6 +181,7 @@ export default async function ProductoPage({
   const imagenPrincipal = imagenes && imagenes.length > 0 ? imagenes[0].url : null;
 
   const imagenesGaleria: ImagenProducto[] = (imagenes ?? []).map((img) => ({
+    id: img.id,
     url: img.url,
     alt: img.alt,
     variantId: img.variant_id,

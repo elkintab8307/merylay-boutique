@@ -54,6 +54,7 @@ export function GuestFavorites() {
     const next = mergeCartItem(current, {
       productId: item.productId,
       variantId: null,
+      imageId: null,
       slug: item.slug,
       name: item.name,
       unitPrice: item.price,

@@ -18,6 +18,7 @@ const ITEMS: LocalCartItem[] = [
   {
     productId: "prod-1",
     variantId: null,
+    imageId: null,
     slug: "pijama",
     name: "Pijama Rosa",
     unitPrice: 50000,
@@ -139,5 +140,24 @@ describe("registrarVenta", () => {
       }),
     );
     expect(redirect).toHaveBeenCalledWith("/pos/venta/sale-uuid-1");
+  });
+
+  it("venta con estampado elegido: envia imageId por item", async () => {
+    const supabase = crearSupabaseMock();
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+
+    const itemsConEstampado = [{ ...ITEMS[0], imageId: "img-1" }];
+
+    const { registrarVenta } = await import("../sale-action");
+    await expect(
+      registrarVenta(itemsConEstampado, "efectivo", 0, null, "cust-1"),
+    ).rejects.toThrow("NEXT_REDIRECT");
+
+    expect(supabase.rpc).toHaveBeenCalledWith(
+      "create_pos_sale",
+      expect.objectContaining({
+        p_items: [expect.objectContaining({ imageId: "img-1" })],
+      }),
+    );
   });
 });

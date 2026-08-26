@@ -5,6 +5,7 @@ export type VariantOption = {
   sku: string;
   stock: number;
   priceOverride: number | null;
+  images?: { imageId: string; url: string; alt: string | null }[];
 };
 
 export function getVariantOptions(variants: VariantOption[]) {

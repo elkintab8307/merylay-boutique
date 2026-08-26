@@ -53,14 +53,27 @@ export async function buscarProductosPos(params: {
       .order("talla"),
     supabase
       .from("product_images")
-      .select("product_id, url")
+      .select("id, product_id, variant_id, url, alt, is_primary")
       .in("product_id", productIds)
-      .eq("is_primary", true),
+      .order("sort_order"),
   ]);
   if (variantsError) throw variantsError;
   if (imagesError) throw imagesError;
 
-  const imagenPorProducto = new Map((images ?? []).map((img) => [img.product_id, img.url]));
+  const imagenPrincipalPorProducto = new Map<string, string>();
+  for (const img of images ?? []) {
+    if (img.is_primary && !imagenPrincipalPorProducto.has(img.product_id)) {
+      imagenPrincipalPorProducto.set(img.product_id, img.url);
+    }
+  }
+  // Si ningun producto tiene una imagen marcada como principal, usa la
+  // primera imagen general disponible (mismo criterio de respaldo que la
+  // tienda publica).
+  for (const img of images ?? []) {
+    if (!imagenPrincipalPorProducto.has(img.product_id)) {
+      imagenPrincipalPorProducto.set(img.product_id, img.url);
+    }
+  }
 
   return products.map((p) => ({
     id: p.id,
@@ -68,7 +81,7 @@ export async function buscarProductosPos(params: {
     sku: p.sku,
     price: precioEfectivo(p.price, p.promo_price),
     stock: p.stock,
-    imageUrl: imagenPorProducto.get(p.id) ?? null,
+    imageUrl: imagenPrincipalPorProducto.get(p.id) ?? null,
     variants: (variants ?? [])
       .filter((v) => v.product_id === p.id)
       .map((v) => ({
@@ -78,6 +91,9 @@ export async function buscarProductosPos(params: {
         sku: v.sku,
         stock: v.stock,
         priceOverride: v.price_override,
+        images: (images ?? [])
+          .filter((img) => img.variant_id === v.id)
+          .map((img) => ({ imageId: img.id, url: img.url, alt: img.alt })),
       })),
   }));
 }

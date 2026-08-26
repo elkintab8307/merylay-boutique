@@ -26,7 +26,7 @@ export default async function CarritoPage() {
   const { data: cartItems } = cart
     ? await supabase
         .from("cart_items")
-        .select("id, product_id, variant_id, qty, unit_price")
+        .select("id, product_id, variant_id, image_id, qty, unit_price")
         .eq("cart_id", cart.id)
     : { data: [] };
 
@@ -35,21 +35,33 @@ export default async function CarritoPage() {
     .map((i) => i.variant_id)
     .filter((v): v is string => Boolean(v));
 
-  const [{ data: products }, { data: variants }] = await Promise.all([
+  const [{ data: products }, { data: variants }, { data: imagenesDeVariantes }] = await Promise.all([
     productIds.length > 0
       ? supabase.from("products").select("id, name, slug").in("id", productIds)
       : Promise.resolve({ data: [] as { id: string; name: string; slug: string }[] }),
     variantIds.length > 0
       ? supabase.from("product_variants").select("id, talla, color").in("id", variantIds)
       : Promise.resolve({ data: [] as { id: string; talla: string | null; color: string | null }[] }),
+    variantIds.length > 0
+      ? supabase
+          .from("product_images")
+          .select("id, url, alt, variant_id")
+          .in("variant_id", variantIds)
+      : Promise.resolve({ data: [] as { id: string; url: string; alt: string | null; variant_id: string | null }[] }),
   ]);
 
   const productById = new Map((products ?? []).map((p) => [p.id, p]));
   const variantById = new Map((variants ?? []).map((v) => [v.id, v]));
+  const imagenPorId = new Map((imagenesDeVariantes ?? []).map((img) => [img.id, img.url]));
 
   const items: CartItemView[] = (cartItems ?? []).map((item) => {
     const product = productById.get(item.product_id);
     const variant = item.variant_id ? variantById.get(item.variant_id) : null;
+    const estampadosDeEstaVariante = item.variant_id
+      ? (imagenesDeVariantes ?? [])
+          .filter((img) => img.variant_id === item.variant_id)
+          .map((img) => ({ imageId: img.id, url: img.url, alt: img.alt }))
+      : [];
     return {
       id: item.id,
       name: product?.name ?? "Producto",
@@ -59,6 +71,8 @@ export default async function CarritoPage() {
         : null,
       qty: item.qty,
       unitPrice: item.unit_price,
+      imageUrl: item.image_id ? (imagenPorId.get(item.image_id) ?? null) : null,
+      estampadosDisponibles: estampadosDeEstaVariante,
     };
   });
 

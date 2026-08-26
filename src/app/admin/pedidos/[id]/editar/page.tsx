@@ -24,7 +24,7 @@ export default async function EditarPedidoPage({
 
   const { data: items } = await supabase
     .from("order_items")
-    .select("qty, unit_price, product_id, variant_id")
+    .select("qty, unit_price, product_id, variant_id, image_id")
     .eq("order_id", pedido.id);
 
   const productIds = (items ?? [])
@@ -71,6 +71,7 @@ export default async function EditarPedidoPage({
     return {
       productId: item.product_id ?? "",
       variantId: item.variant_id,
+      imageId: item.image_id,
       slug: "",
       name: varianteLabel ? `${nombreBase} (${varianteLabel})` : nombreBase,
       unitPrice: item.unit_price,

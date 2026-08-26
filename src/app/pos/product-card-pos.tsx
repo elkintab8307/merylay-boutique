@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { getVariantOptions, findMatchingVariant } from "@/lib/store/variants";
 import type { LocalCartItem } from "@/lib/cart/local-cart";
 import type { PosProductoResult } from "./product-browser-action";
+import { EstampadoPickerModal } from "@/components/store/estampado-picker-modal";
 
 export function ProductCardPos({
   product,
@@ -20,6 +21,7 @@ export function ProductCardPos({
   const { tallas, colores } = getVariantOptions(product.variants);
   const hasVariants = product.variants.length > 0;
   const [seleccionando, setSeleccionando] = useState(false);
+  const [modalAbierto, setModalAbierto] = useState(false);
   const [talla, setTalla] = useState<string | null>(product.variants[0]?.talla ?? null);
   const [color, setColor] = useState<string | null>(product.variants[0]?.color ?? null);
 
@@ -31,6 +33,7 @@ export function ProductCardPos({
   // Gate especifico de la variante seleccionada: solo aplica al boton "Confirmar"
   // dentro del selector expandido, donde ya se eligio una combinacion concreta.
   const agotado = stockDisponible <= 0;
+  const imagenesDeVariante = variantSeleccionada?.images ?? [];
 
   // Disponibilidad agregada del producto (maxima entre variantes, o stock del
   // producto si no tiene variantes). Usada para el gate/badge en estado
@@ -52,19 +55,33 @@ export function ProductCardPos({
         ? { variant: "warning" as const, label: `${stockMostrado} unidades` }
         : { variant: "neutral" as const, label: `${stockMostrado} unidades` };
 
-  const confirmarAgregar = () => {
+  const agregarItems = (imageIds: (string | null)[]) => {
     const variantLabel = [talla, color].filter(Boolean).join(" / ");
-    onAdd({
-      productId: product.id,
-      variantId: hasVariants ? (variantSeleccionada?.id ?? null) : null,
-      slug: "",
-      name: hasVariants && variantLabel ? `${product.name} (${variantLabel})` : product.name,
-      unitPrice,
-      qty: 1,
-      imageUrl: product.imageUrl,
-      stock: stockDisponible,
-    });
+    for (const imageId of imageIds) {
+      const imagenElegida = imageId
+        ? imagenesDeVariante.find((img) => img.imageId === imageId)
+        : undefined;
+      onAdd({
+        productId: product.id,
+        variantId: hasVariants ? (variantSeleccionada?.id ?? null) : null,
+        imageId: imageId ?? null,
+        slug: "",
+        name: hasVariants && variantLabel ? `${product.name} (${variantLabel})` : product.name,
+        unitPrice,
+        qty: 1,
+        imageUrl: imagenElegida?.url ?? product.imageUrl,
+        stock: stockDisponible,
+      });
+    }
     setSeleccionando(false);
+  };
+
+  const confirmarAgregar = () => {
+    if (imagenesDeVariante.length > 1) {
+      setModalAbierto(true);
+      return;
+    }
+    agregarItems([imagenesDeVariante[0]?.imageId ?? null]);
   };
 
   const handleAgregarClick = () => {
@@ -149,6 +166,18 @@ export function ProductCardPos({
           Agregar
         </button>
       )}
+
+      <EstampadoPickerModal
+        open={modalAbierto}
+        images={imagenesDeVariante}
+        seleccionInicial={[]}
+        modoUnico={false}
+        onClose={() => setModalAbierto(false)}
+        onConfirm={(imageIds) => {
+          setModalAbierto(false);
+          agregarItems(imageIds);
+        }}
+      />
     </div>
   );
 }
