@@ -45,9 +45,9 @@ export default async function CarritoPage() {
     variantIds.length > 0
       ? supabase
           .from("product_images")
-          .select("id, url, alt, variant_id")
+          .select("id, url, alt, variant_id, vendida")
           .in("variant_id", variantIds)
-      : Promise.resolve({ data: [] as { id: string; url: string; alt: string | null; variant_id: string | null }[] }),
+      : Promise.resolve({ data: [] as { id: string; url: string; alt: string | null; variant_id: string | null; vendida: boolean }[] }),
   ]);
 
   const productById = new Map((products ?? []).map((p) => [p.id, p]));
@@ -59,7 +59,10 @@ export default async function CarritoPage() {
     const variant = item.variant_id ? variantById.get(item.variant_id) : null;
     const estampadosDeEstaVariante = item.variant_id
       ? (imagenesDeVariantes ?? [])
-          .filter((img) => img.variant_id === item.variant_id)
+          .filter(
+            (img) =>
+              img.variant_id === item.variant_id && (!img.vendida || img.id === item.image_id),
+          )
           .map((img) => ({ imageId: img.id, url: img.url, alt: img.alt }))
       : [];
     return {
@@ -73,6 +76,7 @@ export default async function CarritoPage() {
       unitPrice: item.unit_price,
       imageUrl: item.image_id ? (imagenPorId.get(item.image_id) ?? null) : null,
       estampadosDisponibles: estampadosDeEstaVariante,
+      imageId: item.image_id,
     };
   });
 
