@@ -31,6 +31,11 @@ export function mergeCartItem(items: LocalCartItem[], newItem: LocalCartItem): L
   const index = items.findIndex((i) => sameItem(i, newItem));
 
   if (index === -1) {
+    // Una linea con estampado elegido es siempre 1 unidad fisica (esa foto
+    // puntual); no se acota al stock agregado de la variante.
+    if (newItem.imageId) {
+      return [...items, { ...newItem, qty: 1 }];
+    }
     const usadoPorOtrasLineas = newItem.variantId
       ? stockUsadoPorVariante(items, newItem.variantId)
       : 0;
@@ -43,6 +48,12 @@ export function mergeCartItem(items: LocalCartItem[], newItem: LocalCartItem): L
   }
 
   const updated = [...items];
+  // Una linea con estampado elegido es siempre 1 unidad fisica (esa foto
+  // puntual); no se acota al stock agregado de la variante.
+  if (updated[index].imageId) {
+    updated[index] = { ...updated[index], qty: 1 };
+    return updated;
+  }
   const usadoPorOtrasLineas = newItem.variantId
     ? stockUsadoPorVariante(items, newItem.variantId) - updated[index].qty
     : 0;
@@ -63,6 +74,11 @@ export function updateItemQty(
   return items
     .map((i) => {
       if (!sameItem(i, { productId, variantId, imageId })) return i;
+      // Una linea con estampado elegido es siempre 1 unidad fisica (esa foto
+      // puntual); no se acota al stock agregado de la variante.
+      if (i.imageId) {
+        return { ...i, qty: Math.min(Math.max(qty, 0), 1) };
+      }
       const usadoPorOtrasLineas = variantId ? stockUsadoPorVariante(items, variantId) - i.qty : 0;
       const maximoDisponible = Math.max(i.stock - usadoPorOtrasLineas, 0);
       return { ...i, qty: Math.min(Math.max(qty, 0), maximoDisponible) };

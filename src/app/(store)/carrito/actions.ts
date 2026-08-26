@@ -36,9 +36,12 @@ export async function addToCart(
   const { data: existing } = await existingQuery.maybeSingle();
 
   if (existing) {
+    // Una linea con estampado elegido es siempre 1 unidad fisica (esa foto
+    // puntual); no se suma a la cantidad existente.
+    const nuevaQty = imageId ? 1 : existing.qty + qty;
     const { error } = await supabase
       .from("cart_items")
-      .update({ qty: existing.qty + qty })
+      .update({ qty: nuevaQty })
       .eq("id", existing.id);
     if (error) return { error: "No se pudo actualizar el carrito." };
   } else {
