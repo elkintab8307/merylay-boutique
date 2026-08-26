@@ -18,6 +18,12 @@ export type SidebarSection = {
   items: { href: string; label: string; icon?: React.ReactNode }[];
 };
 
+export type SidebarExtraItem = {
+  label: string;
+  icon?: React.ReactNode;
+  onClick: () => void;
+};
+
 function NavLinks({
   sections,
   currentPath,
@@ -67,18 +73,23 @@ function NavLinks({
   );
 }
 
+const EXTRA_ITEM_CLASSNAME =
+  "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-brand-ciruela transition-colors hover:bg-brand-rosa-claro/20";
+
 export function BackendSidebar({
   sections,
   homeHref,
   open,
   onOpenChange,
   ocultarTriggerMovil = false,
+  extraItem,
 }: {
   sections: SidebarSection[];
   homeHref: string;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   ocultarTriggerMovil?: boolean;
+  extraItem?: SidebarExtraItem;
 }) {
   const pathname = usePathname();
 
@@ -89,6 +100,16 @@ export function BackendSidebar({
           MeryLay
         </Link>
         <NavLinks sections={sections} currentPath={pathname} />
+        {extraItem && (
+          <button
+            type="button"
+            onClick={extraItem.onClick}
+            className={EXTRA_ITEM_CLASSNAME}
+          >
+            {extraItem.icon}
+            {extraItem.label}
+          </button>
+        )}
       </aside>
       <Sheet open={open} onOpenChange={onOpenChange}>
         {!ocultarTriggerMovil && (
@@ -107,7 +128,7 @@ export function BackendSidebar({
               MeryLay
             </SheetTitle>
           </SheetHeader>
-          <div className="px-2 pb-4">
+          <div className="flex flex-col gap-2 px-2 pb-4">
             <NavLinks
               sections={sections}
               currentPath={pathname}
@@ -117,6 +138,15 @@ export function BackendSidebar({
                 </SheetClose>
               )}
             />
+            {extraItem && (
+              <SheetClose
+                render={<button type="button" onClick={extraItem.onClick} />}
+                className={EXTRA_ITEM_CLASSNAME}
+              >
+                {extraItem.icon}
+                {extraItem.label}
+              </SheetClose>
+            )}
           </div>
         </SheetContent>
       </Sheet>

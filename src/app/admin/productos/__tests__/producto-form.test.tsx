@@ -2,8 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ProductoForm } from "../producto-form";
 
+const routerPush = vi.fn();
+const routerRefresh = vi.fn();
+
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ push: routerPush, refresh: routerRefresh }),
 }));
 
 vi.mock("../actions", () => ({
@@ -100,5 +103,81 @@ describe("ProductoForm", () => {
     const variantImageUrlsArg = llamada[2];
     expect(variantImageUrlsArg[0]).toEqual([]);
     expect(variantImageUrlsArg[1]).toEqual(["https://storage.test/variante-l.jpg"]);
+  });
+
+  it("sin onGuardado, navega a /admin/productos al guardar (comportamiento por defecto)", async () => {
+    routerPush.mockClear();
+    routerRefresh.mockClear();
+    const { createProducto } = await import("../actions");
+    const { subirImagenesProductoCliente } = await import(
+      "@/lib/admin/upload-product-images-client"
+    );
+    vi.mocked(createProducto).mockResolvedValue({});
+    vi.mocked(subirImagenesProductoCliente).mockResolvedValue({ urls: [] });
+
+    render(
+      <ProductoForm
+        defaultValues={{
+          name: "Pijama de prueba",
+          slug: "pijama-de-prueba",
+          description: "",
+          categoryId: null,
+          price: 10000,
+          promoPrice: null,
+          costPrice: null,
+          stock: 5,
+          isActive: true,
+          isFeatured: false,
+          variantes: [],
+        }}
+        categoriasDisponibles={[]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /guardar/i }));
+
+    await waitFor(() => {
+      expect(routerPush).toHaveBeenCalledWith("/admin/productos");
+    });
+  });
+
+  it("con onGuardado, lo llama en vez de navegar al guardar", async () => {
+    routerPush.mockClear();
+    routerRefresh.mockClear();
+    const { createProducto } = await import("../actions");
+    const { subirImagenesProductoCliente } = await import(
+      "@/lib/admin/upload-product-images-client"
+    );
+    vi.mocked(createProducto).mockResolvedValue({});
+    vi.mocked(subirImagenesProductoCliente).mockResolvedValue({ urls: [] });
+
+    const onGuardado = vi.fn();
+
+    render(
+      <ProductoForm
+        defaultValues={{
+          name: "Pijama de prueba",
+          slug: "pijama-de-prueba",
+          description: "",
+          categoryId: null,
+          price: 10000,
+          promoPrice: null,
+          costPrice: null,
+          stock: 5,
+          isActive: true,
+          isFeatured: false,
+          variantes: [],
+        }}
+        categoriasDisponibles={[]}
+        onGuardado={onGuardado}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /guardar/i }));
+
+    await waitFor(() => {
+      expect(onGuardado).toHaveBeenCalled();
+    });
+    expect(routerPush).not.toHaveBeenCalled();
   });
 });
