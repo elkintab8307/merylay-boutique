@@ -7,6 +7,7 @@ export function PosTerminal() {
   return (
     <VentaItemsEditor
       mobileVistaDoble
+      persistirVentaEnCurso
       clienteObligatorio
       textoBoton="Registrar venta"
       textoBotonEnviando="Registrando..."
