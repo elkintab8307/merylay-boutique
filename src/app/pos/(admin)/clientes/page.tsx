@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Table, TableHeader, TableRow, TableCell, TableHeaderCell } from "@/components/ui/table";
 import { sanitizarQueryBusqueda } from "@/lib/search/sanitize";
+import { CrearClienteForm } from "./crear-cliente-form";
 
 export default async function ClientesPage({
   searchParams,
@@ -17,7 +18,10 @@ export default async function ClientesPage({
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-12">
-      <h1 className="mb-8 font-heading text-3xl text-brand-ciruela">Clientes</h1>
+      <div className="mb-4 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+        <h1 className="font-heading text-3xl text-brand-ciruela">Clientes</h1>
+        <CrearClienteForm />
+      </div>
       <form className="mb-4 flex gap-2" action="/pos/clientes">
         <input
           type="text"
