@@ -48,6 +48,8 @@ begin
     raise exception 'Tu carrito esta vacio.';
   end if;
 
+  -- Verificar stock disponible por cada item, bloqueando las filas
+  -- para evitar sobreventa con checkouts concurrentes.
   for v_item in
     select ci.product_id, ci.variant_id, ci.qty
     from public.cart_items ci
@@ -64,6 +66,7 @@ begin
     end if;
   end loop;
 
+  -- Descontar stock
   for v_item in
     select ci.product_id, ci.variant_id, ci.qty
     from public.cart_items ci
@@ -115,6 +118,9 @@ end;
 $$;
 
 -- --- create_order_wompi: arrastra image_id desde cart_items ---
+-- Crea un pedido con metodo de pago Wompi sin descontar stock.
+-- El stock se descuenta solo al confirmar el pago (confirm_order_payment_wompi),
+-- ya que un pago con tarjeta/PSE puede abandonarse o rechazarse.
 create or replace function public.create_order_wompi(
   p_shipping_address jsonb
 )
@@ -146,6 +152,8 @@ begin
     raise exception 'Tu carrito esta vacio.';
   end if;
 
+  -- Verifica stock disponible (sin descontar) para no aceptar un pedido
+  -- Wompi de algo que ya esta agotado.
   for v_item in
     select ci.product_id, ci.variant_id, ci.qty
     from public.cart_items ci
@@ -203,6 +211,19 @@ $$;
 -- --- update_order_items: p_items acepta imageId opcional ---
 -- (cuerpo base = 029_bloquear_edicion_wompi_pendiente.sql, la version
 -- vigente mas reciente; unico cambio: image_id de punta a punta)
+--
+-- Corrige update_order_items (028_editar_pedido_tienda.sql): un pedido
+-- pagado con Wompi solo descuenta stock cuando el pago se confirma
+-- (confirm_order_payment_wompi, 013_wompi_pago.sql) -- mientras esta
+-- pendiente (wompi_transaction_id is null) su stock NUNCA se descuenta.
+-- La version anterior de esta funcion asumia que el stock de los items
+-- actuales SIEMPRE estaba descontado y lo restauraba incondicionalmente,
+-- lo que corrompia el stock si se editaba un pedido Wompi todavia
+-- pendiente (sumaba de vuelta stock que nunca se habia restado). Editar
+-- un pedido Wompi pendiente tambien cambia orders.total, lo que rompe la
+-- verificacion de monto del webhook cuando el pago si se confirme despues
+-- (src/app/api/webhooks/wompi/route.ts). Se bloquea la edicion mientras
+-- el pago Wompi no este confirmado.
 create or replace function public.update_order_items(
   p_order_id uuid,
   p_items jsonb
@@ -238,6 +259,9 @@ begin
     raise exception 'El pedido no tiene productos.';
   end if;
 
+  -- Bloquea el pedido para evitar ediciones concurrentes, y lee el
+  -- shipping actual (no se toca, se preserva en el total recalculado),
+  -- junto con el metodo de pago y el id de transaccion Wompi.
   select shipping, payment_method, wompi_transaction_id
   into v_shipping, v_payment_method, v_wompi_transaction_id
   from public.orders where id = p_order_id for update;
@@ -245,10 +269,18 @@ begin
     raise exception 'Pedido no encontrado.';
   end if;
 
+  -- Un pedido Wompi solo descuenta stock cuando el pago se confirma
+  -- (wompi_transaction_id se llena en ese momento, ver
+  -- confirm_order_payment_wompi). Mientras este pendiente, sus items NO
+  -- tienen stock descontado todavia: restaurar/reajustar aqui corromperia
+  -- el stock, y cambiar el total rompe la verificacion de monto del
+  -- webhook cuando el pago si llegue a confirmarse despues.
   if v_payment_method = 'wompi' and v_wompi_transaction_id is null then
     raise exception 'Este pedido se pago con Wompi y el pago todavia no se ha confirmado. No se puede editar hasta que el pago se confirme o el pedido se cancele.';
   end if;
 
+  -- Restaura el stock de los items ACTUALES del pedido (revierte el
+  -- descuento aplicado cuando se creo/edito por ultima vez).
   for v_product_id, v_variant_id, v_qty in
     select product_id, variant_id, qty from public.order_items where order_id = p_order_id
   loop
@@ -259,6 +291,8 @@ begin
     end if;
   end loop;
 
+  -- Verifica stock suficiente para el NUEVO conjunto de items,
+  -- bloqueando filas (mismo chequeo que update_pos_sale).
   for v_item in select * from jsonb_array_elements(p_items)
   loop
     v_product_id := (v_item->>'productId')::uuid;
@@ -282,6 +316,7 @@ begin
     v_subtotal := v_subtotal + v_qty * (v_item->>'unitPrice')::numeric;
   end loop;
 
+  -- Descuenta stock del nuevo conjunto.
   for v_item in select * from jsonb_array_elements(p_items)
   loop
     v_product_id := (v_item->>'productId')::uuid;
@@ -295,6 +330,8 @@ begin
     end if;
   end loop;
 
+  -- Reemplaza los items del pedido (estrategia "borrar y reinsertar",
+  -- mismo patron ya usado en update_pos_sale).
   delete from public.order_items where order_id = p_order_id;
 
   for v_item in select * from jsonb_array_elements(p_items)
@@ -320,6 +357,8 @@ begin
     values (p_order_id, v_product_id, v_variant_id, v_image_id, v_name_snapshot, v_qty, v_unit_price, v_qty * v_unit_price);
   end loop;
 
+  -- status, payment_method, shipping_address, order_number, user_id,
+  -- created_at y shipping NO cambian.
   update public.orders
   set subtotal = v_subtotal, total = v_subtotal + v_shipping
   where id = p_order_id;
@@ -332,6 +371,10 @@ $$;
 -- --- create_pos_sale: p_items acepta imageId opcional ---
 -- (cuerpo base = 045_pos_clientes_portal.sql, la version vigente mas
 -- reciente; unico cambio: image_id de punta a punta)
+--
+-- create_pos_sale: el cliente ahora es obligatorio para toda venta
+-- nueva, no solo a credito (antes del cambio, p_customer_id null era
+-- valido para pagos de contado).
 create or replace function public.create_pos_sale(
   p_items jsonb,
   p_payment_method public.payment_method,
@@ -506,6 +549,17 @@ $$;
 -- --- update_pos_sale: p_items acepta imageId opcional ---
 -- (cuerpo base = 043_fix_update_pos_sale_credit_guards.sql, la version
 -- vigente mas reciente; unico cambio: image_id de punta a punta)
+--
+-- Restaura los dos guardias de credito de update_pos_sale que la
+-- migracion 042 perdio al reescribir la funcion desde el cuerpo de la
+-- migracion 027 (anterior al sistema de credito) en vez del cuerpo de
+-- la migracion 034 (que agrego estos guardias). Sin estos guardias:
+-- 1) se puede editar una venta a credito ya existente, dañando el
+--    saldo ya calculado a partir de credit_payments/credit_installments.
+-- 2) se puede convertir una venta normal en credito desde aqui, sin
+--    generar credit_installments (create_pos_sale es el unico camino
+--    valido para crear una venta a credito).
+-- Se mantiene el p_customer_id agregado en 042.
 create or replace function public.update_pos_sale(
   p_sale_id uuid,
   p_items jsonb,
