@@ -40,7 +40,17 @@ export function ProductVariantSelector({
   onColorChange: (color: string | null) => void;
   imagenesDeVarianteActual: EstampadoOption[];
 }) {
-  const { tallas, colores } = useMemo(() => getVariantOptions(variants), [variants]);
+  const { tallas: tallasTodas, colores: coloresTodos } = useMemo(
+    () => getVariantOptions(variants),
+    [variants],
+  );
+  // Una talla o un color sin stock no se muestra como opcion en el selector
+  // -- no tiene sentido dejar elegir algo que ya no se puede comprar (esto
+  // incluye a las variantes sin ninguna foto propia, que bajo el modelo de
+  // estampados siempre tienen stock 0). Mismo criterio que ya usa la
+  // tarjeta de producto del POS.
+  const tallas = tallasTodas.filter((t) => variants.some((v) => v.talla === t && v.stock > 0));
+  const colores = coloresTodos.filter((c) => variants.some((v) => v.color === c && v.stock > 0));
   const [message, setMessage] = useState<string | null>(null);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [isPending, startTransition] = useTransition();
