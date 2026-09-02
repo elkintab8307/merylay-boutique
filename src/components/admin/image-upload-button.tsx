@@ -1,8 +1,43 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ImagePlus } from "lucide-react";
+import { Check, ImagePlus, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { EstadoImagen } from "@/lib/admin/upload-product-images-client";
+
+function EstadoOverlay({ estado }: { estado: EstadoImagen }) {
+  if (estado === "comprimiendo" || estado === "subiendo") {
+    return (
+      <span
+        role="status"
+        aria-label={estado === "comprimiendo" ? "Preparando" : "Subiendo"}
+        className="absolute inset-0 flex items-center justify-center rounded-md bg-black/45"
+      >
+        <Loader2 className="h-5 w-5 animate-spin text-white" />
+      </span>
+    );
+  }
+  if (estado === "ok") {
+    return (
+      <span
+        role="status"
+        aria-label="Subida correcta"
+        className="absolute -top-1.5 -left-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-green-600 text-white"
+      >
+        <Check className="h-3 w-3" />
+      </span>
+    );
+  }
+  return (
+    <span
+      role="status"
+      aria-label="No se pudo subir"
+      className="absolute -top-1.5 -left-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-white"
+    >
+      <X className="h-3 w-3" />
+    </span>
+  );
+}
 
 export function ImageUploadButton({
   id,
@@ -10,12 +45,14 @@ export function ImageUploadButton({
   onChange,
   label = "Agregar imágenes",
   multiple = true,
+  estados,
 }: {
   id: string;
   files: File[];
   onChange: (files: File[]) => void;
   label?: string;
   multiple?: boolean;
+  estados?: Map<File, EstadoImagen>;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [prevFiles, setPrevFiles] = useState(files);
@@ -88,6 +125,7 @@ export function ImageUploadButton({
         <div className="flex flex-wrap gap-2">
           {files.map((file, index) => {
             const url = previewUrls.get(file);
+            const estado = estados?.get(file);
             return (
               <div key={`${file.name}-${index}`} className="relative h-16 w-16">
                 {url && (
@@ -98,6 +136,7 @@ export function ImageUploadButton({
                     className="h-full w-full rounded-md border border-brand-rosa-claro object-cover"
                   />
                 )}
+                {estado && <EstadoOverlay estado={estado} />}
                 <button
                   type="button"
                   onClick={() => onChange(files.filter((_, i) => i !== index))}

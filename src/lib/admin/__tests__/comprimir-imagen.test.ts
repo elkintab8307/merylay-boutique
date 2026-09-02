@@ -25,39 +25,86 @@ describe("comprimirImagen", () => {
     vi.restoreAllMocks();
   });
 
-  it("devuelve un File JPEG redimensionado a partir de la foto original", async () => {
+  function mockCanvas(blob: Blob | null) {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      drawImage: vi.fn(),
+    } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation(function (
+      cb: BlobCallback,
+    ) {
+      cb(blob);
+    });
+  }
+
+  it("devuelve un File JPEG redimensionado cuando el navegador puede procesar la imagen", async () => {
     vi.stubGlobal(
       "createImageBitmap",
       vi.fn().mockResolvedValue({ width: 4000, height: 3000, close: vi.fn() }),
     );
-    const drawImage = vi.fn();
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
-      drawImage,
-    } as unknown as CanvasRenderingContext2D);
-    vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation(function (
-      this: HTMLCanvasElement,
-      cb: BlobCallback,
-    ) {
-      cb(new Blob(["jpeg-bytes"], { type: "image/jpeg" }));
+    mockCanvas(new Blob(["x".repeat(1000)], { type: "image/jpeg" }));
+
+    const original = new File(["y".repeat(2_000_000)], "IMG_0001.PNG", {
+      type: "image/png",
     });
+    const resultado = await comprimirImagen(original, { ladoMaximo: 1280 });
 
-    const original = new File(["png-bytes"], "IMG_0001.PNG", { type: "image/png" });
-    const resultado = await comprimirImagen(original, { ladoMaximo: 1600 });
-
-    expect(resultado).toBeInstanceOf(File);
     expect(resultado.type).toBe("image/jpeg");
     expect(resultado.name).toBe("IMG_0001.jpg");
-    expect(drawImage).toHaveBeenCalledWith(expect.anything(), 0, 0, 1600, 1200);
+    expect(resultado.size).toBeLessThan(original.size);
   });
 
-  it("lanza un error claro con el nombre del archivo cuando el navegador no puede decodificar la imagen", async () => {
+  it("NO lanza: devuelve el archivo original si el navegador no puede decodificar la imagen", async () => {
     vi.stubGlobal(
       "createImageBitmap",
       vi.fn().mockRejectedValue(new Error("unsupported")),
     );
 
-    const original = new File(["heic-bytes"], "foto.heic", { type: "image/heic" });
+    const original = new File(["z".repeat(2_000_000)], "foto.heic", {
+      type: "image/heic",
+    });
+    const resultado = await comprimirImagen(original);
 
-    await expect(comprimirImagen(original)).rejects.toThrow(/foto\.heic/);
+    expect(resultado).toBe(original);
+  });
+
+  it("devuelve el archivo original si toBlob no produce nada (memoria insuficiente)", async () => {
+    vi.stubGlobal(
+      "createImageBitmap",
+      vi.fn().mockResolvedValue({ width: 4000, height: 3000, close: vi.fn() }),
+    );
+    mockCanvas(null);
+
+    const original = new File(["z".repeat(2_000_000)], "captura.png", {
+      type: "image/png",
+    });
+    const resultado = await comprimirImagen(original);
+
+    expect(resultado).toBe(original);
+  });
+
+  it("devuelve el archivo original sin tocar el decodificador si ya es pequeno", async () => {
+    const createImageBitmap = vi.fn();
+    vi.stubGlobal("createImageBitmap", createImageBitmap);
+
+    const original = new File(["chico"], "mini.jpg", { type: "image/jpeg" });
+    const resultado = await comprimirImagen(original, { omitirDebajoDeBytes: 100_000 });
+
+    expect(resultado).toBe(original);
+    expect(createImageBitmap).not.toHaveBeenCalled();
+  });
+
+  it("devuelve el original si la version comprimida terminaria pesando mas", async () => {
+    vi.stubGlobal(
+      "createImageBitmap",
+      vi.fn().mockResolvedValue({ width: 4000, height: 3000, close: vi.fn() }),
+    );
+    mockCanvas(new Blob(["x".repeat(5_000_000)], { type: "image/jpeg" }));
+
+    const original = new File(["y".repeat(1_000_000)], "grande.png", {
+      type: "image/png",
+    });
+    const resultado = await comprimirImagen(original);
+
+    expect(resultado).toBe(original);
   });
 });

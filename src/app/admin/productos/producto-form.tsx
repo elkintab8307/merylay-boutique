@@ -14,7 +14,12 @@ import {
   setPrimaryProductImage,
   toggleImagenVendida,
 } from "./actions";
-import { subirImagenesProductoCliente } from "@/lib/admin/upload-product-images-client";
+import {
+  subirImagenesProductoCliente,
+  type EstadoImagen,
+  type ResultadoSubida,
+} from "@/lib/admin/upload-product-images-client";
+import { motivoARemedio } from "@/lib/admin/motivo-remedio";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ImageUploadButton } from "@/components/admin/image-upload-button";
@@ -56,19 +61,22 @@ export function ProductoForm({
     defaultValues.variantes.map(() => []),
   );
   // Errores de subida ubicados por seccion. `clave` es "general" o
-  // "variante-<indice>"; se usa tambien como id del <p> para hacer scroll
-  // hasta el primer error. Ver onSubmit.
+  // "variante-<indice>"; se usa tambien como id del bloque para hacer
+  // scroll hasta el primer error. Ver onSubmit.
   const [erroresImagenes, setErroresImagenes] = useState<
-    { clave: string; seccion: string; nombres: string[] }[]
+    { clave: string; seccion: string; items: { nombre: string; motivo: string }[] }[]
   >([]);
-  // URLs de imagenes que ya se subieron con exito en un intento anterior
-  // (cuando parte del lote fallo). Al reintentar solo se re-suben los
-  // File que quedan en imageFiles / variantImageFiles; estas URLs se
-  // conservan para no volver a subirlas ni perderlas.
-  const [urlsGeneralesSubidas, setUrlsGeneralesSubidas] = useState<string[]>([]);
-  const [urlsVariantesSubidas, setUrlsVariantesSubidas] = useState<string[][]>(
-    defaultValues.variantes.map(() => []),
+  // Estado visible de cada imagen en su miniatura: comprimiendo / subiendo
+  // / ok (chulo verde) / error (X roja). La subida va una por una y este
+  // mapa se actualiza en cada paso (ver onSubmit -> marcarEstado).
+  const [estadosImagenes, setEstadosImagenes] = useState<Map<File, EstadoImagen>>(
+    new Map(),
   );
+  // URL publica ya obtenida para cada File que subio bien en un intento
+  // anterior. Sirve para reconstruir las URLs por seccion y para NO volver
+  // a subir una imagen que ya quedo cuando el usuario pulsa "Guardar" otra
+  // vez tras un fallo parcial.
+  const [urlsSubidas, setUrlsSubidas] = useState<Map<File, string>>(new Map());
 
   const {
     register,
@@ -91,13 +99,11 @@ export function ProductoForm({
   const handleAppendVariante = () => {
     append({ talla: "", color: "", priceOverride: null });
     setVariantImageFiles((prev) => [...prev, []]);
-    setUrlsVariantesSubidas((prev) => [...prev, []]);
   };
 
   const handleRemoveVariante = (index: number) => {
     remove(index);
     setVariantImageFiles((prev) => prev.filter((_, i) => i !== index));
-    setUrlsVariantesSubidas((prev) => prev.filter((_, i) => i !== index));
     setErroresImagenes((prev) => prev.filter((e) => e.clave !== `variante-${index}`));
   };
 
@@ -112,15 +118,33 @@ export function ProductoForm({
 
   const renderErrorImagenes = (clave: string) => {
     const err = erroresImagenes.find((e) => e.clave === clave);
-    if (!err) return null;
-    const n = err.nombres.length;
+    if (!err || err.items.length === 0) return null;
     return (
-      <p id={`error-imagenes-${clave}`} className="text-sm text-red-600">
-        {n === 1
-          ? `No se pudo subir 1 imagen de «${err.seccion}»: ${err.nombres[0]}.`
-          : `No se pudieron subir ${n} imágenes de «${err.seccion}»: ${err.nombres.join(", ")}.`}{" "}
-        Vuelve a pulsar «Guardar» para reintentar.
-      </p>
+      <div
+        id={`error-imagenes-${clave}`}
+        className="flex flex-col gap-2 rounded-md border border-red-300 bg-red-50 p-3 text-sm"
+      >
+        <p className="font-medium text-red-700">
+          No se {err.items.length === 1 ? "pudo subir esta imagen" : "pudieron subir estas imágenes"}{" "}
+          de «{err.seccion}»:
+        </p>
+        <ul className="flex flex-col gap-2">
+          {err.items.map((it) => {
+            const remedio = motivoARemedio(it.motivo);
+            return (
+              <li key={it.nombre} className="text-brand-ciruela">
+                <span className="font-medium">{it.nombre}</span> — {remedio.causa}
+                <br />
+                <span className="text-brand-ciruela/80">Qué hacer: {remedio.queHacer}</span>
+              </li>
+            );
+          })}
+        </ul>
+        <p className="text-brand-ciruela/80">
+          Las imágenes con ✓ ya quedaron guardadas; al pulsar «Guardar» solo se
+          reintentan las que tienen ✗.
+        </p>
+      </div>
     );
   };
 
@@ -128,50 +152,79 @@ export function ProductoForm({
     setServerError(null);
     setErroresImagenes([]);
     try {
-      const nuevosErrores: { clave: string; seccion: string; nombres: string[] }[] = [];
+      // URLs conseguidas EN ESTE intento (fuente autoritativa dentro del
+      // submit; el estado de React no se refresca a mitad de la funcion).
+      const urlsDeEsteIntento = new Map<File, string>();
 
-      const resultadoGeneral = await subirImagenesProductoCliente(imageFiles);
-      const imageUrls = [...urlsGeneralesSubidas, ...resultadoGeneral.urls];
-      if (resultadoGeneral.fallos.length > 0) {
-        nuevosErrores.push({
-          clave: "general",
-          seccion: "Imágenes generales",
-          nombres: resultadoGeneral.fallos.map((f) => f.nombre),
-        });
-      }
+      const marcarEstado = (file: File, estado: EstadoImagen) => {
+        setEstadosImagenes((prev) => new Map(prev).set(file, estado));
+      };
+
+      // Empareja cada File subido con su URL: `resultado.urls` viene en el
+      // mismo orden que `pendientes`, saltando los que fallaron.
+      const registrarUrls = (pendientes: File[], resultado: ResultadoSubida) => {
+        const fallidos = new Set(resultado.fallos.map((f) => f.file));
+        let i = 0;
+        for (const file of pendientes) {
+          if (fallidos.has(file)) continue;
+          const url = resultado.urls[i++];
+          if (url) urlsDeEsteIntento.set(file, url);
+        }
+      };
+
+      const urlDe = (file: File) =>
+        urlsDeEsteIntento.get(file) ?? urlsSubidas.get(file);
+
+      const nuevosErrores: {
+        clave: string;
+        seccion: string;
+        items: { nombre: string; motivo: string }[];
+      }[] = [];
+
+      const subirSeccion = async (
+        clave: string,
+        seccion: string,
+        archivos: File[],
+      ): Promise<string[]> => {
+        const pendientes = archivos.filter((f) => !urlDe(f));
+        if (pendientes.length > 0) {
+          const resultado = await subirImagenesProductoCliente(pendientes, {
+            onEstado: marcarEstado,
+          });
+          registrarUrls(pendientes, resultado);
+          if (resultado.fallos.length > 0) {
+            nuevosErrores.push({
+              clave,
+              seccion,
+              items: resultado.fallos.map((f) => ({ nombre: f.nombre, motivo: f.motivo })),
+            });
+          }
+        }
+        return archivos.map(urlDe).filter((u): u is string => Boolean(u));
+      };
+
+      const imageUrls = await subirSeccion(
+        "general",
+        "Imágenes generales",
+        imageFiles,
+      );
 
       const variantImageUrls: string[][] = [];
       for (let i = 0; i < variantImageFiles.length; i++) {
-        const resultado = await subirImagenesProductoCliente(variantImageFiles[i] ?? []);
-        variantImageUrls[i] = [
-          ...(urlsVariantesSubidas[i] ?? []),
-          ...resultado.urls,
-        ];
-        if (resultado.fallos.length > 0) {
-          nuevosErrores.push({
-            clave: `variante-${i}`,
-            seccion: etiquetaVariante(i),
-            nombres: resultado.fallos.map((f) => f.nombre),
-          });
-        }
+        variantImageUrls[i] = await subirSeccion(
+          `variante-${i}`,
+          etiquetaVariante(i),
+          variantImageFiles[i] ?? [],
+        );
       }
 
-      // Conserva lo que si subio y deja en la cola solo los File que
-      // fallaron, para que "Guardar" reintente unicamente esos.
-      setUrlsGeneralesSubidas(imageUrls);
-      setUrlsVariantesSubidas(variantImageUrls);
-      const fallosGeneral = nuevosErrores.find((e) => e.clave === "general");
-      setImageFiles(
-        fallosGeneral
-          ? imageFiles.filter((f) => fallosGeneral.nombres.includes(f.name))
-          : [],
-      );
-      setVariantImageFiles(
-        variantImageFiles.map((files, i) => {
-          const err = nuevosErrores.find((e) => e.clave === `variante-${i}`);
-          return err ? (files ?? []).filter((f) => err.nombres.includes(f.name)) : [];
-        }),
-      );
+      if (urlsDeEsteIntento.size > 0) {
+        setUrlsSubidas((prev) => {
+          const siguiente = new Map(prev);
+          for (const [file, url] of urlsDeEsteIntento) siguiente.set(file, url);
+          return siguiente;
+        });
+      }
 
       if (nuevosErrores.length > 0) {
         setErroresImagenes(nuevosErrores);
@@ -195,8 +248,12 @@ export function ProductoForm({
         return;
       }
 
-      setUrlsGeneralesSubidas([]);
-      setUrlsVariantesSubidas(variantImageFiles.map(() => []));
+      // Producto guardado: limpia las imagenes ya subidas para no
+      // reenviarlas si el formulario sigue montado (caso modal).
+      setUrlsSubidas(new Map());
+      setEstadosImagenes(new Map());
+      setImageFiles([]);
+      setVariantImageFiles(variantImageFiles.map(() => []));
 
       if (onGuardado) {
         onGuardado();
@@ -558,6 +615,7 @@ export function ProductoForm({
                   files={variantImageFiles[index] ?? []}
                   onChange={(files) => handleVariantImageChange(index, files)}
                   label={`Imágenes de la variante ${index + 1}`}
+                  estados={estadosImagenes}
                 />
                 {renderErrorImagenes(`variante-${index}`)}
               </div>
@@ -615,6 +673,7 @@ export function ProductoForm({
           id="general-images"
           files={imageFiles}
           onChange={handleImageChange}
+          estados={estadosImagenes}
         />
         {imageSizeError && <p className="text-sm text-red-600">{imageSizeError}</p>}
         {renderErrorImagenes("general")}
