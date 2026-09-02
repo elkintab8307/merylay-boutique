@@ -55,6 +55,20 @@ export function ProductoForm({
   const [variantImageFiles, setVariantImageFiles] = useState<File[][]>(
     defaultValues.variantes.map(() => []),
   );
+  // Errores de subida ubicados por seccion. `clave` es "general" o
+  // "variante-<indice>"; se usa tambien como id del <p> para hacer scroll
+  // hasta el primer error. Ver onSubmit.
+  const [erroresImagenes, setErroresImagenes] = useState<
+    { clave: string; seccion: string; nombres: string[] }[]
+  >([]);
+  // URLs de imagenes que ya se subieron con exito en un intento anterior
+  // (cuando parte del lote fallo). Al reintentar solo se re-suben los
+  // File que quedan en imageFiles / variantImageFiles; estas URLs se
+  // conservan para no volver a subirlas ni perderlas.
+  const [urlsGeneralesSubidas, setUrlsGeneralesSubidas] = useState<string[]>([]);
+  const [urlsVariantesSubidas, setUrlsVariantesSubidas] = useState<string[][]>(
+    defaultValues.variantes.map(() => []),
+  );
 
   const {
     register,
@@ -77,33 +91,100 @@ export function ProductoForm({
   const handleAppendVariante = () => {
     append({ talla: "", color: "", priceOverride: null });
     setVariantImageFiles((prev) => [...prev, []]);
+    setUrlsVariantesSubidas((prev) => [...prev, []]);
   };
 
   const handleRemoveVariante = (index: number) => {
     remove(index);
     setVariantImageFiles((prev) => prev.filter((_, i) => i !== index));
+    setUrlsVariantesSubidas((prev) => prev.filter((_, i) => i !== index));
+    setErroresImagenes((prev) => prev.filter((e) => e.clave !== `variante-${index}`));
+  };
+
+  const etiquetaVariante = (index: number) => {
+    const v = variantesWatched[index];
+    const partes = [
+      v?.talla ? `Talla ${v.talla}` : null,
+      v?.color ? v.color : null,
+    ].filter(Boolean);
+    return `Variante ${index + 1}${partes.length > 0 ? ` (${partes.join(" / ")})` : ""}`;
+  };
+
+  const renderErrorImagenes = (clave: string) => {
+    const err = erroresImagenes.find((e) => e.clave === clave);
+    if (!err) return null;
+    const n = err.nombres.length;
+    return (
+      <p id={`error-imagenes-${clave}`} className="text-sm text-red-600">
+        {n === 1
+          ? `No se pudo subir 1 imagen de «${err.seccion}»: ${err.nombres[0]}.`
+          : `No se pudieron subir ${n} imágenes de «${err.seccion}»: ${err.nombres.join(", ")}.`}{" "}
+        Vuelve a pulsar «Guardar» para reintentar.
+      </p>
+    );
   };
 
   const onSubmit = async (data: ProductoInput) => {
     setServerError(null);
+    setErroresImagenes([]);
     try {
+      const nuevosErrores: { clave: string; seccion: string; nombres: string[] }[] = [];
+
       const resultadoGeneral = await subirImagenesProductoCliente(imageFiles);
-      if (resultadoGeneral.error) {
-        setServerError(resultadoGeneral.error);
-        return;
+      const imageUrls = [...urlsGeneralesSubidas, ...resultadoGeneral.urls];
+      if (resultadoGeneral.fallos.length > 0) {
+        nuevosErrores.push({
+          clave: "general",
+          seccion: "Imágenes generales",
+          nombres: resultadoGeneral.fallos.map((f) => f.nombre),
+        });
       }
 
-      const resultadosVariantes = await Promise.all(
-        variantImageFiles.map((files) => subirImagenesProductoCliente(files)),
+      const variantImageUrls: string[][] = [];
+      for (let i = 0; i < variantImageFiles.length; i++) {
+        const resultado = await subirImagenesProductoCliente(variantImageFiles[i] ?? []);
+        variantImageUrls[i] = [
+          ...(urlsVariantesSubidas[i] ?? []),
+          ...resultado.urls,
+        ];
+        if (resultado.fallos.length > 0) {
+          nuevosErrores.push({
+            clave: `variante-${i}`,
+            seccion: etiquetaVariante(i),
+            nombres: resultado.fallos.map((f) => f.nombre),
+          });
+        }
+      }
+
+      // Conserva lo que si subio y deja en la cola solo los File que
+      // fallaron, para que "Guardar" reintente unicamente esos.
+      setUrlsGeneralesSubidas(imageUrls);
+      setUrlsVariantesSubidas(variantImageUrls);
+      const fallosGeneral = nuevosErrores.find((e) => e.clave === "general");
+      setImageFiles(
+        fallosGeneral
+          ? imageFiles.filter((f) => fallosGeneral.nombres.includes(f.name))
+          : [],
       );
-      const errorVariante = resultadosVariantes.find((r) => r.error);
-      if (errorVariante) {
-        setServerError(errorVariante.error as string);
+      setVariantImageFiles(
+        variantImageFiles.map((files, i) => {
+          const err = nuevosErrores.find((e) => e.clave === `variante-${i}`);
+          return err ? (files ?? []).filter((f) => err.nombres.includes(f.name)) : [];
+        }),
+      );
+
+      if (nuevosErrores.length > 0) {
+        setErroresImagenes(nuevosErrores);
+        requestAnimationFrame(() => {
+          const primero = document.getElementById(
+            `error-imagenes-${nuevosErrores[0].clave}`,
+          );
+          if (primero && typeof primero.scrollIntoView === "function") {
+            primero.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+        });
         return;
       }
-
-      const imageUrls = resultadoGeneral.urls ?? [];
-      const variantImageUrls = resultadosVariantes.map((r) => r.urls ?? []);
 
       const result = productoId
         ? await updateProducto(productoId, data, imageUrls, variantImageUrls)
@@ -113,6 +194,9 @@ export function ProductoForm({
         setServerError(result.error);
         return;
       }
+
+      setUrlsGeneralesSubidas([]);
+      setUrlsVariantesSubidas(variantImageFiles.map(() => []));
 
       if (onGuardado) {
         onGuardado();
@@ -475,6 +559,7 @@ export function ProductoForm({
                   onChange={(files) => handleVariantImageChange(index, files)}
                   label={`Imágenes de la variante ${index + 1}`}
                 />
+                {renderErrorImagenes(`variante-${index}`)}
               </div>
             </div>
           );
@@ -532,6 +617,7 @@ export function ProductoForm({
           onChange={handleImageChange}
         />
         {imageSizeError && <p className="text-sm text-red-600">{imageSizeError}</p>}
+        {renderErrorImagenes("general")}
       </div>
 
       {serverError && <p className="text-sm text-red-600">{serverError}</p>}

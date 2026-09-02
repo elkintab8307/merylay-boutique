@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ProductoForm } from "../producto-form";
 
@@ -14,27 +14,37 @@ vi.mock("../actions", () => ({
   updateProducto: vi.fn(),
   deleteProductImage: vi.fn(),
   setPrimaryProductImage: vi.fn(),
+  toggleImagenVendida: vi.fn(),
 }));
 
 vi.mock("@/lib/admin/upload-product-images-client", () => ({
   subirImagenesProductoCliente: vi.fn(),
 }));
 
+const defaultValuesBase = {
+  name: "Pijama de prueba",
+  slug: "pijama-de-prueba",
+  description: "",
+  categoryId: null,
+  price: 10000,
+  promoPrice: null,
+  costPrice: null,
+  stock: 5,
+  isActive: true,
+  isFeatured: false,
+  variantes: [],
+} as const;
+
 describe("ProductoForm", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("muestra el mensaje de error cuando dos variantes tienen la misma talla y color", async () => {
     render(
       <ProductoForm
         defaultValues={{
-          name: "Pijama de prueba",
-          slug: "pijama-de-prueba",
-          description: "",
-          categoryId: null,
-          price: 10000,
-          promoPrice: null,
-          costPrice: null,
-          stock: 5,
-          isActive: true,
-          isFeatured: false,
+          ...defaultValuesBase,
           variantes: [
             { talla: "M", color: "Rosa", priceOverride: null },
             { talla: "M", color: "Rosa", priceOverride: null },
@@ -61,25 +71,15 @@ describe("ProductoForm", () => {
       "@/lib/admin/upload-product-images-client"
     );
     vi.mocked(createProducto).mockResolvedValue({});
-    vi.mocked(subirImagenesProductoCliente).mockImplementation(async (files) =>
-      files.length === 0
-        ? { urls: [] }
-        : { urls: files.map((f) => `https://storage.test/${f.name}`) },
-    );
+    vi.mocked(subirImagenesProductoCliente).mockImplementation(async (files) => ({
+      urls: files.map((f) => `https://storage.test/${f.name}`),
+      fallos: [],
+    }));
 
     render(
       <ProductoForm
         defaultValues={{
-          name: "Pijama de prueba",
-          slug: "pijama-de-prueba",
-          description: "",
-          categoryId: null,
-          price: 10000,
-          promoPrice: null,
-          costPrice: null,
-          stock: 5,
-          isActive: true,
-          isFeatured: false,
+          ...defaultValuesBase,
           variantes: [
             { talla: "M", color: "Rosa", priceOverride: null },
             { talla: "L", color: "Rosa", priceOverride: null },
@@ -113,23 +113,11 @@ describe("ProductoForm", () => {
       "@/lib/admin/upload-product-images-client"
     );
     vi.mocked(createProducto).mockResolvedValue({});
-    vi.mocked(subirImagenesProductoCliente).mockResolvedValue({ urls: [] });
+    vi.mocked(subirImagenesProductoCliente).mockResolvedValue({ urls: [], fallos: [] });
 
     render(
       <ProductoForm
-        defaultValues={{
-          name: "Pijama de prueba",
-          slug: "pijama-de-prueba",
-          description: "",
-          categoryId: null,
-          price: 10000,
-          promoPrice: null,
-          costPrice: null,
-          stock: 5,
-          isActive: true,
-          isFeatured: false,
-          variantes: [],
-        }}
+        defaultValues={{ ...defaultValuesBase, variantes: [] }}
         categoriasDisponibles={[]}
       />,
     );
@@ -149,25 +137,13 @@ describe("ProductoForm", () => {
       "@/lib/admin/upload-product-images-client"
     );
     vi.mocked(createProducto).mockResolvedValue({});
-    vi.mocked(subirImagenesProductoCliente).mockResolvedValue({ urls: [] });
+    vi.mocked(subirImagenesProductoCliente).mockResolvedValue({ urls: [], fallos: [] });
 
     const onGuardado = vi.fn();
 
     render(
       <ProductoForm
-        defaultValues={{
-          name: "Pijama de prueba",
-          slug: "pijama-de-prueba",
-          description: "",
-          categoryId: null,
-          price: 10000,
-          promoPrice: null,
-          costPrice: null,
-          stock: 5,
-          isActive: true,
-          isFeatured: false,
-          variantes: [],
-        }}
+        defaultValues={{ ...defaultValuesBase, variantes: [] }}
         categoriasDisponibles={[]}
         onGuardado={onGuardado}
       />,
@@ -179,5 +155,104 @@ describe("ProductoForm", () => {
       expect(onGuardado).toHaveBeenCalled();
     });
     expect(routerPush).not.toHaveBeenCalled();
+  });
+
+  it("cuando falla la subida de una variante, muestra el error con la etiqueta de la variante y el nombre del archivo, y no guarda el producto", async () => {
+    const { createProducto } = await import("../actions");
+    const { subirImagenesProductoCliente } = await import(
+      "@/lib/admin/upload-product-images-client"
+    );
+    vi.mocked(createProducto).mockResolvedValue({});
+    vi.mocked(subirImagenesProductoCliente).mockImplementation(async (files) =>
+      files.some((f) => f.name === "mala.jpg")
+        ? { urls: [], fallos: [{ nombre: "mala.jpg", motivo: "Payload too large" }] }
+        : { urls: files.map((f) => `https://storage.test/${f.name}`), fallos: [] },
+    );
+
+    render(
+      <ProductoForm
+        defaultValues={{
+          ...defaultValuesBase,
+          variantes: [
+            { talla: "M", color: "Rosa", priceOverride: null },
+            { talla: "L", color: "Rosa", priceOverride: null },
+          ],
+        }}
+        categoriasDisponibles={[]}
+      />,
+    );
+
+    const inputsDeVariante = document.querySelectorAll('input[type="file"]');
+    fireEvent.change(inputsDeVariante[1], {
+      target: { files: [new File(["x"], "mala.jpg", { type: "image/jpeg" })] },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /guardar/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Variante 2 \(Talla L \/ Rosa\)/)).toBeInTheDocument();
+    });
+    expect(screen.getByText(/mala\.jpg/)).toBeInTheDocument();
+    expect(createProducto).not.toHaveBeenCalled();
+  });
+
+  it("al reintentar solo re-sube las imagenes que habian fallado y conserva las que ya subieron", async () => {
+    const { createProducto } = await import("../actions");
+    const { subirImagenesProductoCliente } = await import(
+      "@/lib/admin/upload-product-images-client"
+    );
+    vi.mocked(createProducto).mockResolvedValue({});
+
+    let llamada = 0;
+    vi.mocked(subirImagenesProductoCliente).mockImplementation(async (files) => {
+      llamada += 1;
+      const nombres = files.map((f) => f.name);
+      if (llamada === 1) {
+        expect(nombres).toEqual(["a.jpg", "b.jpg"]);
+        return {
+          urls: ["https://storage.test/a.jpg"],
+          fallos: [{ nombre: "b.jpg", motivo: "network" }],
+        };
+      }
+      expect(nombres).toEqual(["b.jpg"]);
+      return { urls: ["https://storage.test/b.jpg"], fallos: [] };
+    });
+
+    render(
+      <ProductoForm
+        defaultValues={{ ...defaultValuesBase, variantes: [] }}
+        categoriasDisponibles={[]}
+      />,
+    );
+
+    const inputGeneral = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+    fireEvent.change(inputGeneral, {
+      target: {
+        files: [
+          new File(["a"], "a.jpg", { type: "image/jpeg" }),
+          new File(["b"], "b.jpg", { type: "image/jpeg" }),
+        ],
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /guardar/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/b\.jpg/)).toBeInTheDocument();
+    });
+    expect(createProducto).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /guardar/i }));
+
+    await waitFor(() => {
+      expect(createProducto).toHaveBeenCalled();
+    });
+    const imageUrlsArg = vi.mocked(createProducto).mock.calls[0][1];
+    expect(imageUrlsArg).toEqual([
+      "https://storage.test/a.jpg",
+      "https://storage.test/b.jpg",
+    ]);
   });
 });
