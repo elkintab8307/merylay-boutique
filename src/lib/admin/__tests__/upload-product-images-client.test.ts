@@ -12,7 +12,7 @@ const getPublicUrl = vi.fn((path: string) => ({
   data: { publicUrl: `https://storage.test/${path}` },
 }));
 
-const SIN_ESPERA = { esperaReintentoMs: 0 };
+const SIN_ESPERA = { esperaReintentoMs: 0, pausaEntreImagenesMs: 0 };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -63,15 +63,16 @@ describe("subirImagenesProductoCliente", () => {
 
     expect(resultado.urls).toEqual([]);
     expect(resultado.fallos).toEqual([
-      { nombre: "pijama-frente.jpg", motivo: expect.stringContaining("Payload too large") },
+      expect.objectContaining({
+        nombre: "pijama-frente.jpg",
+        motivo: expect.stringContaining("Payload too large"),
+      }),
     ]);
   });
 
   it("una imagen que falla no impide que las demas se suban", async () => {
-    upload.mockImplementation(async (path: string, file: File) =>
-      file.name === "mala.jpg"
-        ? { error: { message: "boom" } }
-        : { error: null },
+    upload.mockImplementation(async (_path: string, file: File) =>
+      file.name === "mala.jpg" ? { error: { message: "boom" } } : { error: null },
     );
 
     const resultado = await subirImagenesProductoCliente(
@@ -79,30 +80,13 @@ describe("subirImagenesProductoCliente", () => {
       SIN_ESPERA,
     );
 
-    expect(upload).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ name: "buena.jpg" }));
-    expect(resultado.urls).toHaveLength(1);
-    expect(resultado.fallos).toEqual([
-      { nombre: "mala.jpg", motivo: expect.any(String) },
-    ]);
-  });
-
-  it("reporta el fallo cuando la compresion lanza y no intenta subir esa imagen", async () => {
-    vi.mocked(comprimirImagen).mockImplementation(async (file) => {
-      if (file.name === "foto.heic") {
-        throw new Error("No se pudo procesar «foto.heic» — usa una foto en formato JPG o PNG.");
-      }
-      return file;
-    });
-
-    const resultado = await subirImagenesProductoCliente(
-      [foto("foto.heic"), foto("ok.jpg")],
-      SIN_ESPERA,
+    expect(upload).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ name: "buena.jpg" }),
     );
-
-    expect(upload).toHaveBeenCalledTimes(1);
     expect(resultado.urls).toHaveLength(1);
     expect(resultado.fallos).toEqual([
-      { nombre: "foto.heic", motivo: expect.stringContaining("No se pudo procesar") },
+      expect.objectContaining({ nombre: "mala.jpg", motivo: expect.any(String) }),
     ]);
   });
 
@@ -110,5 +94,51 @@ describe("subirImagenesProductoCliente", () => {
     const resultado = await subirImagenesProductoCliente([], SIN_ESPERA);
     expect(upload).not.toHaveBeenCalled();
     expect(resultado).toEqual({ urls: [], fallos: [] });
+  });
+
+  it("informa el progreso de cada imagen: comprimiendo -> subiendo -> ok", async () => {
+    const eventos: Array<[string, string]> = [];
+    const a = foto("a.jpg");
+
+    await subirImagenesProductoCliente([a], {
+      ...SIN_ESPERA,
+      onEstado: (file, estado) => eventos.push([file.name, estado]),
+    });
+
+    expect(eventos).toEqual([
+      ["a.jpg", "comprimiendo"],
+      ["a.jpg", "subiendo"],
+      ["a.jpg", "ok"],
+    ]);
+  });
+
+  it("informa estado 'error' con el motivo cuando una imagen no se puede subir", async () => {
+    upload.mockResolvedValue({ error: { message: "Failed to fetch" } });
+    const eventos: Array<{ nombre: string; estado: string; motivo?: string }> = [];
+
+    await subirImagenesProductoCliente([foto("x.jpg")], {
+      ...SIN_ESPERA,
+      onEstado: (file, estado, detalle) =>
+        eventos.push({ nombre: file.name, estado, motivo: detalle?.motivo }),
+    });
+
+    expect(eventos.at(-1)).toEqual({
+      nombre: "x.jpg",
+      estado: "error",
+      motivo: expect.stringContaining("Failed to fetch"),
+    });
+  });
+
+  it("si la compresion devuelve el archivo original igual lo sube", async () => {
+    const original = foto("captura.png");
+    vi.mocked(comprimirImagen).mockResolvedValue(original);
+
+    const resultado = await subirImagenesProductoCliente([original], SIN_ESPERA);
+
+    expect(upload).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ name: "captura.png" }),
+    );
+    expect(resultado.urls).toHaveLength(1);
   });
 });

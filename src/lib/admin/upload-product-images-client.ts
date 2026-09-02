@@ -6,55 +6,74 @@ import { comprimirImagen } from "./comprimir-imagen";
  * "product-images" (RLS ya restringe la escritura a admin/superadmin).
  * A diferencia de subir los archivos crudos en el body de una Server
  * Action, esto evita el limite de payload (~4.5MB) de las funciones
- * serverless de Vercel — el mismo problema que ya se resolvio para las
- * imagenes de los banners del home (ver upload-banner-image-client.ts).
+ * serverless de Vercel.
  *
  * Las subidas van UNA POR UNA (no en paralelo): por datos moviles,
- * varias fotos pesadas a la vez saturan la conexion y algunas se caian
- * sin aviso. Cada foto se comprime antes de subir y se reintenta hasta
- * MAX_INTENTOS veces ante fallo de red. Lo que aun asi no sube se
- * devuelve en `fallos` con su nombre y el motivo real, para que el
- * formulario pueda decir exactamente que imagen fallo y en que seccion.
+ * varias fotos pesadas a la vez saturan la conexion y algunas se caen.
+ * Cada foto se comprime (mejor esfuerzo; si falla se sube la original) y
+ * se reintenta hasta MAX_INTENTOS veces ante fallo de red. Entre imagen e
+ * imagen hay una pausa corta para que el navegador libere memoria. El
+ * callback `onEstado` permite pintar el progreso por imagen en el
+ * formulario (spinner / chulo verde / X roja).
  */
 
 const MAX_INTENTOS = 3;
 const ESPERA_REINTENTO_MS = 800;
+const PAUSA_ENTRE_IMAGENES_MS = 150;
+
+export type EstadoImagen = "comprimiendo" | "subiendo" | "ok" | "error";
 
 export type ResultadoSubida = {
+  /** URLs publicas de las imagenes subidas, en el mismo orden en que
+   *  aparecen los archivos exitosos dentro de `files`. */
   urls: string[];
-  fallos: { nombre: string; motivo: string }[];
+  /** Un item por archivo que no se pudo subir. Incluye la referencia al
+   *  `File` para que quien llama pueda emparejar sin depender del nombre. */
+  fallos: { file: File; nombre: string; motivo: string }[];
+};
+
+type Opciones = {
+  esperaReintentoMs?: number;
+  pausaEntreImagenesMs?: number;
+  onEstado?: (
+    file: File,
+    estado: EstadoImagen,
+    detalle?: { url?: string; motivo?: string },
+  ) => void;
 };
 
 const esperar = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function subirImagenesProductoCliente(
   files: File[],
-  opciones: { esperaReintentoMs?: number } = {},
+  opciones: Opciones = {},
 ): Promise<ResultadoSubida> {
   const esperaReintentoMs = opciones.esperaReintentoMs ?? ESPERA_REINTENTO_MS;
+  const pausaEntreImagenesMs =
+    opciones.pausaEntreImagenesMs ?? PAUSA_ENTRE_IMAGENES_MS;
+  const onEstado = opciones.onEstado;
+
   const urls: string[] = [];
-  const fallos: { nombre: string; motivo: string }[] = [];
+  const fallos: { file: File; nombre: string; motivo: string }[] = [];
 
   const supabase = createClient();
   const bucket = supabase.storage.from("product-images");
 
-  for (const file of files) {
-    let comprimida: File;
-    try {
-      comprimida = await comprimirImagen(file);
-    } catch (error) {
-      fallos.push({ nombre: file.name, motivo: mensajeDeError(error) });
-      continue;
-    }
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
 
-    const extension = comprimida.name.split(".").pop() ?? "jpg";
+    onEstado?.(file, "comprimiendo");
+    const preparada = await comprimirImagen(file);
+
+    onEstado?.(file, "subiendo");
+    const extension = preparada.name.split(".").pop() ?? "jpg";
     const path = `${crypto.randomUUID()}.${extension}`;
 
     let ultimoMotivo = "No se pudo subir la imagen.";
     let subida = false;
 
     for (let intento = 1; intento <= MAX_INTENTOS; intento++) {
-      const { error: uploadError } = await bucket.upload(path, comprimida);
+      const { error: uploadError } = await bucket.upload(path, preparada);
       if (!uploadError) {
         subida = true;
         break;
@@ -66,16 +85,18 @@ export async function subirImagenesProductoCliente(
     }
 
     if (subida) {
-      urls.push(bucket.getPublicUrl(path).data.publicUrl);
+      const url = bucket.getPublicUrl(path).data.publicUrl;
+      urls.push(url);
+      onEstado?.(file, "ok", { url });
     } else {
-      fallos.push({ nombre: file.name, motivo: ultimoMotivo });
+      fallos.push({ file, nombre: file.name, motivo: ultimoMotivo });
+      onEstado?.(file, "error", { motivo: ultimoMotivo });
+    }
+
+    if (pausaEntreImagenesMs > 0 && i < files.length - 1) {
+      await esperar(pausaEntreImagenesMs);
     }
   }
 
   return { urls, fallos };
-}
-
-function mensajeDeError(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return "No se pudo procesar la imagen.";
 }

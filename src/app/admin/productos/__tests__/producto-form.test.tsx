@@ -35,6 +35,11 @@ const defaultValuesBase = {
   variantes: [],
 } as const;
 
+async function subirMock() {
+  const mod = await import("@/lib/admin/upload-product-images-client");
+  return vi.mocked(mod.subirImagenesProductoCliente);
+}
+
 describe("ProductoForm", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -65,16 +70,14 @@ describe("ProductoForm", () => {
     });
   });
 
-  it("sube las imagenes de cada variante desde el navegador y envia las URLs en el indice correcto al guardar", async () => {
+  it("sube las imagenes de cada variante y envia las URLs en el indice correcto al guardar", async () => {
     const { createProducto } = await import("../actions");
-    const { subirImagenesProductoCliente } = await import(
-      "@/lib/admin/upload-product-images-client"
-    );
     vi.mocked(createProducto).mockResolvedValue({});
-    vi.mocked(subirImagenesProductoCliente).mockImplementation(async (files) => ({
-      urls: files.map((f) => `https://storage.test/${f.name}`),
-      fallos: [],
-    }));
+    (await subirMock()).mockImplementation(async (files, opts) => {
+      const urls = files.map((f) => `https://storage.test/${f.name}`);
+      files.forEach((f, i) => opts?.onEstado?.(f, "ok", { url: urls[i] }));
+      return { urls, fallos: [] };
+    });
 
     render(
       <ProductoForm
@@ -89,31 +92,24 @@ describe("ProductoForm", () => {
       />,
     );
 
-    const inputsDeVariante = document.querySelectorAll('input[type="file"]');
-    const archivoVarianteL = new File(["contenido"], "variante-l.jpg", { type: "image/jpeg" });
-    fireEvent.change(inputsDeVariante[1], { target: { files: [archivoVarianteL] } });
+    const inputs = document.querySelectorAll('input[type="file"]');
+    fireEvent.change(inputs[1], {
+      target: { files: [new File(["c"], "variante-l.jpg", { type: "image/jpeg" })] },
+    });
 
     fireEvent.click(screen.getByRole("button", { name: /guardar/i }));
 
-    await waitFor(() => {
-      expect(createProducto).toHaveBeenCalled();
-    });
+    await waitFor(() => expect(createProducto).toHaveBeenCalled());
 
-    const llamada = vi.mocked(createProducto).mock.calls[0];
-    const variantImageUrlsArg = llamada[2];
+    const variantImageUrlsArg = vi.mocked(createProducto).mock.calls[0][2];
     expect(variantImageUrlsArg[0]).toEqual([]);
     expect(variantImageUrlsArg[1]).toEqual(["https://storage.test/variante-l.jpg"]);
   });
 
-  it("sin onGuardado, navega a /admin/productos al guardar (comportamiento por defecto)", async () => {
-    routerPush.mockClear();
-    routerRefresh.mockClear();
+  it("sin onGuardado, navega a /admin/productos al guardar", async () => {
     const { createProducto } = await import("../actions");
-    const { subirImagenesProductoCliente } = await import(
-      "@/lib/admin/upload-product-images-client"
-    );
     vi.mocked(createProducto).mockResolvedValue({});
-    vi.mocked(subirImagenesProductoCliente).mockResolvedValue({ urls: [], fallos: [] });
+    (await subirMock()).mockResolvedValue({ urls: [], fallos: [] });
 
     render(
       <ProductoForm
@@ -124,21 +120,13 @@ describe("ProductoForm", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /guardar/i }));
 
-    await waitFor(() => {
-      expect(routerPush).toHaveBeenCalledWith("/admin/productos");
-    });
+    await waitFor(() => expect(routerPush).toHaveBeenCalledWith("/admin/productos"));
   });
 
   it("con onGuardado, lo llama en vez de navegar al guardar", async () => {
-    routerPush.mockClear();
-    routerRefresh.mockClear();
     const { createProducto } = await import("../actions");
-    const { subirImagenesProductoCliente } = await import(
-      "@/lib/admin/upload-product-images-client"
-    );
     vi.mocked(createProducto).mockResolvedValue({});
-    vi.mocked(subirImagenesProductoCliente).mockResolvedValue({ urls: [], fallos: [] });
-
+    (await subirMock()).mockResolvedValue({ urls: [], fallos: [] });
     const onGuardado = vi.fn();
 
     render(
@@ -151,23 +139,23 @@ describe("ProductoForm", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /guardar/i }));
 
-    await waitFor(() => {
-      expect(onGuardado).toHaveBeenCalled();
-    });
+    await waitFor(() => expect(onGuardado).toHaveBeenCalled());
     expect(routerPush).not.toHaveBeenCalled();
   });
 
-  it("cuando falla la subida de una variante, muestra el error con la etiqueta de la variante y el nombre del archivo, y no guarda el producto", async () => {
+  it("cuando falla la subida de una variante, muestra la variante, el archivo, la causa y que hacer, y no guarda", async () => {
     const { createProducto } = await import("../actions");
-    const { subirImagenesProductoCliente } = await import(
-      "@/lib/admin/upload-product-images-client"
-    );
     vi.mocked(createProducto).mockResolvedValue({});
-    vi.mocked(subirImagenesProductoCliente).mockImplementation(async (files) =>
-      files.some((f) => f.name === "mala.jpg")
-        ? { urls: [], fallos: [{ nombre: "mala.jpg", motivo: "Payload too large" }] }
-        : { urls: files.map((f) => `https://storage.test/${f.name}`), fallos: [] },
-    );
+    (await subirMock()).mockImplementation(async (files, opts) => {
+      const mala = files.find((f) => f.name === "mala.png");
+      if (mala) {
+        opts?.onEstado?.(mala, "error", { motivo: "Failed to fetch" });
+        return { urls: [], fallos: [{ file: mala, nombre: "mala.png", motivo: "Failed to fetch" }] };
+      }
+      const urls = files.map((f) => `https://storage.test/${f.name}`);
+      files.forEach((f, i) => opts?.onEstado?.(f, "ok", { url: urls[i] }));
+      return { urls, fallos: [] };
+    });
 
     render(
       <ProductoForm
@@ -182,39 +170,42 @@ describe("ProductoForm", () => {
       />,
     );
 
-    const inputsDeVariante = document.querySelectorAll('input[type="file"]');
-    fireEvent.change(inputsDeVariante[1], {
-      target: { files: [new File(["x"], "mala.jpg", { type: "image/jpeg" })] },
+    const inputs = document.querySelectorAll('input[type="file"]');
+    fireEvent.change(inputs[1], {
+      target: { files: [new File(["x"], "mala.png", { type: "image/png" })] },
     });
 
     fireEvent.click(screen.getByRole("button", { name: /guardar/i }));
 
-    await waitFor(() => {
-      expect(screen.getByText(/Variante 2 \(Talla L \/ Rosa\)/)).toBeInTheDocument();
-    });
-    expect(screen.getByText(/mala\.jpg/)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByText(/Variante 2 \(Talla L \/ Rosa\)/)).toBeInTheDocument(),
+    );
+    expect(screen.getByText(/mala\.png/)).toBeInTheDocument();
+    expect(screen.getByText(/conexión/i)).toBeInTheDocument();
+    expect(screen.getByText(/señal|wifi/i)).toBeInTheDocument();
     expect(createProducto).not.toHaveBeenCalled();
   });
 
-  it("al reintentar solo re-sube las imagenes que habian fallado y conserva las que ya subieron", async () => {
+  it("al reintentar solo re-sube las imagenes que fallaron y conserva las que ya subieron", async () => {
     const { createProducto } = await import("../actions");
-    const { subirImagenesProductoCliente } = await import(
-      "@/lib/admin/upload-product-images-client"
-    );
     vi.mocked(createProducto).mockResolvedValue({});
 
     let llamada = 0;
-    vi.mocked(subirImagenesProductoCliente).mockImplementation(async (files) => {
+    (await subirMock()).mockImplementation(async (files, opts) => {
       llamada += 1;
       const nombres = files.map((f) => f.name);
       if (llamada === 1) {
         expect(nombres).toEqual(["a.jpg", "b.jpg"]);
+        const a = files[0];
+        opts?.onEstado?.(a, "ok", { url: "https://storage.test/a.jpg" });
+        opts?.onEstado?.(files[1], "error", { motivo: "network" });
         return {
           urls: ["https://storage.test/a.jpg"],
-          fallos: [{ nombre: "b.jpg", motivo: "network" }],
+          fallos: [{ file: files[1], nombre: "b.jpg", motivo: "network" }],
         };
       }
       expect(nombres).toEqual(["b.jpg"]);
+      opts?.onEstado?.(files[0], "ok", { url: "https://storage.test/b.jpg" });
       return { urls: ["https://storage.test/b.jpg"], fallos: [] };
     });
 
@@ -225,9 +216,7 @@ describe("ProductoForm", () => {
       />,
     );
 
-    const inputGeneral = document.querySelector(
-      'input[type="file"]',
-    ) as HTMLInputElement;
+    const inputGeneral = document.querySelector('input[type="file"]') as HTMLInputElement;
     fireEvent.change(inputGeneral, {
       target: {
         files: [
@@ -238,21 +227,54 @@ describe("ProductoForm", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: /guardar/i }));
-
-    await waitFor(() => {
-      expect(screen.getByText(/b\.jpg/)).toBeInTheDocument();
-    });
+    await waitFor(() => expect(screen.getByText(/b\.jpg/)).toBeInTheDocument());
     expect(createProducto).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: /guardar/i }));
+    await waitFor(() => expect(createProducto).toHaveBeenCalled());
 
-    await waitFor(() => {
-      expect(createProducto).toHaveBeenCalled();
-    });
-    const imageUrlsArg = vi.mocked(createProducto).mock.calls[0][1];
-    expect(imageUrlsArg).toEqual([
+    expect(vi.mocked(createProducto).mock.calls[0][1]).toEqual([
       "https://storage.test/a.jpg",
       "https://storage.test/b.jpg",
     ]);
+  });
+
+  it("muestra el chulo verde en la miniatura de una imagen que ya se subio", async () => {
+    const { createProducto } = await import("../actions");
+    vi.mocked(createProducto).mockResolvedValue({});
+    (await subirMock()).mockImplementation(async (files, opts) => {
+      const buena = files.find((f) => f.name === "buena.jpg");
+      const mala = files.find((f) => f.name === "mala.jpg");
+      if (buena) opts?.onEstado?.(buena, "ok", { url: "https://storage.test/buena.jpg" });
+      if (mala) opts?.onEstado?.(mala, "error", { motivo: "network" });
+      return {
+        urls: buena ? ["https://storage.test/buena.jpg"] : [],
+        fallos: mala ? [{ file: mala, nombre: "mala.jpg", motivo: "network" }] : [],
+      };
+    });
+
+    render(
+      <ProductoForm
+        defaultValues={{ ...defaultValuesBase, variantes: [] }}
+        categoriasDisponibles={[]}
+      />,
+    );
+
+    const inputGeneral = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(inputGeneral, {
+      target: {
+        files: [
+          new File(["1"], "buena.jpg", { type: "image/jpeg" }),
+          new File(["2"], "mala.jpg", { type: "image/jpeg" }),
+        ],
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /guardar/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("status", { name: /subida correcta/i })).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("status", { name: /no se pudo subir/i })).toBeInTheDocument();
   });
 });
