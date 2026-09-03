@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatPrice } from "@/lib/format";
 import { calcularDescuento, precioEfectivo } from "@/lib/store/discount";
 import { obtenerUmbralStockBajo } from "@/lib/admin/low-stock";
+import { ordenarTallas } from "@/lib/admin/ordenar-tallas";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ToggleProductoButton } from "./toggle-producto-button";
@@ -33,6 +34,29 @@ export default async function ProductosPage() {
       : { data: [] as { product_id: string; url: string }[] };
   const imagenPorProducto = new Map(
     (imagenesPrincipales ?? []).map((img) => [img.product_id, img.url]),
+  );
+
+  // Tallas de cada producto, para poder distinguir en la lista cual
+  // editar cuando hay productos con el mismo (o parecido) nombre.
+  const { data: variantesDeProductos } =
+    idsProductos.length > 0
+      ? await supabase
+          .from("product_variants")
+          .select("product_id, talla")
+          .in("product_id", idsProductos)
+      : { data: [] as { product_id: string; talla: string | null }[] };
+  const tallasPorProducto = new Map<string, string[]>();
+  for (const producto of productos ?? []) {
+    const tallas = (variantesDeProductos ?? [])
+      .filter((v) => v.product_id === producto.id)
+      .map((v) => v.talla)
+      .filter((t): t is string => Boolean(t && t.trim()));
+    if (tallas.length > 0) {
+      tallasPorProducto.set(producto.id, ordenarTallas(tallas));
+    }
+  }
+  const productosConVariantes = new Set(
+    (variantesDeProductos ?? []).map((v) => v.product_id),
   );
 
   // Un producto solo se puede borrar si nunca se ha vendido (ni en la
@@ -101,6 +125,23 @@ export default async function ProductosPage() {
                     ? ` · ${categoriaPorId.get(producto.category_id) ?? "—"}`
                     : ""}
                 </p>
+                {tallasPorProducto.has(producto.id) ? (
+                  <div className="flex flex-wrap items-center gap-1">
+                    <span className="text-xs text-brand-ciruela/60">Tallas:</span>
+                    {tallasPorProducto.get(producto.id)!.map((talla) => (
+                      <span
+                        key={talla}
+                        className="rounded border border-brand-rosa-claro px-1.5 py-0.5 text-xs font-medium text-brand-ciruela"
+                      >
+                        {talla}
+                      </span>
+                    ))}
+                  </div>
+                ) : !productosConVariantes.has(producto.id) ? (
+                  <span className="w-fit rounded border border-brand-rosa-claro/60 px-1.5 py-0.5 text-xs text-brand-ciruela/60">
+                    Talla única
+                  </span>
+                ) : null}
                 <div className="flex items-baseline gap-2">
                   <p className="font-heading text-lg text-brand-rosa">
                     {formatPrice(precioMostrado)}
