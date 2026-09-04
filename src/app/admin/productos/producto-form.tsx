@@ -475,19 +475,32 @@ export function ProductoForm({
             </p>
           </div>
         )}
-        <div>
-          <label htmlFor="stock" className="text-sm text-brand-ciruela">
-            Stock
-          </label>
-          <Input
-            id="stock"
-            type="number"
-            {...register("stock", { valueAsNumber: true })}
-          />
-          {errors.stock && (
-            <p className="text-sm text-red-600">{errors.stock.message}</p>
-          )}
-        </div>
+        {fields.length > 0 ? (
+          <div>
+            <label className="text-sm text-brand-ciruela">Stock</label>
+            <p className="flex min-h-10 flex-wrap items-center gap-x-2 text-sm text-brand-ciruela">
+              {existingImages.filter((img) => img.variant_id !== null && !img.vendida).length}{" "}
+              unidades
+              <span className="text-xs text-brand-ciruela/60">
+                — se calcula solo, sumando las fotos disponibles de cada variante
+              </span>
+            </p>
+          </div>
+        ) : (
+          <div>
+            <label htmlFor="stock" className="text-sm text-brand-ciruela">
+              Stock
+            </label>
+            <Input
+              id="stock"
+              type="number"
+              {...register("stock", { valueAsNumber: true })}
+            />
+            {errors.stock && (
+              <p className="text-sm text-red-600">{errors.stock.message}</p>
+            )}
+          </div>
+        )}
         <div className="flex gap-6">
           <label className="flex items-center gap-2 text-sm text-brand-ciruela">
             <input type="checkbox" {...register("isActive")} />
