@@ -231,8 +231,7 @@ describe("createProducto / updateProducto — stock segun variantes", () => {
   });
 
   function mockParaUpdate() {
-    const productsUpdateSpy = vi.fn((payload: Record<string, unknown>) => ({
-      _payload: payload,
+    const productsUpdateSpy = vi.fn<(payload: Record<string, unknown>) => unknown>(() => ({
       eq: () => ({
         select: () => ({ single: () => Promise.resolve({ data: { sku: "SKU-1" }, error: null }) }),
       }),

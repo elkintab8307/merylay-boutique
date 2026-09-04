@@ -477,7 +477,7 @@ export function ProductoForm({
         )}
         {fields.length > 0 ? (
           <div>
-            <label className="text-sm text-brand-ciruela">Stock</label>
+            <span className="text-sm text-brand-ciruela">Stock</span>
             <p className="flex min-h-10 flex-wrap items-center gap-x-2 text-sm text-brand-ciruela">
               {existingImages.filter((img) => img.variant_id !== null && !img.vendida).length}{" "}
               unidades

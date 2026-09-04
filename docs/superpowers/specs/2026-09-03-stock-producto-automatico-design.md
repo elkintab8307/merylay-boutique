@@ -60,11 +60,13 @@ manual — no hay de dónde calcularlo.
 - **`admin/productos/actions.ts`**: `createProducto` inserta
   `stock: parsed.data.stock`; `updateProducto` lo pone en el payload de
   `update`. `updateProducto` **siempre** re-`upsert`ea/inserta/borra las
-  variantes enviadas (via `diffVariantes`), pero el `upsert` de variantes
-  existentes **no** incluye la columna `stock` en su SET — o sea, un
-  `upsert` de variante sin cambios reales **no** dispara
-  `AFTER UPDATE OF stock`. Solo INSERT (variante nueva) y DELETE (variante
-  quitada) disparan el trigger nuevo en un `updateProducto`.
+  variantes enviadas (via `diffVariantes`), y el `upsert` de variantes
+  existentes incluye `product_id` en su SET (ver `actions.ts` ~línea 228)
+  — o sea, cada `upsert` dispara `AFTER UPDATE OF ... product_id` en toda
+  variante existente. En la práctica: `updateProducto` recalcula
+  `products.stock` en **cada guardado** (por el `upsert` de variantes
+  existentes, además del INSERT de variantes nuevas y el DELETE de
+  variantes quitadas), no solo cuando hay INSERT/DELETE.
 - **`products.stock`**: `int not null default 0 check (stock >= 0)`.
 - Migraciones se aplican con el MCP de Supabase
   (`mcp__supabase__apply_migration`), nunca a mano. Los tipos
@@ -247,8 +249,9 @@ pasa a:
   `products` sin la clave `stock` cuando
   `parsed.data.variantes.length > 0`; con `stock: parsed.data.stock`
   cuando no hay variantes. (La columna queda como está; el trigger la
-  mantiene por los INSERT/DELETE de variantes de esta misma llamada, o
-  por las ventas / toggles de foto entre ediciones.)
+  mantiene por el `upsert` de variantes existentes —que incluye
+  `product_id` en su SET— más el INSERT/DELETE de variantes de esta misma
+  llamada, o por las ventas / toggles de foto entre ediciones.)
 - Nada más cambia en estas funciones.
 
 ### Listado de productos (`admin/productos/page.tsx`)
