@@ -8,6 +8,7 @@ import { slugify } from "@/lib/slug";
 import { guardarImagenesProducto } from "@/lib/admin/upload-product-images";
 import { generarSkuVariante } from "@/lib/sku";
 import { diffVariantes } from "@/lib/admin/variant-diff";
+import { debeGuardarStockManual } from "@/lib/admin/stock-producto";
 
 async function uniqueSlug(baseSlug: string, ignoreId?: string) {
   const supabase = await createClient();
@@ -70,7 +71,7 @@ export async function createProducto(
       price: parsed.data.price,
       promo_price: parsed.data.promoPrice,
       sku: skuGenerado,
-      stock: parsed.data.stock,
+      stock: debeGuardarStockManual(parsed.data.variantes.length) ? parsed.data.stock : 0,
       is_active: parsed.data.isActive,
       is_featured: parsed.data.isFeatured,
     })
@@ -164,7 +165,9 @@ export async function updateProducto(
       category_id: parsed.data.categoryId,
       price: parsed.data.price,
       promo_price: parsed.data.promoPrice,
-      stock: parsed.data.stock,
+      ...(debeGuardarStockManual(parsed.data.variantes.length)
+        ? { stock: parsed.data.stock }
+        : {}),
       is_active: parsed.data.isActive,
       is_featured: parsed.data.isFeatured,
     })

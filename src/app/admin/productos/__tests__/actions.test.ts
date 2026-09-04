@@ -145,3 +145,153 @@ describe("toggleImagenVendida", () => {
     expect(resultado).toEqual({ error: expect.any(String) });
   });
 });
+
+describe("createProducto / updateProducto — stock segun variantes", () => {
+  beforeEach(() => {
+    vi.mocked(createClient).mockReset();
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const inputBase = {
+    name: "Pijama test",
+    slug: "pijama-test",
+    description: "",
+    categoryId: null,
+    price: 10000,
+    promoPrice: null,
+    costPrice: null,
+    stock: 9,
+    isActive: true,
+    isFeatured: false,
+    variantes: [] as Array<{ talla?: string; color?: string; priceOverride: number | null }>,
+  };
+
+  function mockParaCreate() {
+    const productsInsertSpy = vi.fn(() => ({
+      select: () => ({ single: () => Promise.resolve({ data: { id: "p1" }, error: null }) }),
+    }));
+    const from = vi.fn((tabla: string) => {
+      if (tabla === "products") {
+        return {
+          // uniqueSlug: select().eq().maybeSingle()  y   select().eq().neq().maybeSingle()
+          select: () => ({
+            eq: () => ({
+              maybeSingle: () => Promise.resolve({ data: null, error: null }),
+              neq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }),
+            }),
+          }),
+          insert: productsInsertSpy,
+        };
+      }
+      if (tabla === "product_variants") {
+        return {
+          insert: () => ({ select: () => Promise.resolve({ data: [{ id: "v1" }], error: null }) }),
+        };
+      }
+      if (tabla === "product_costs") {
+        return { upsert: () => Promise.resolve({ error: null }) };
+      }
+      throw new Error(`tabla inesperada: ${tabla}`);
+    });
+    const rpc = vi.fn(() => Promise.resolve({ data: "SKU-1", error: null }));
+    return { supabase: { from, rpc }, productsInsertSpy };
+  }
+
+  it("createProducto sin variantes escribe el stock del formulario", async () => {
+    const { supabase, productsInsertSpy } = mockParaCreate();
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+    const { createProducto } = await import("../actions");
+
+    await createProducto({ ...inputBase, variantes: [] }, [], []);
+
+    expect(productsInsertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ stock: 9 }),
+    );
+  });
+
+  it("createProducto con variantes escribe stock 0 (lo calcula el trigger)", async () => {
+    const { supabase, productsInsertSpy } = mockParaCreate();
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+    const { createProducto } = await import("../actions");
+
+    await createProducto(
+      {
+        ...inputBase,
+        variantes: [{ talla: "M", color: "Rosa", priceOverride: null }],
+      },
+      [],
+      [],
+    );
+
+    expect(productsInsertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ stock: 0 }),
+    );
+  });
+
+  function mockParaUpdate() {
+    const productsUpdateSpy = vi.fn<(payload: Record<string, unknown>) => unknown>(() => ({
+      eq: () => ({
+        select: () => ({ single: () => Promise.resolve({ data: { sku: "SKU-1" }, error: null }) }),
+      }),
+    }));
+    const from = vi.fn((tabla: string) => {
+      if (tabla === "products") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: () => Promise.resolve({ data: null, error: null }),
+              neq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }),
+            }),
+          }),
+          update: productsUpdateSpy,
+        };
+      }
+      if (tabla === "product_variants") {
+        return {
+          select: () => ({ eq: () => Promise.resolve({ data: [], error: null }) }),
+          insert: () => ({ select: () => Promise.resolve({ data: [{ id: "v1" }], error: null }) }),
+          upsert: () => Promise.resolve({ error: null }),
+          delete: () => ({ in: () => Promise.resolve({ error: null }) }),
+        };
+      }
+      if (tabla === "product_costs") {
+        return { upsert: () => Promise.resolve({ error: null }) };
+      }
+      throw new Error(`tabla inesperada: ${tabla}`);
+    });
+    return { supabase: { from, rpc: vi.fn() }, productsUpdateSpy };
+  }
+
+  it("updateProducto sin variantes incluye stock en el update", async () => {
+    const { supabase, productsUpdateSpy } = mockParaUpdate();
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+    const { updateProducto } = await import("../actions");
+
+    await updateProducto("p1", { ...inputBase, variantes: [] }, [], []);
+
+    expect(productsUpdateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ stock: 9 }),
+    );
+  });
+
+  it("updateProducto con variantes NO incluye stock en el update", async () => {
+    const { supabase, productsUpdateSpy } = mockParaUpdate();
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+    const { updateProducto } = await import("../actions");
+
+    await updateProducto(
+      "p1",
+      {
+        ...inputBase,
+        variantes: [{ talla: "M", color: "Rosa", priceOverride: null }],
+      },
+      [],
+      [],
+    );
+
+    const payload = productsUpdateSpy.mock.calls[0][0] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty("stock");
+  });
+});

@@ -277,4 +277,39 @@ describe("ProductoForm", () => {
     );
     expect(screen.getByRole("status", { name: /no se pudo subir/i })).toBeInTheDocument();
   });
+
+  it("con variantes muestra el stock calculado de solo lectura y no el input", () => {
+    render(
+      <ProductoForm
+        defaultValues={{
+          ...defaultValuesBase,
+          variantes: [
+            { talla: "M", color: "Rosa", priceOverride: null },
+            { talla: "L", color: "Rosa", priceOverride: null },
+          ],
+        }}
+        categoriasDisponibles={[]}
+        imagenesExistentes={[
+          { id: "i1", url: "u1", is_primary: true, variant_id: "v1", vendida: false },
+          { id: "i2", url: "u2", is_primary: false, variant_id: "v1", vendida: true },
+          { id: "i3", url: "u3", is_primary: false, variant_id: "v2", vendida: false },
+        ]}
+      />,
+    );
+
+    // 2 fotos no vendidas de variante => "2 unidades"
+    expect(screen.getByText(/2 unidades/)).toBeInTheDocument();
+    expect(screen.getByText(/se calcula solo/i)).toBeInTheDocument();
+    expect(document.querySelector("#stock")).not.toBeInTheDocument();
+  });
+
+  it("sin variantes muestra el input de stock editable", () => {
+    render(
+      <ProductoForm
+        defaultValues={{ ...defaultValuesBase, variantes: [] }}
+        categoriasDisponibles={[]}
+      />,
+    );
+    expect(document.querySelector("#stock")).toBeInTheDocument();
+  });
 });
