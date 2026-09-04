@@ -60,6 +60,18 @@
   --shadow-brand-md: 0 6px 16px rgb(110 42 68 / 0.12), 0 2px 6px rgb(110 42 68 / 0.08);
   --shadow-brand-lg: 0 16px 32px rgb(110 42 68 / 0.14), 0 6px 12px rgb(110 42 68 / 0.10);
   --animate-caer-nieve: caer-nieve 8s linear infinite;
+  --animate-marquesina: marquesina 32s linear infinite;
+}
+
+/* Marquesina de la franja promocional: la pista se renderiza 2 veces y
+   -50% equivale al ancho de una copia, asi el bucle no salta. */
+@keyframes marquesina {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
 }
 
 @keyframes caer-nieve {

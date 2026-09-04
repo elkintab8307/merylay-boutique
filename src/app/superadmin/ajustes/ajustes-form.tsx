@@ -93,17 +93,31 @@ export function AjustesForm({
             <p className="text-sm text-red-600">{errors.direccion.message}</p>
           )}
         </div>
-        <div>
-          <label
-            htmlFor="mensajePromocional"
-            className="text-sm text-brand-ciruela"
-          >
-            Mensaje promocional
-          </label>
-          <Input id="mensajePromocional" {...register("mensajePromocional")} />
-          {errors.mensajePromocional && (
+        <div className="flex flex-col gap-2">
+          <span className="text-sm text-brand-ciruela">
+            Frases de la franja superior (marquesina)
+          </span>
+          <p className="text-xs text-brand-ciruela/60">
+            Se muestran rotando en la franja de arriba de la tienda, separadas
+            por el símbolo ♠. Puedes dejar frases vacías.
+          </p>
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i}>
+              <label
+                htmlFor={`frasePromocional-${i}`}
+                className="text-xs text-brand-ciruela/70"
+              >
+                Frase {i + 1}
+              </label>
+              <Input
+                id={`frasePromocional-${i}`}
+                {...register(`frasesPromocionales.${i}` as const)}
+              />
+            </div>
+          ))}
+          {errors.frasesPromocionales && (
             <p className="text-sm text-red-600">
-              {errors.mensajePromocional.message}
+              Revisa las frases de la franja superior.
             </p>
           )}
         </div>
