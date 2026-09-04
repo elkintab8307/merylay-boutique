@@ -7,7 +7,7 @@ const base = {
   contactoTelefono: "3001234567",
   envioCostoDefecto: 15000,
   direccion: "Calle 10 #20-30, Bogotá",
-  mensajePromocional: "",
+  frasesPromocionales: ["", "", "", ""],
   redesInstagram: "",
   redesFacebook: "",
   redesTiktok: "",
@@ -70,6 +70,38 @@ describe("storeSettingsSchema", () => {
 
   it("rechaza un nombre de tienda demasiado corto", () => {
     const result = storeSettingsSchema.safeParse({ ...base, nombreTienda: "M" });
+    expect(result.success).toBe(false);
+  });
+
+  it("acepta exactamente 4 frases promocionales y recorta espacios", () => {
+    const result = storeSettingsSchema.safeParse({
+      ...base,
+      frasesPromocionales: [
+        "  Domicilios Gratis en Armenia  ",
+        "Nuevas Colecciones Cada Semana",
+        "",
+        "",
+      ],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.frasesPromocionales[0]).toBe("Domicilios Gratis en Armenia");
+    }
+  });
+
+  it("rechaza menos de 4 frases promocionales", () => {
+    const result = storeSettingsSchema.safeParse({
+      ...base,
+      frasesPromocionales: ["Una", "Dos", "Tres"],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rechaza más de 4 frases promocionales", () => {
+    const result = storeSettingsSchema.safeParse({
+      ...base,
+      frasesPromocionales: ["Una", "Dos", "Tres", "Cuatro", "Cinco"],
+    });
     expect(result.success).toBe(false);
   });
 

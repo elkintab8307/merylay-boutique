@@ -46,9 +46,11 @@ export default async function AjustesPage() {
       valueByKey.get(STORE_SETTINGS_KEYS.envioCostoDefecto) ?? 0,
     ),
     direccion: String(valueByKey.get(STORE_SETTINGS_KEYS.direccion) ?? ""),
-    mensajePromocional: String(
-      valueByKey.get(STORE_SETTINGS_KEYS.mensajePromocional) ?? "",
-    ),
+    frasesPromocionales: (() => {
+      const raw = valueByKey.get(STORE_SETTINGS_KEYS.frasesPromocionales);
+      const arr = Array.isArray(raw) ? raw.map((f) => String(f)) : [];
+      return [arr[0] ?? "", arr[1] ?? "", arr[2] ?? "", arr[3] ?? ""];
+    })(),
     stockBajoUmbral: Number(
       valueByKey.get(STORE_SETTINGS_KEYS.stockBajoUmbral) ?? 5,
     ),
