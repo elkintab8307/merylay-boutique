@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import { LightboxImagenes } from "@/components/store/lightbox-imagenes";
 
 export function ProductGallery({
   images,
@@ -15,6 +16,7 @@ export function ProductGallery({
   onSelectVariant?: (variantId: string | null) => void;
 }) {
   const [selected, setSelected] = useState(0);
+  const [lightboxIndice, setLightboxIndice] = useState<number | null>(null);
   // Ajuste de estado durante el render (en vez de useEffect) para resetear
   // la miniatura seleccionada solo cuando cambia la IDENTIDAD de la variante
   // seleccionada, no en cada render (el array `images` cambia de referencia
@@ -43,14 +45,19 @@ export function ProductGallery({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-brand-rosa-claro">
+      <button
+        type="button"
+        aria-label="Ver imagen ampliada"
+        onClick={() => setLightboxIndice(activeIndex)}
+        className="relative aspect-square w-full cursor-zoom-in overflow-hidden rounded-lg bg-brand-rosa-claro"
+      >
         <Image
           src={images[activeIndex].url}
           alt={images[activeIndex].alt ?? productName}
           fill
           className="object-contain"
         />
-      </div>
+      </button>
       {images.length > 1 && (
         <div className="flex gap-2">
           {images.map((image, index) => (
@@ -74,6 +81,14 @@ export function ProductGallery({
             </button>
           ))}
         </div>
+      )}
+      {lightboxIndice !== null && (
+        <LightboxImagenes
+          images={images.map((img) => ({ url: img.url, alt: img.alt }))}
+          indiceInicial={lightboxIndice}
+          productName={productName}
+          onClose={() => setLightboxIndice(null)}
+        />
       )}
     </div>
   );
