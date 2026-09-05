@@ -47,6 +47,15 @@ describe("ordenarImagenesTarjeta", () => {
     expect(r).toEqual(["u0", "u1", "u2", "u3", "u4"]);
   });
 
+  it("desempata de forma estable por url cuando el sort_order coincide", () => {
+    const entrada = [
+      img({ url: "zeta", sortOrder: 1 }),
+      img({ url: "alfa", sortOrder: 1 }),
+    ];
+    expect(ordenarImagenesTarjeta(entrada)).toEqual(["alfa", "zeta"]);
+    expect(ordenarImagenesTarjeta([...entrada].reverse())).toEqual(["alfa", "zeta"]);
+  });
+
   it("lista vacia -> []", () => {
     expect(ordenarImagenesTarjeta([])).toEqual([]);
   });

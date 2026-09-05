@@ -96,6 +96,11 @@ describe("useCarruselTactil", () => {
     return { ...r, apiRef };
   }
 
+  it("arranca en indiceInicial", () => {
+    const { apiRef } = montar({ total: 4, indiceInicial: 2 });
+    expect(apiRef.current!.indice).toBe(2);
+  });
+
   it("irA(i) actualiza el indice y llama scrollTo con el offset del slide", () => {
     const { apiRef } = montar({ total: 4 });
     act(() => apiRef.current!.irA(2));

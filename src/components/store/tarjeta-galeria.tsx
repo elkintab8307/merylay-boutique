@@ -24,7 +24,15 @@ export function TarjetaGaleria({ images, alt }: { images: string[]; alt: string 
   }
 
   if (images.length === 1) {
-    return <Image src={images[0]} alt={alt} fill className="object-contain" />;
+    return (
+      <Image
+        src={images[0]}
+        alt={alt}
+        fill
+        className="object-contain"
+        sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
+      />
+    );
   }
 
   return (
@@ -35,7 +43,13 @@ export function TarjetaGaleria({ images, alt }: { images: string[]; alt: string 
       >
         {images.map((url, i) => (
           <div key={url + i} className="relative h-full w-full shrink-0 snap-start">
-            <Image src={url} alt={alt} fill className="object-contain" />
+            <Image
+              src={url}
+              alt={alt}
+              fill
+              className="object-contain"
+              sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
+            />
           </div>
         ))}
       </div>

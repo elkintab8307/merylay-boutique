@@ -28,17 +28,23 @@ export function useCarruselTactil({
   total,
   autoAvanceMs,
   desfaseInicialMs = 0,
+  indiceInicial = 0,
 }: {
   total: number;
   autoAvanceMs?: number;
   desfaseInicialMs?: number;
+  indiceInicial?: number;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
-  const [indice, setIndice] = useState(0);
+  const indiceInicialClamp = Math.min(
+    Math.max(indiceInicial, 0),
+    Math.max(total - 1, 0),
+  );
+  const [indice, setIndice] = useState(indiceInicialClamp);
 
   // Copia de `indice` en un ref para leerlo desde timers/eventos sin
   // recrear callbacks. Se sincroniza en un efecto (nunca durante el render).
-  const indiceRef = useRef(0);
+  const indiceRef = useRef(indiceInicialClamp);
   useEffect(() => {
     indiceRef.current = indice;
   }, [indice]);
@@ -117,14 +123,8 @@ export function useCarruselTactil({
       intervalo = setInterval(tick, autoAvanceMs);
     }, autoAvanceMs + desfaseInicialMs);
 
-    const onVis = () => {
-      /* el propio tick chequea document.visibilityState */
-    };
-    document.addEventListener("visibilitychange", onVis);
-
     return () => {
       io.disconnect();
-      document.removeEventListener("visibilitychange", onVis);
       if (arranque) clearTimeout(arranque);
       if (intervalo) clearInterval(intervalo);
     };

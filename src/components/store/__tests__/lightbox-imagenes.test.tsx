@@ -56,18 +56,39 @@ describe("LightboxImagenes", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it("clic en el fondo cierra, pero clic en la imagen NO", () => {
+  it("tocar una diapositiva cierra el lightbox", () => {
+    const onClose = vi.fn();
+    render(
+      <LightboxImagenes images={imgs} indiceInicial={0} productName="Pijama" onClose={onClose} />,
+    );
+    const slide = document.body.querySelectorAll("[data-slide]")[0];
+    fireEvent.click(slide);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("el boton Cerrar no dispara un cierre doble", () => {
     const onClose = vi.fn();
     render(<LightboxImagenes images={imgs} indiceInicial={0} productName="Pijama" onClose={onClose} />);
-    fireEvent.click(screen.getByRole("dialog"));
+    fireEvent.click(screen.getByRole("button", { name: /cerrar/i }));
     expect(onClose).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getAllByRole("img")[0]);
-    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("el boton Siguiente no cierra", () => {
+    const onClose = vi.fn();
+    render(<LightboxImagenes images={imgs} indiceInicial={0} productName="Pijama" onClose={onClose} />);
+    fireEvent.click(screen.getByRole("button", { name: /siguiente/i }));
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it("el boton siguiente avanza el contador", () => {
     render(<LightboxImagenes images={imgs} indiceInicial={0} productName="Pijama" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /siguiente/i }));
+    expect(screen.getByText("2 / 3")).toBeInTheDocument();
+  });
+
+  it("ArrowRight avanza el contador", () => {
+    render(<LightboxImagenes images={imgs} indiceInicial={0} productName="Pijama" onClose={vi.fn()} />);
+    fireEvent.keyDown(document, { key: "ArrowRight" });
     expect(screen.getByText("2 / 3")).toBeInTheDocument();
   });
 

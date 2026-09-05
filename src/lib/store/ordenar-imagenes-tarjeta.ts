@@ -17,7 +17,8 @@ export function ordenarImagenesTarjeta(imagenes: ImagenTarjeta[]): string[] {
     .filter((img) => !img.vendida)
     .sort((a, b) => {
       if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1;
-      return a.sortOrder - b.sortOrder;
+      if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+      return a.url.localeCompare(b.url);
     })
     .slice(0, MAX_IMAGENES_TARJETA)
     .map((img) => img.url);

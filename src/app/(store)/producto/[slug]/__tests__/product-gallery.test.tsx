@@ -42,4 +42,11 @@ describe("ProductGallery — lightbox", () => {
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
+
+  it("al cerrar el lightbox el foco vuelve a la imagen grande", () => {
+    render(<ProductGallery images={images} productName="Pijama" />);
+    fireEvent.click(screen.getByRole("button", { name: /ver imagen ampliada/i }));
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.getByRole("button", { name: /ver imagen ampliada/i })).toHaveFocus();
+  });
 });
