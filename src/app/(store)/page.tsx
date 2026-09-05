@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { ProductCard, type ProductCardData } from "@/components/store/product-card";
 import { productoAgotado } from "@/lib/store/stock";
+import { ordenarImagenesTarjeta } from "@/lib/store/ordenar-imagenes-tarjeta";
 import { HeroSection } from "@/components/store/hero-section";
 import { BenefitsBar } from "@/components/store/benefits-bar";
 import { FeaturedCategories } from "@/components/store/featured-categories";
@@ -79,10 +80,17 @@ export default async function HomePage() {
     productoIds.length > 0
       ? supabase
           .from("product_images")
-          .select("product_id, url")
+          .select("product_id, url, sort_order, is_primary, vendida")
           .in("product_id", productoIds)
-          .eq("is_primary", true)
-      : Promise.resolve({ data: [] as { product_id: string; url: string }[] }),
+      : Promise.resolve({
+          data: [] as {
+            product_id: string;
+            url: string;
+            sort_order: number;
+            is_primary: boolean;
+            vendida: boolean;
+          }[],
+        }),
     user && productoIds.length > 0
       ? supabase
           .from("favorites")
@@ -92,7 +100,20 @@ export default async function HomePage() {
       : Promise.resolve({ data: [] as { product_id: string }[] }),
   ]);
 
-  const imagenPorProducto = new Map((imagenes ?? []).map((img) => [img.product_id, img.url]));
+  const imagenesPorProducto = new Map<
+    string,
+    { url: string; sortOrder: number; isPrimary: boolean; vendida: boolean }[]
+  >();
+  for (const img of imagenes ?? []) {
+    const lista = imagenesPorProducto.get(img.product_id) ?? [];
+    lista.push({
+      url: img.url,
+      sortOrder: img.sort_order,
+      isPrimary: img.is_primary,
+      vendida: img.vendida,
+    });
+    imagenesPorProducto.set(img.product_id, lista);
+  }
   const favoritosSet = new Set((favoritos ?? []).map((f) => f.product_id));
 
   const tallasPorProducto = new Map<string, string[]>();
@@ -113,7 +134,7 @@ export default async function HomePage() {
     name: p.name,
     price: p.price,
     promoPrice: p.promo_price,
-    imageUrl: imagenPorProducto.get(p.id) ?? null,
+    imageUrls: ordenarImagenesTarjeta(imagenesPorProducto.get(p.id) ?? []),
     tallas: tallasPorProducto.get(p.id) ?? [],
   }));
 

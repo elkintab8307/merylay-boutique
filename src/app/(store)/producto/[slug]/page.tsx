@@ -6,6 +6,7 @@ import type { ImagenProducto } from "@/lib/store/variant-images";
 import { Breadcrumbs, type BreadcrumbItem } from "@/components/store/breadcrumbs";
 import { RelatedProducts } from "@/components/store/related-products";
 import type { ProductCardData } from "@/components/store/product-card";
+import { ordenarImagenesTarjeta } from "@/lib/store/ordenar-imagenes-tarjeta";
 
 export default async function ProductoPage({
   params,
@@ -122,10 +123,17 @@ export default async function ProductoPage({
       relacionadosIds.length > 0
         ? supabase
             .from("product_images")
-            .select("product_id, url")
+            .select("product_id, url, sort_order, is_primary, vendida")
             .in("product_id", relacionadosIds)
-            .eq("is_primary", true)
-        : Promise.resolve({ data: [] as { product_id: string; url: string }[] }),
+        : Promise.resolve({
+            data: [] as {
+              product_id: string;
+              url: string;
+              sort_order: number;
+              is_primary: boolean;
+              vendida: boolean;
+            }[],
+          }),
       user && relacionadosIds.length > 0
         ? supabase
             .from("favorites")
@@ -141,9 +149,20 @@ export default async function ProductoPage({
         : Promise.resolve({ data: [] as { product_id: string; talla: string | null }[] }),
     ]);
 
-  const imagenPorRelacionado = new Map(
-    (imagenesRelacionados ?? []).map((img) => [img.product_id, img.url]),
-  );
+  const imagenesPorRelacionado = new Map<
+    string,
+    { url: string; sortOrder: number; isPrimary: boolean; vendida: boolean }[]
+  >();
+  for (const img of imagenesRelacionados ?? []) {
+    const lista = imagenesPorRelacionado.get(img.product_id) ?? [];
+    lista.push({
+      url: img.url,
+      sortOrder: img.sort_order,
+      isPrimary: img.is_primary,
+      vendida: img.vendida,
+    });
+    imagenesPorRelacionado.set(img.product_id, lista);
+  }
   const favoritosRelacionadosSet = new Set(
     (favoritosRelacionados ?? []).map((f) => f.product_id),
   );
@@ -165,7 +184,7 @@ export default async function ProductoPage({
     name: p.name,
     price: p.price,
     promoPrice: p.promo_price,
-    imageUrl: imagenPorRelacionado.get(p.id) ?? null,
+    imageUrls: ordenarImagenesTarjeta(imagenesPorRelacionado.get(p.id) ?? []),
     tallas: tallasPorRelacionado.get(p.id) ?? [],
   }));
 

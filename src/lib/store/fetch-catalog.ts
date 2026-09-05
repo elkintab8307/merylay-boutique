@@ -2,6 +2,7 @@ import type { createClient } from "@/lib/supabase/server";
 import { getVariantOptions } from "./variants";
 import { calcularDescuento } from "./discount";
 import { productoAgotado } from "./stock";
+import { ordenarImagenesTarjeta } from "@/lib/store/ordenar-imagenes-tarjeta";
 import type { ProductCardData } from "@/components/store/product-card";
 
 export type FetchCatalogParams = {
@@ -127,10 +128,17 @@ export async function fetchCatalogProducts(
     idsFiltrados.length > 0
       ? supabase
           .from("product_images")
-          .select("product_id, url")
+          .select("product_id, url, sort_order, is_primary, vendida")
           .in("product_id", idsFiltrados)
-          .eq("is_primary", true)
-      : Promise.resolve({ data: [] as { product_id: string; url: string }[] }),
+      : Promise.resolve({
+          data: [] as {
+            product_id: string;
+            url: string;
+            sort_order: number;
+            is_primary: boolean;
+            vendida: boolean;
+          }[],
+        }),
     userId && idsFiltrados.length > 0
       ? supabase
           .from("favorites")
@@ -140,7 +148,20 @@ export async function fetchCatalogProducts(
       : Promise.resolve({ data: [] as { product_id: string }[] }),
   ]);
 
-  const imagenPorProducto = new Map((imagenes ?? []).map((img) => [img.product_id, img.url]));
+  const imagenesPorProducto = new Map<
+    string,
+    { url: string; sortOrder: number; isPrimary: boolean; vendida: boolean }[]
+  >();
+  for (const img of imagenes ?? []) {
+    const lista = imagenesPorProducto.get(img.product_id) ?? [];
+    lista.push({
+      url: img.url,
+      sortOrder: img.sort_order,
+      isPrimary: img.is_primary,
+      vendida: img.vendida,
+    });
+    imagenesPorProducto.set(img.product_id, lista);
+  }
   const tallasPorProducto = new Map<string, string[]>();
   for (const variante of variantes ?? []) {
     if (!variante.talla || !idsFiltrados.includes(variante.product_id)) continue;
@@ -160,7 +181,7 @@ export async function fetchCatalogProducts(
     name: p.name,
     price: p.price,
     promoPrice: p.promo_price,
-    imageUrl: imagenPorProducto.get(p.id) ?? null,
+    imageUrls: ordenarImagenesTarjeta(imagenesPorProducto.get(p.id) ?? []),
     tallas: tallasPorProducto.get(p.id) ?? [],
   }));
 
