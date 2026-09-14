@@ -70,6 +70,10 @@ export default async function EditarProductoPage({
             talla: v.talla ?? "",
             color: v.color ?? "",
             priceOverride: v.price_override,
+            // Placeholder: Task 5 calcula esto con esNuevaColeccionActiva()
+            // a partir de nueva_coleccion_desde y pasa
+            // nuevaColeccionInfoPorVariante para las ya vencidas.
+            nuevaColeccion: false,
           })),
         }}
         categoriasDisponibles={categorias ?? []}

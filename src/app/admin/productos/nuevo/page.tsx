@@ -24,7 +24,7 @@ export default async function NuevoProductoPage() {
           isActive: true,
           isFeatured: false,
           variantes: [
-            { talla: "", color: "", priceOverride: null },
+            { talla: "", color: "", priceOverride: null, nuevaColeccion: false },
           ],
         }}
         categoriasDisponibles={categorias ?? []}

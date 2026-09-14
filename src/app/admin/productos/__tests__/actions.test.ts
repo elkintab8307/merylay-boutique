@@ -165,7 +165,12 @@ describe("createProducto / updateProducto — stock segun variantes", () => {
     stock: 9,
     isActive: true,
     isFeatured: false,
-    variantes: [] as Array<{ talla?: string; color?: string; priceOverride: number | null }>,
+    variantes: [] as Array<{
+      talla?: string;
+      color?: string;
+      priceOverride: number | null;
+      nuevaColeccion: boolean;
+    }>,
   };
 
   function mockParaCreate() {
@@ -219,7 +224,7 @@ describe("createProducto / updateProducto — stock segun variantes", () => {
     await createProducto(
       {
         ...inputBase,
-        variantes: [{ talla: "M", color: "Rosa", priceOverride: null }],
+        variantes: [{ talla: "M", color: "Rosa", priceOverride: null, nuevaColeccion: false }],
       },
       [],
       [],
@@ -285,7 +290,7 @@ describe("createProducto / updateProducto — stock segun variantes", () => {
       "p1",
       {
         ...inputBase,
-        variantes: [{ talla: "M", color: "Rosa", priceOverride: null }],
+        variantes: [{ talla: "M", color: "Rosa", priceOverride: null, nuevaColeccion: false }],
       },
       [],
       [],
