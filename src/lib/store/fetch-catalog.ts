@@ -15,6 +15,11 @@ export type FetchCatalogParams = {
   sort: { key: string; column: "is_featured" | "price" | "created_at"; ascending: boolean };
   userId: string | null;
   soloPromociones?: boolean;
+  /** Recorta la cantidad de productos devueltos (p. ej. los carruseles por
+   *  categoria del home, que muestran como maximo 10). No garantiza esa
+   *  cantidad exacta: el recorte ocurre antes del filtro de stock/promocion,
+   *  asi que un producto agotado dentro del recorte simplemente no aparece. */
+  limit?: number;
 };
 
 export type CatalogResult = {
@@ -38,6 +43,7 @@ export async function fetchCatalogProducts(
     sort,
     userId,
     soloPromociones,
+    limit,
   } = params;
 
   let query = supabase
@@ -62,7 +68,8 @@ export async function fetchCatalogProducts(
     .order(sort.column, { ascending: sort.ascending })
     .order("created_at", { ascending: false });
 
-  const { data: productosBase } = await query;
+  const { data } = await query;
+  const productosBase = limit !== undefined ? (data ?? []).slice(0, limit) : (data ?? []);
 
   const productosEnPromocion = soloPromociones
     ? (productosBase ?? []).filter(
