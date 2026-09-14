@@ -9,6 +9,7 @@ import { guardarImagenesProducto } from "@/lib/admin/upload-product-images";
 import { generarSkuVariante } from "@/lib/sku";
 import { diffVariantes } from "@/lib/admin/variant-diff";
 import { debeGuardarStockManual } from "@/lib/admin/stock-producto";
+import { resolverNuevaColeccionDesde } from "@/lib/admin/nueva-coleccion";
 
 async function uniqueSlug(baseSlug: string, ignoreId?: string) {
   const supabase = await createClient();
@@ -94,6 +95,7 @@ export async function createProducto(
           color: variante.color || null,
           sku: generarSkuVariante(skuGenerado, variante.talla || null, variante.color || null),
           price_override: variante.priceOverride,
+          nueva_coleccion_desde: resolverNuevaColeccionDesde(null, variante.nuevaColeccion),
         })),
       )
       .select("id");
@@ -181,7 +183,7 @@ export async function updateProducto(
 
   const { data: variantesExistentes, error: variantesExistentesError } = await supabase
     .from("product_variants")
-    .select("id")
+    .select("id, nueva_coleccion_desde")
     .eq("product_id", id);
 
   if (variantesExistentesError) {
@@ -191,6 +193,9 @@ export async function updateProducto(
   }
 
   const idsExistentes = (variantesExistentes ?? []).map((v) => v.id);
+  const nuevaColeccionDesdePorId = new Map(
+    (variantesExistentes ?? []).map((v) => [v.id, v.nueva_coleccion_desde]),
+  );
 
   const diff = diffVariantes(parsed.data.variantes, idsExistentes);
 
@@ -235,6 +240,10 @@ export async function updateProducto(
           item.variante.color || null,
         ),
         price_override: item.variante.priceOverride,
+        nueva_coleccion_desde: resolverNuevaColeccionDesde(
+          nuevaColeccionDesdePorId.get(item.id) ?? null,
+          item.variante.nuevaColeccion,
+        ),
       })),
       { onConflict: "id" },
     );
@@ -263,6 +272,7 @@ export async function updateProducto(
             item.variante.color || null,
           ),
           price_override: item.variante.priceOverride,
+          nueva_coleccion_desde: resolverNuevaColeccionDesde(null, item.variante.nuevaColeccion),
         })),
       )
       .select("id");
