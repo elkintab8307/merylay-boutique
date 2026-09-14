@@ -1,13 +1,17 @@
 import { createClient } from "@/lib/supabase/server";
 import { ProductCard, type ProductCardData } from "@/components/store/product-card";
+import { CarruselCategoria } from "@/components/store/carrusel-categoria";
 import { productoAgotado } from "@/lib/store/stock";
 import { ordenarImagenesTarjeta } from "@/lib/store/ordenar-imagenes-tarjeta";
+import { fetchCatalogProducts } from "@/lib/store/fetch-catalog";
 import { HeroSection } from "@/components/store/hero-section";
 import { BenefitsBar } from "@/components/store/benefits-bar";
 import { FeaturedCategories } from "@/components/store/featured-categories";
 import { CollectionBanners } from "@/components/store/collection-banners";
 import { ReviewsSection, type ReviewItem } from "@/components/store/reviews-section";
 import { parseHeroStored, bannersStoredSchema } from "@/lib/validation/home-contenido";
+
+const PRODUCTOS_POR_CARRUSEL_CATEGORIA = 10;
 
 export default async function HomePage() {
   const supabase = await createClient();
@@ -138,6 +142,28 @@ export default async function HomePage() {
     tallas: tallasPorProducto.get(p.id) ?? [],
   }));
 
+  const carruselesCategoria = (
+    await Promise.all(
+      (categorias ?? []).map(async (categoria) => {
+        const resultado = await fetchCatalogProducts(supabase, {
+          categoryId: categoria.id,
+          tallas: [],
+          colores: [],
+          sort: { key: "recientes", column: "created_at", ascending: false },
+          userId: user?.id ?? null,
+          limit: PRODUCTOS_POR_CARRUSEL_CATEGORIA,
+        });
+        return {
+          id: categoria.id,
+          titulo: categoria.name,
+          verTodosHref: `/categoria/${categoria.slug}`,
+          productos: resultado.productos,
+          favoritosSet: resultado.favoritosSet,
+        };
+      }),
+    )
+  ).filter((c) => c.productos.length > 0);
+
   const settingsByKey = new Map((settingsRows ?? []).map((r) => [r.key, r.value]));
   const hero = parseHeroStored(settingsByKey.get("home_hero"));
   const bannersParsed = bannersStoredSchema.safeParse(settingsByKey.get("home_banners"));
@@ -160,7 +186,16 @@ export default async function HomePage() {
           .filter((c) => c.is_featured)
           .map((c) => ({ id: c.id, name: c.name, slug: c.slug, imageUrl: c.image_url }))}
       />
-      <CollectionBanners banners={banners} />
+      {carruselesCategoria.map((carrusel) => (
+        <CarruselCategoria
+          key={carrusel.id}
+          titulo={carrusel.titulo}
+          verTodosHref={carrusel.verTodosHref}
+          productos={carrusel.productos}
+          currentUserId={user?.id ?? null}
+          favoritosSet={carrusel.favoritosSet}
+        />
+      ))}
 
       {productos.length > 0 && (
         <section className="flex flex-col gap-6">
@@ -177,6 +212,8 @@ export default async function HomePage() {
           </div>
         </section>
       )}
+
+      <CollectionBanners banners={banners} />
 
       <ReviewsSection resenas={resenas} />
     </main>
