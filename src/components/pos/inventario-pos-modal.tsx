@@ -251,6 +251,7 @@ export function InventarioPosModal({
                   defaultValues={vista.producto.defaultValues}
                   categoriasDisponibles={categorias}
                   imagenesExistentes={vista.producto.imagenesExistentes}
+                  nuevaColeccionInfoPorVariante={vista.producto.nuevaColeccionInfoPorVariante}
                   onGuardado={handleGuardado}
                 />
               )}

@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/admin/require-admin";
 import { createClient } from "@/lib/supabase/server";
 import { generarCodigoBarras, generarCodigoQr } from "@/lib/codigos";
 import { obtenerUmbralStockBajo } from "@/lib/admin/low-stock";
+import { esNuevaColeccionActiva, diasDesdeExpiracion } from "@/lib/admin/nueva-coleccion";
 import type { ProductoInput } from "@/lib/validation/producto";
 
 export type InventarioProductoResumen = {
@@ -102,6 +103,7 @@ export type InventarioProductoParaEditar = {
     variant_id: string | null;
     vendida: boolean;
   }[];
+  nuevaColeccionInfoPorVariante: Record<string, { expiroHaceDias: number }>;
 };
 
 export async function obtenerProductoParaEditar(
@@ -119,7 +121,7 @@ export async function obtenerProductoParaEditar(
     await Promise.all([
       supabase
         .from("product_variants")
-        .select("id, talla, color, price_override")
+        .select("id, talla, color, price_override, nueva_coleccion_desde")
         .eq("product_id", id),
       supabase
         .from("product_images")
@@ -130,6 +132,14 @@ export async function obtenerProductoParaEditar(
       generarCodigoBarras(producto.sku),
       generarCodigoQr(producto.sku),
     ]);
+
+  const nuevaColeccionInfoPorVariante: Record<string, { expiroHaceDias: number }> = {};
+  for (const v of variantes ?? []) {
+    const dias = diasDesdeExpiracion(v.nueva_coleccion_desde);
+    if (dias !== null) {
+      nuevaColeccionInfoPorVariante[v.id] = { expiroHaceDias: dias };
+    }
+  }
 
   return {
     producto: {
@@ -153,13 +163,11 @@ export async function obtenerProductoParaEditar(
           talla: v.talla ?? "",
           color: v.color ?? "",
           priceOverride: v.price_override,
-          // Placeholder: Task 5 calcula esto con esNuevaColeccionActiva()
-          // a partir de nueva_coleccion_desde y pasa
-          // nuevaColeccionInfoPorVariante para las ya vencidas.
-          nuevaColeccion: false,
+          nuevaColeccion: esNuevaColeccionActiva(v.nueva_coleccion_desde),
         })),
       },
       imagenesExistentes: imagenes ?? [],
+      nuevaColeccionInfoPorVariante,
     },
   };
 }
