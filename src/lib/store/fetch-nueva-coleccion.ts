@@ -1,5 +1,5 @@
 import type { createClient } from "@/lib/supabase/server";
-import { esNuevaColeccionActiva } from "@/lib/admin/nueva-coleccion";
+import { DURACION_NUEVA_COLECCION_DIAS, esNuevaColeccionActiva } from "@/lib/admin/nueva-coleccion";
 
 export type NuevaColeccionItem = {
   variantId: string;
@@ -21,10 +21,15 @@ const MAX_ITEMS_NUEVA_COLECCION = 12;
 export async function fetchNuevaColeccion(
   supabase: Awaited<ReturnType<typeof createClient>>,
 ): Promise<NuevaColeccionItem[]> {
+  const cortesIso = new Date(
+    Date.now() - DURACION_NUEVA_COLECCION_DIAS * 24 * 60 * 60 * 1000,
+  ).toISOString();
   const { data: variantesCandidatas } = await supabase
     .from("product_variants")
     .select("id, product_id, price_override, nueva_coleccion_desde")
-    .not("nueva_coleccion_desde", "is", null);
+    .not("nueva_coleccion_desde", "is", null)
+    .gte("nueva_coleccion_desde", cortesIso)
+    .order("nueva_coleccion_desde", { ascending: false });
 
   const variantesActivas = (variantesCandidatas ?? []).filter((v) =>
     esNuevaColeccionActiva(v.nueva_coleccion_desde),
@@ -46,7 +51,7 @@ export async function fetchNuevaColeccion(
   const variantIds = variantesActivas.map((v) => v.id);
   const { data: imagenes } = await supabase
     .from("product_images")
-    .select("variant_id, url, sort_order, is_primary")
+    .select("variant_id, url, sort_order, is_primary, vendida")
     .eq("vendida", false)
     .in("variant_id", variantIds);
 
@@ -56,6 +61,7 @@ export async function fetchNuevaColeccion(
   >();
   for (const img of imagenes ?? []) {
     if (!img.variant_id) continue;
+    if (img.vendida) continue;
     const lista = imagenesPorVariante.get(img.variant_id) ?? [];
     lista.push({ url: img.url, sortOrder: img.sort_order, isPrimary: img.is_primary });
     imagenesPorVariante.set(img.variant_id, lista);

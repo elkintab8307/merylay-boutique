@@ -14,8 +14,6 @@ const CLAVE_SESSION_STORAGE = "nueva-coleccion-vista";
 
 export function NuevaColeccionOverlay({ items }: { items: NuevaColeccionItem[] }) {
   const [mostrar, setMostrar] = useState(false);
-  const cerrarRef = useRef<HTMLButtonElement | null>(null);
-  const { ref } = useCarruselTactil({ total: items.length, autoAvanceMs: 2500 });
 
   useEffect(() => {
     if (items.length === 0) return;
@@ -27,30 +25,45 @@ export function NuevaColeccionOverlay({ items }: { items: NuevaColeccionItem[] }
     setMostrar(true);
   }, [items.length]);
 
+  if (!mostrar || items.length === 0 || typeof document === "undefined") return null;
+
+  return createPortal(
+    <PanelNuevaColeccion items={items} onCerrar={() => setMostrar(false)} />,
+    document.body,
+  );
+}
+
+function PanelNuevaColeccion({
+  items,
+  onCerrar,
+}: {
+  items: NuevaColeccionItem[];
+  onCerrar: () => void;
+}) {
+  const cerrarRef = useRef<HTMLButtonElement | null>(null);
+  const { ref } = useCarruselTactil({ total: items.length, autoAvanceMs: 2500 });
+
   useEffect(() => {
-    if (!mostrar) return;
     cerrarRef.current?.focus();
     const previo = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMostrar(false);
+      if (e.key === "Escape") onCerrar();
     };
     document.addEventListener("keydown", onKey);
     return () => {
       document.body.style.overflow = previo;
       document.removeEventListener("keydown", onKey);
     };
-  }, [mostrar]);
+  }, [onCerrar]);
 
-  if (!mostrar || items.length === 0 || typeof document === "undefined") return null;
-
-  return createPortal(
+  return (
     <div
       role="dialog"
       aria-modal="true"
       aria-label="Nueva Colección"
       onClick={(e) => {
-        if (e.target === e.currentTarget) setMostrar(false);
+        if (e.target === e.currentTarget) onCerrar();
       }}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
     >
@@ -59,7 +72,7 @@ export function NuevaColeccionOverlay({ items }: { items: NuevaColeccionItem[] }
           ref={cerrarRef}
           type="button"
           aria-label="Cerrar"
-          onClick={() => setMostrar(false)}
+          onClick={onCerrar}
           className="absolute right-3 top-3 rounded-full bg-black/10 p-2 text-brand-ciruela"
         >
           <X className="h-5 w-5" />
@@ -85,7 +98,7 @@ export function NuevaColeccionOverlay({ items }: { items: NuevaColeccionItem[] }
               >
                 <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-brand-rosa-claro">
                   <Image src={item.imageUrl} alt={item.productName} fill className="object-cover" sizes="160px" />
-                  <span className="absolute left-1 top-1 animate-pulse rounded-full bg-brand-rosa px-2 py-0.5 text-[10px] font-semibold text-brand-crema">
+                  <span className="absolute left-1 top-1 animate-pulse rounded-full bg-brand-rosa px-2 py-0.5 text-[10px] font-semibold text-brand-crema motion-reduce:animate-none">
                     NUEVO
                   </span>
                 </div>
@@ -103,7 +116,6 @@ export function NuevaColeccionOverlay({ items }: { items: NuevaColeccionItem[] }
           })}
         </div>
       </div>
-    </div>,
-    document.body,
+    </div>
   );
 }

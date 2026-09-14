@@ -4,7 +4,7 @@ import { fetchNuevaColeccion } from "../fetch-nueva-coleccion";
 
 function crearQueryBuilderMock(data: unknown[]) {
   const builder: Record<string, unknown> = {};
-  const chain = ["select", "eq", "in", "not"];
+  const chain = ["select", "eq", "in", "not", "gte", "order"];
   for (const metodo of chain) {
     builder[metodo] = vi.fn(() => builder);
   }
@@ -81,6 +81,22 @@ describe("fetchNuevaColeccion", () => {
         { id: "p1", slug: "pijama-1", name: "Pijama 1", price: 50000, promo_price: null, is_active: true },
       ],
       product_images: [],
+    });
+
+    expect(await fetchNuevaColeccion(supabase as never)).toEqual([]);
+  });
+
+  it("excluye variantes cuya unica foto candidata esta marcada vendida", async () => {
+    const supabase = crearSupabaseMock({
+      product_variants: [
+        { id: "v1", product_id: "p1", price_override: null, nueva_coleccion_desde: AHORA_ISO },
+      ],
+      products: [
+        { id: "p1", slug: "pijama-1", name: "Pijama 1", price: 50000, promo_price: null, is_active: true },
+      ],
+      product_images: [
+        { variant_id: "v1", url: "https://cdn.test/v1.jpg", sort_order: 0, is_primary: true, vendida: true },
+      ],
     });
 
     expect(await fetchNuevaColeccion(supabase as never)).toEqual([]);

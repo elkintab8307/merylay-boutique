@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { NuevaColeccionOverlay } from "../nueva-coleccion-overlay";
 import type { NuevaColeccionItem } from "@/lib/store/fetch-nueva-coleccion";
 
@@ -22,6 +22,7 @@ beforeEach(() => {
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, value: 100 });
 });
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -72,6 +73,39 @@ describe("NuevaColeccionOverlay", () => {
     render(<NuevaColeccionOverlay items={[item({})]} />);
     fireEvent.click(screen.getByRole("dialog"));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("hace auto-avance del carrusel cuando hay mas de un item y esta en viewport", () => {
+    let ioCallback: (entries: { isIntersecting: boolean }[]) => void = () => {};
+    class IntersectionObserverStub {
+      constructor(cb: (entries: { isIntersecting: boolean }[]) => void) {
+        ioCallback = cb;
+      }
+      observe() {}
+      disconnect() {}
+      unobserve() {}
+    }
+    vi.stubGlobal("IntersectionObserver", IntersectionObserverStub);
+    const scrollToMock = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", { configurable: true, value: scrollToMock });
+
+    vi.useFakeTimers();
+
+    render(
+      <NuevaColeccionOverlay
+        items={[item({ variantId: "v1", productSlug: "pijama-uno" }), item({ variantId: "v2", productSlug: "pijama-dos" })]}
+      />,
+    );
+
+    act(() => {
+      ioCallback([{ isIntersecting: true }]);
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(2500);
+    });
+
+    expect(scrollToMock).toHaveBeenCalled();
   });
 
   it("cada tarjeta enlaza al producto correcto", () => {
