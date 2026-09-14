@@ -51,8 +51,8 @@ describe("ProductoForm", () => {
         defaultValues={{
           ...defaultValuesBase,
           variantes: [
-            { talla: "M", color: "Rosa", priceOverride: null },
-            { talla: "M", color: "Rosa", priceOverride: null },
+            { talla: "M", color: "Rosa", priceOverride: null, nuevaColeccion: false },
+            { talla: "M", color: "Rosa", priceOverride: null, nuevaColeccion: false },
           ],
         }}
         categoriasDisponibles={[]}
@@ -84,8 +84,8 @@ describe("ProductoForm", () => {
         defaultValues={{
           ...defaultValuesBase,
           variantes: [
-            { talla: "M", color: "Rosa", priceOverride: null },
-            { talla: "L", color: "Rosa", priceOverride: null },
+            { talla: "M", color: "Rosa", priceOverride: null, nuevaColeccion: false },
+            { talla: "L", color: "Rosa", priceOverride: null, nuevaColeccion: false },
           ],
         }}
         categoriasDisponibles={[]}
@@ -162,8 +162,8 @@ describe("ProductoForm", () => {
         defaultValues={{
           ...defaultValuesBase,
           variantes: [
-            { talla: "M", color: "Rosa", priceOverride: null },
-            { talla: "L", color: "Rosa", priceOverride: null },
+            { talla: "M", color: "Rosa", priceOverride: null, nuevaColeccion: false },
+            { talla: "L", color: "Rosa", priceOverride: null, nuevaColeccion: false },
           ],
         }}
         categoriasDisponibles={[]}
@@ -284,8 +284,8 @@ describe("ProductoForm", () => {
         defaultValues={{
           ...defaultValuesBase,
           variantes: [
-            { talla: "M", color: "Rosa", priceOverride: null },
-            { talla: "L", color: "Rosa", priceOverride: null },
+            { talla: "M", color: "Rosa", priceOverride: null, nuevaColeccion: false },
+            { talla: "L", color: "Rosa", priceOverride: null, nuevaColeccion: false },
           ],
         }}
         categoriasDisponibles={[]}
@@ -311,5 +311,37 @@ describe("ProductoForm", () => {
       />,
     );
     expect(document.querySelector("#stock")).toBeInTheDocument();
+  });
+
+  it("con una variante en Nueva Coleccion activa, el checkbox aparece marcado", () => {
+    render(
+      <ProductoForm
+        defaultValues={{
+          ...defaultValuesBase,
+          variantes: [
+            { talla: "M", color: "Rosa", priceOverride: null, nuevaColeccion: true },
+          ],
+        }}
+        categoriasDisponibles={[]}
+      />,
+    );
+    const checkbox = screen.getByRole("checkbox", { name: /nueva colección/i });
+    expect(checkbox).toBeChecked();
+  });
+
+  it("muestra el texto de expiracion para una variante que ya vencio", () => {
+    render(
+      <ProductoForm
+        defaultValues={{
+          ...defaultValuesBase,
+          variantes: [
+            { id: "v1", talla: "M", color: "Rosa", priceOverride: null, nuevaColeccion: false },
+          ],
+        }}
+        categoriasDisponibles={[]}
+        nuevaColeccionInfoPorVariante={{ v1: { expiroHaceDias: 3 } }}
+      />,
+    );
+    expect(screen.getByText(/expiró hace 3 días/i)).toBeInTheDocument();
   });
 });

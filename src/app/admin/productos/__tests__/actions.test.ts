@@ -165,7 +165,12 @@ describe("createProducto / updateProducto — stock segun variantes", () => {
     stock: 9,
     isActive: true,
     isFeatured: false,
-    variantes: [] as Array<{ talla?: string; color?: string; priceOverride: number | null }>,
+    variantes: [] as Array<{
+      talla?: string;
+      color?: string;
+      priceOverride: number | null;
+      nuevaColeccion: boolean;
+    }>,
   };
 
   function mockParaCreate() {
@@ -187,7 +192,7 @@ describe("createProducto / updateProducto — stock segun variantes", () => {
       }
       if (tabla === "product_variants") {
         return {
-          insert: () => ({ select: () => Promise.resolve({ data: [{ id: "v1" }], error: null }) }),
+          insert: () => ({ select: () => Promise.resolve({ data: [{ id: "11111111-1111-4111-8111-111111111111" }], error: null }) }),
         };
       }
       if (tabla === "product_costs") {
@@ -219,7 +224,7 @@ describe("createProducto / updateProducto — stock segun variantes", () => {
     await createProducto(
       {
         ...inputBase,
-        variantes: [{ talla: "M", color: "Rosa", priceOverride: null }],
+        variantes: [{ talla: "M", color: "Rosa", priceOverride: null, nuevaColeccion: false }],
       },
       [],
       [],
@@ -251,7 +256,7 @@ describe("createProducto / updateProducto — stock segun variantes", () => {
       if (tabla === "product_variants") {
         return {
           select: () => ({ eq: () => Promise.resolve({ data: [], error: null }) }),
-          insert: () => ({ select: () => Promise.resolve({ data: [{ id: "v1" }], error: null }) }),
+          insert: () => ({ select: () => Promise.resolve({ data: [{ id: "11111111-1111-4111-8111-111111111111" }], error: null }) }),
           upsert: () => Promise.resolve({ error: null }),
           delete: () => ({ in: () => Promise.resolve({ error: null }) }),
         };
@@ -285,7 +290,7 @@ describe("createProducto / updateProducto — stock segun variantes", () => {
       "p1",
       {
         ...inputBase,
-        variantes: [{ talla: "M", color: "Rosa", priceOverride: null }],
+        variantes: [{ talla: "M", color: "Rosa", priceOverride: null, nuevaColeccion: false }],
       },
       [],
       [],
@@ -293,5 +298,208 @@ describe("createProducto / updateProducto — stock segun variantes", () => {
 
     const payload = productsUpdateSpy.mock.calls[0][0] as Record<string, unknown>;
     expect(payload).not.toHaveProperty("stock");
+  });
+});
+
+describe("createProducto / updateProducto — nueva coleccion", () => {
+  beforeEach(() => {
+    vi.mocked(createClient).mockReset();
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const inputBase = {
+    name: "Pijama test",
+    slug: "pijama-test",
+    description: "",
+    categoryId: null,
+    price: 10000,
+    promoPrice: null,
+    costPrice: null,
+    stock: 9,
+    isActive: true,
+    isFeatured: false,
+    variantes: [] as Array<{
+      id?: string;
+      talla?: string;
+      color?: string;
+      priceOverride: number | null;
+      nuevaColeccion: boolean;
+    }>,
+  };
+
+  function mockParaCreate() {
+    const variantesInsertSpy = vi.fn<
+      (payload: Array<Record<string, unknown>>) => unknown
+    >(() => ({
+      select: () => Promise.resolve({ data: [{ id: "11111111-1111-4111-8111-111111111111" }], error: null }),
+    }));
+    const from = vi.fn((tabla: string) => {
+      if (tabla === "products") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: () => Promise.resolve({ data: null, error: null }),
+              neq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }),
+            }),
+          }),
+          insert: () => ({
+            select: () => ({ single: () => Promise.resolve({ data: { id: "p1" }, error: null }) }),
+          }),
+        };
+      }
+      if (tabla === "product_variants") {
+        return { insert: variantesInsertSpy };
+      }
+      if (tabla === "product_costs") {
+        return { upsert: () => Promise.resolve({ error: null }) };
+      }
+      throw new Error(`tabla inesperada: ${tabla}`);
+    });
+    const rpc = vi.fn(() => Promise.resolve({ data: "SKU-1", error: null }));
+    return { supabase: { from, rpc }, variantesInsertSpy };
+  }
+
+  it("createProducto con el checkbox marcado guarda nueva_coleccion_desde no nulo", async () => {
+    const { supabase, variantesInsertSpy } = mockParaCreate();
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+    const { createProducto } = await import("../actions");
+
+    await createProducto(
+      {
+        ...inputBase,
+        variantes: [{ talla: "M", color: "Rosa", priceOverride: null, nuevaColeccion: true }],
+      },
+      [],
+      [],
+    );
+
+    const payload = variantesInsertSpy.mock.calls[0][0] as Array<Record<string, unknown>>;
+    expect(payload[0].nueva_coleccion_desde).not.toBeNull();
+    expect(typeof payload[0].nueva_coleccion_desde).toBe("string");
+  });
+
+  it("createProducto con el checkbox sin marcar guarda nueva_coleccion_desde null", async () => {
+    const { supabase, variantesInsertSpy } = mockParaCreate();
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+    const { createProducto } = await import("../actions");
+
+    await createProducto(
+      {
+        ...inputBase,
+        variantes: [{ talla: "M", color: "Rosa", priceOverride: null, nuevaColeccion: false }],
+      },
+      [],
+      [],
+    );
+
+    const payload = variantesInsertSpy.mock.calls[0][0] as Array<Record<string, unknown>>;
+    expect(payload[0].nueva_coleccion_desde).toBeNull();
+  });
+
+  function mockParaUpdate(nuevaColeccionDesdeExistente: string | null) {
+    const variantesUpsertSpy = vi.fn<
+      (payload: Array<Record<string, unknown>>) => unknown
+    >(() => Promise.resolve({ error: null }));
+    const from = vi.fn((tabla: string) => {
+      if (tabla === "products") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: () => Promise.resolve({ data: null, error: null }),
+              neq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }),
+            }),
+          }),
+          update: () => ({
+            eq: () => ({
+              select: () => ({ single: () => Promise.resolve({ data: { sku: "SKU-1" }, error: null }) }),
+            }),
+          }),
+        };
+      }
+      if (tabla === "product_variants") {
+        return {
+          select: () => ({
+            eq: () =>
+              Promise.resolve({
+                data: [{ id: "11111111-1111-4111-8111-111111111111", nueva_coleccion_desde: nuevaColeccionDesdeExistente }],
+                error: null,
+              }),
+          }),
+          upsert: variantesUpsertSpy,
+          delete: () => ({ in: () => Promise.resolve({ error: null }) }),
+        };
+      }
+      if (tabla === "product_costs") {
+        return { upsert: () => Promise.resolve({ error: null }) };
+      }
+      throw new Error(`tabla inesperada: ${tabla}`);
+    });
+    return { supabase: { from, rpc: vi.fn() }, variantesUpsertSpy };
+  }
+
+  it("updateProducto: variante ya activa que se guarda sin tocar el checkbox conserva la fecha", async () => {
+    const desdeExistente = "2026-09-10T00:00:00.000Z";
+    const { supabase, variantesUpsertSpy } = mockParaUpdate(desdeExistente);
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+    const { updateProducto } = await import("../actions");
+
+    await updateProducto(
+      "p1",
+      {
+        ...inputBase,
+        variantes: [
+          { id: "11111111-1111-4111-8111-111111111111", talla: "M", color: "Rosa", priceOverride: null, nuevaColeccion: true },
+        ],
+      },
+      [],
+      [],
+    );
+
+    const payload = variantesUpsertSpy.mock.calls[0][0] as Array<Record<string, unknown>>;
+    expect(payload[0].nueva_coleccion_desde).toBe(desdeExistente);
+  });
+
+  it("updateProducto: desmarcar una variante activa pone nueva_coleccion_desde en null", async () => {
+    const { supabase, variantesUpsertSpy } = mockParaUpdate("2026-09-10T00:00:00.000Z");
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+    const { updateProducto } = await import("../actions");
+
+    await updateProducto(
+      "p1",
+      {
+        ...inputBase,
+        variantes: [
+          { id: "11111111-1111-4111-8111-111111111111", talla: "M", color: "Rosa", priceOverride: null, nuevaColeccion: false },
+        ],
+      },
+      [],
+      [],
+    );
+
+    const payload = variantesUpsertSpy.mock.calls[0][0] as Array<Record<string, unknown>>;
+    expect(payload[0].nueva_coleccion_desde).toBeNull();
+  });
+
+  it("updateProducto: marcar una variante que estaba inactiva guarda una fecha nueva", async () => {
+    const { supabase, variantesUpsertSpy } = mockParaUpdate(null);
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+    const { updateProducto } = await import("../actions");
+
+    await updateProducto(
+      "p1",
+      {
+        ...inputBase,
+        variantes: [
+          { id: "11111111-1111-4111-8111-111111111111", talla: "M", color: "Rosa", priceOverride: null, nuevaColeccion: true },
+        ],
+      },
+      [],
+      [],
+    );
+
+    const payload = variantesUpsertSpy.mock.calls[0][0] as Array<Record<string, unknown>>;
+    expect(payload[0].nueva_coleccion_desde).not.toBeNull();
   });
 });

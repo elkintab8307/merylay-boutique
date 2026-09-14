@@ -9,6 +9,7 @@ describe("varianteSchema", () => {
         color: "",
         priceOverride: null,
         stock: 5,
+        nuevaColeccion: false,
       }).success,
     ).toBe(true);
   });
@@ -20,6 +21,7 @@ describe("varianteSchema", () => {
         color: "Rosa",
         priceOverride: null,
         stock: 5,
+        nuevaColeccion: false,
       }).success,
     ).toBe(true);
   });
@@ -31,6 +33,7 @@ describe("varianteSchema", () => {
         color: "",
         priceOverride: null,
         stock: 5,
+        nuevaColeccion: false,
       }).success,
     ).toBe(false);
   });
@@ -59,7 +62,9 @@ describe("productoSchema", () => {
     expect(
       productoSchema.safeParse({
         ...base,
-        variantes: [{ talla: "M", color: "Rosa", priceOverride: null, stock: 3 }],
+        variantes: [
+          { talla: "M", color: "Rosa", priceOverride: null, stock: 3, nuevaColeccion: false },
+        ],
       }).success,
     ).toBe(true);
   });
@@ -72,8 +77,8 @@ describe("productoSchema", () => {
     const result = productoSchema.safeParse({
       ...base,
       variantes: [
-        { talla: "M", color: "Rosa", priceOverride: null, stock: 3 },
-        { talla: "M", color: "Rosa", priceOverride: null, stock: 5 },
+        { talla: "M", color: "Rosa", priceOverride: null, stock: 3, nuevaColeccion: false },
+        { talla: "M", color: "Rosa", priceOverride: null, stock: 5, nuevaColeccion: false },
       ],
     });
     expect(result.success).toBe(false);
@@ -83,8 +88,8 @@ describe("productoSchema", () => {
     const result = productoSchema.safeParse({
       ...base,
       variantes: [
-        { talla: "M", color: "Rosa", priceOverride: null, stock: 3 },
-        { talla: " m ", color: "ROSA", priceOverride: null, stock: 5 },
+        { talla: "M", color: "Rosa", priceOverride: null, stock: 3, nuevaColeccion: false },
+        { talla: " m ", color: "ROSA", priceOverride: null, stock: 5, nuevaColeccion: false },
       ],
     });
     expect(result.success).toBe(false);
@@ -94,8 +99,8 @@ describe("productoSchema", () => {
     const result = productoSchema.safeParse({
       ...base,
       variantes: [
-        { talla: "M", color: "Rosa", priceOverride: null, stock: 3 },
-        { talla: "L", color: "Rosa", priceOverride: null, stock: 5 },
+        { talla: "M", color: "Rosa", priceOverride: null, stock: 3, nuevaColeccion: false },
+        { talla: "L", color: "Rosa", priceOverride: null, stock: 5, nuevaColeccion: false },
       ],
     });
     expect(result.success).toBe(true);
@@ -105,8 +110,8 @@ describe("productoSchema", () => {
     const result = productoSchema.safeParse({
       ...base,
       variantes: [
-        { talla: "S", color: "", priceOverride: null, stock: 3 },
-        { talla: "S!", color: "", priceOverride: null, stock: 5 },
+        { talla: "S", color: "", priceOverride: null, stock: 3, nuevaColeccion: false },
+        { talla: "S!", color: "", priceOverride: null, stock: 5, nuevaColeccion: false },
       ],
     });
     expect(result.success).toBe(false);

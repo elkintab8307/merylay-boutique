@@ -41,6 +41,7 @@ export function ProductoForm({
   defaultValues,
   categoriasDisponibles,
   imagenesExistentes = [],
+  nuevaColeccionInfoPorVariante = {},
   onGuardado,
 }: {
   productoId?: string;
@@ -50,6 +51,7 @@ export function ProductoForm({
   defaultValues: ProductoInput;
   categoriasDisponibles: CategoriaOption[];
   imagenesExistentes?: ProductImage[];
+  nuevaColeccionInfoPorVariante?: Record<string, { expiroHaceDias: number }>;
   onGuardado?: () => void;
 }) {
   const router = useRouter();
@@ -97,7 +99,7 @@ export function ProductoForm({
   const variantesWatched = useWatch({ control, name: "variantes" }) ?? [];
 
   const handleAppendVariante = () => {
-    append({ talla: "", color: "", priceOverride: null });
+    append({ talla: "", color: "", priceOverride: null, nuevaColeccion: false });
     setVariantImageFiles((prev) => [...prev, []]);
   };
 
@@ -573,6 +575,20 @@ export function ProductoForm({
                   </p>
                 )}
               </div>
+              <label className="flex items-center gap-2 text-xs text-brand-ciruela">
+                <input
+                  type="checkbox"
+                  {...register(`variantes.${index}.nuevaColeccion` as const)}
+                />
+                Nueva Colección
+              </label>
+              {variantId && nuevaColeccionInfoPorVariante[variantId] && (
+                <p className="text-xs text-brand-ciruela/60">
+                  Estuvo activo, expiró hace{" "}
+                  {nuevaColeccionInfoPorVariante[variantId].expiroHaceDias} día
+                  {nuevaColeccionInfoPorVariante[variantId].expiroHaceDias === 1 ? "" : "s"}.
+                </p>
+              )}
               <div className="flex flex-col gap-2">
                 <label
                   htmlFor={`variant-images-${index}`}

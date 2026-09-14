@@ -4,11 +4,13 @@ import { CarruselCategoria } from "@/components/store/carrusel-categoria";
 import { productoAgotado } from "@/lib/store/stock";
 import { ordenarImagenesTarjeta } from "@/lib/store/ordenar-imagenes-tarjeta";
 import { fetchCatalogProducts } from "@/lib/store/fetch-catalog";
+import { fetchNuevaColeccion } from "@/lib/store/fetch-nueva-coleccion";
 import { HeroSection } from "@/components/store/hero-section";
 import { BenefitsBar } from "@/components/store/benefits-bar";
 import { FeaturedCategories } from "@/components/store/featured-categories";
 import { CollectionBanners } from "@/components/store/collection-banners";
 import { ReviewsSection, type ReviewItem } from "@/components/store/reviews-section";
+import { NuevaColeccionOverlay } from "@/components/store/nueva-coleccion-overlay";
 import { parseHeroStored, bannersStoredSchema } from "@/lib/validation/home-contenido";
 
 const PRODUCTOS_POR_CARRUSEL_CATEGORIA = 10;
@@ -164,6 +166,8 @@ export default async function HomePage() {
     )
   ).filter((c) => c.productos.length > 0);
 
+  const nuevaColeccionItems = await fetchNuevaColeccion(supabase);
+
   const settingsByKey = new Map((settingsRows ?? []).map((r) => [r.key, r.value]));
   const hero = parseHeroStored(settingsByKey.get("home_hero"));
   const bannersParsed = bannersStoredSchema.safeParse(settingsByKey.get("home_banners"));
@@ -180,6 +184,7 @@ export default async function HomePage() {
   return (
     <main className="mx-auto flex max-w-6xl flex-col gap-16 px-6 py-10">
       <HeroSection hero={hero} />
+      <NuevaColeccionOverlay items={nuevaColeccionItems} />
       <BenefitsBar />
       <FeaturedCategories
         categorias={(categorias ?? [])

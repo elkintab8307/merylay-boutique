@@ -724,6 +724,7 @@ export type Database = {
           color: string | null
           id: string
           name: string
+          nueva_coleccion_desde: string | null
           price_override: number | null
           product_id: string
           sku: string
@@ -734,6 +735,7 @@ export type Database = {
           color?: string | null
           id?: string
           name: string
+          nueva_coleccion_desde?: string | null
           price_override?: number | null
           product_id: string
           sku: string
@@ -744,6 +746,7 @@ export type Database = {
           color?: string | null
           id?: string
           name?: string
+          nueva_coleccion_desde?: string | null
           price_override?: number | null
           product_id?: string
           sku?: string

@@ -237,7 +237,7 @@ export function InventarioPosModal({
                     stock: 0,
                     isActive: true,
                     isFeatured: false,
-                    variantes: [{ talla: "", color: "", priceOverride: null }],
+                    variantes: [{ talla: "", color: "", priceOverride: null, nuevaColeccion: false }],
                   }}
                   categoriasDisponibles={categorias}
                   onGuardado={handleGuardado}
@@ -251,6 +251,7 @@ export function InventarioPosModal({
                   defaultValues={vista.producto.defaultValues}
                   categoriasDisponibles={categorias}
                   imagenesExistentes={vista.producto.imagenesExistentes}
+                  nuevaColeccionInfoPorVariante={vista.producto.nuevaColeccionInfoPorVariante}
                   onGuardado={handleGuardado}
                 />
               )}

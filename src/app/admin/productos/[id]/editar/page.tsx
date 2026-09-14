@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { generarCodigoBarras, generarCodigoQr } from "@/lib/codigos";
+import { esNuevaColeccionActiva, diasDesdeExpiracion } from "@/lib/admin/nueva-coleccion";
 import { ProductoForm } from "../../producto-form";
 
 export default async function EditarProductoPage({
@@ -30,7 +31,7 @@ export default async function EditarProductoPage({
     supabase.from("categories").select("id, name").order("name"),
     supabase
       .from("product_variants")
-      .select("id, talla, color, price_override, stock")
+      .select("id, talla, color, price_override, stock, nueva_coleccion_desde")
       .eq("product_id", id),
     supabase
       .from("product_images")
@@ -45,6 +46,14 @@ export default async function EditarProductoPage({
     generarCodigoBarras(producto.sku),
     generarCodigoQr(producto.sku),
   ]);
+
+  const nuevaColeccionInfoPorVariante: Record<string, { expiroHaceDias: number }> = {};
+  for (const v of variantes ?? []) {
+    const dias = diasDesdeExpiracion(v.nueva_coleccion_desde);
+    if (dias !== null) {
+      nuevaColeccionInfoPorVariante[v.id] = { expiroHaceDias: dias };
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -70,10 +79,12 @@ export default async function EditarProductoPage({
             talla: v.talla ?? "",
             color: v.color ?? "",
             priceOverride: v.price_override,
+            nuevaColeccion: esNuevaColeccionActiva(v.nueva_coleccion_desde),
           })),
         }}
         categoriasDisponibles={categorias ?? []}
         imagenesExistentes={imagenes ?? []}
+        nuevaColeccionInfoPorVariante={nuevaColeccionInfoPorVariante}
       />
     </div>
   );
