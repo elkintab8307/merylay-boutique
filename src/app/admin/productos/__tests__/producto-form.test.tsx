@@ -150,7 +150,12 @@ describe("ProductoForm", () => {
       const mala = files.find((f) => f.name === "mala.png");
       if (mala) {
         opts?.onEstado?.(mala, "error", { motivo: "Failed to fetch" });
-        return { urls: [], fallos: [{ file: mala, nombre: "mala.png", motivo: "Failed to fetch" }] };
+        return {
+          urls: [],
+          fallos: [
+            { file: mala, nombre: "mala.png", motivo: "Failed to fetch", sePasoASegundoPlano: false },
+          ],
+        };
       }
       const urls = files.map((f) => `https://storage.test/${f.name}`);
       files.forEach((f, i) => opts?.onEstado?.(f, "ok", { url: urls[i] }));
@@ -201,7 +206,9 @@ describe("ProductoForm", () => {
         opts?.onEstado?.(files[1], "error", { motivo: "network" });
         return {
           urls: ["https://storage.test/a.jpg"],
-          fallos: [{ file: files[1], nombre: "b.jpg", motivo: "network" }],
+          fallos: [
+            { file: files[1], nombre: "b.jpg", motivo: "network", sePasoASegundoPlano: false },
+          ],
         };
       }
       expect(nombres).toEqual(["b.jpg"]);
@@ -249,7 +256,9 @@ describe("ProductoForm", () => {
       if (mala) opts?.onEstado?.(mala, "error", { motivo: "network" });
       return {
         urls: buena ? ["https://storage.test/buena.jpg"] : [],
-        fallos: mala ? [{ file: mala, nombre: "mala.jpg", motivo: "network" }] : [],
+        fallos: mala
+          ? [{ file: mala, nombre: "mala.jpg", motivo: "network", sePasoASegundoPlano: false }]
+          : [],
       };
     });
 

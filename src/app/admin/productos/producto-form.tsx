@@ -66,7 +66,11 @@ export function ProductoForm({
   // "variante-<indice>"; se usa tambien como id del bloque para hacer
   // scroll hasta el primer error. Ver onSubmit.
   const [erroresImagenes, setErroresImagenes] = useState<
-    { clave: string; seccion: string; items: { nombre: string; motivo: string }[] }[]
+    {
+      clave: string;
+      seccion: string;
+      items: { nombre: string; motivo: string; sePasoASegundoPlano: boolean }[];
+    }[]
   >([]);
   // Estado visible de cada imagen en su miniatura: comprimiendo / subiendo
   // / ok (chulo verde) / error (X roja). La subida va una por una y este
@@ -132,7 +136,9 @@ export function ProductoForm({
         </p>
         <ul className="flex flex-col gap-2">
           {err.items.map((it) => {
-            const remedio = motivoARemedio(it.motivo);
+            const remedio = motivoARemedio(it.motivo, {
+              sePasoASegundoPlano: it.sePasoASegundoPlano,
+            });
             return (
               <li key={it.nombre} className="text-brand-ciruela">
                 <span className="font-medium">{it.nombre}</span> — {remedio.causa}
@@ -180,7 +186,7 @@ export function ProductoForm({
       const nuevosErrores: {
         clave: string;
         seccion: string;
-        items: { nombre: string; motivo: string }[];
+        items: { nombre: string; motivo: string; sePasoASegundoPlano: boolean }[];
       }[] = [];
 
       const subirSeccion = async (
@@ -198,7 +204,11 @@ export function ProductoForm({
             nuevosErrores.push({
               clave,
               seccion,
-              items: resultado.fallos.map((f) => ({ nombre: f.nombre, motivo: f.motivo })),
+              items: resultado.fallos.map((f) => ({
+                nombre: f.nombre,
+                motivo: f.motivo,
+                sePasoASegundoPlano: f.sePasoASegundoPlano,
+              })),
             });
           }
         }

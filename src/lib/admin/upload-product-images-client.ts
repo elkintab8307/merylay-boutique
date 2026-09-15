@@ -17,8 +17,8 @@ import { comprimirImagen } from "./comprimir-imagen";
  * formulario (spinner / chulo verde / X roja).
  */
 
-const MAX_INTENTOS = 3;
-const ESPERA_REINTENTO_MS = 800;
+const MAX_INTENTOS = 5;
+const ESPERA_REINTENTO_MS = 1000;
 const PAUSA_ENTRE_IMAGENES_MS = 150;
 
 export type EstadoImagen = "comprimiendo" | "subiendo" | "ok" | "error";
@@ -28,8 +28,12 @@ export type ResultadoSubida = {
    *  aparecen los archivos exitosos dentro de `files`. */
   urls: string[];
   /** Un item por archivo que no se pudo subir. Incluye la referencia al
-   *  `File` para que quien llama pueda emparejar sin depender del nombre. */
-  fallos: { file: File; nombre: string; motivo: string }[];
+   *  `File` para que quien llama pueda emparejar sin depender del nombre.
+   *  `sePasoASegundoPlano` es true si la pestana se oculto (pantalla
+   *  bloqueada, cambio de app) en algun momento mientras se intentaba
+   *  subir ESTE archivo -- el navegador suele cortar la conexion en ese
+   *  caso, lo que se ve identico a una falla de red real. */
+  fallos: { file: File; nombre: string; motivo: string; sePasoASegundoPlano: boolean }[];
 };
 
 type Opciones = {
@@ -54,7 +58,7 @@ export async function subirImagenesProductoCliente(
   const onEstado = opciones.onEstado;
 
   const urls: string[] = [];
-  const fallos: { file: File; nombre: string; motivo: string }[] = [];
+  const fallos: ResultadoSubida["fallos"] = [];
 
   const supabase = createClient();
   const bucket = supabase.storage.from("product-images");
@@ -71,25 +75,35 @@ export async function subirImagenesProductoCliente(
 
     let ultimoMotivo = "No se pudo subir la imagen.";
     let subida = false;
+    let sePasoASegundoPlano = false;
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") sePasoASegundoPlano = true;
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
-    for (let intento = 1; intento <= MAX_INTENTOS; intento++) {
-      const { error: uploadError } = await bucket.upload(path, preparada);
-      if (!uploadError) {
-        subida = true;
-        break;
+    try {
+      for (let intento = 1; intento <= MAX_INTENTOS; intento++) {
+        const { error: uploadError } = await bucket.upload(path, preparada);
+        if (!uploadError) {
+          subida = true;
+          break;
+        }
+        ultimoMotivo = uploadError.message || ultimoMotivo;
+        if (intento < MAX_INTENTOS) {
+          await esperar(esperaReintentoMs * intento);
+        }
       }
-      ultimoMotivo = uploadError.message || ultimoMotivo;
-      if (intento < MAX_INTENTOS) {
-        await esperar(esperaReintentoMs * intento);
-      }
+    } finally {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     }
+    if (document.visibilityState === "hidden") sePasoASegundoPlano = true;
 
     if (subida) {
       const url = bucket.getPublicUrl(path).data.publicUrl;
       urls.push(url);
       onEstado?.(file, "ok", { url });
     } else {
-      fallos.push({ file, nombre: file.name, motivo: ultimoMotivo });
+      fallos.push({ file, nombre: file.name, motivo: ultimoMotivo, sePasoASegundoPlano });
       onEstado?.(file, "error", { motivo: ultimoMotivo });
     }
 

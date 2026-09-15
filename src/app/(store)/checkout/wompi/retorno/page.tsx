@@ -2,7 +2,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 
 const MENSAJES_ESTADO: Record<string, string> = {
-  APPROVED: "¡Tu pago fue aprobado! Estamos confirmando tu pedido.",
+  APPROVED:
+    "¡Tu pago fue aprobado! Gracias por tu compra. Próximamente nos pondremos en contacto para coordinar tu envío.",
   DECLINED: "Tu pago fue rechazado. Puedes intentar de nuevo o elegir otro método.",
   VOIDED: "Tu pago fue anulado.",
   ERROR: "Ocurrió un error al procesar tu pago.",

@@ -58,7 +58,8 @@ export default async function PedidoDetallePage({
     <main className="mx-auto max-w-3xl px-6 py-12">
       {confirmado && (
         <div className="mb-6 rounded-md border border-brand-oro bg-brand-rosa-claro/40 px-4 py-3 text-brand-ciruela">
-          ¡Gracias por tu compra! Tu pedido fue confirmado.
+          ¡Gracias por tu compra! Tu pedido fue confirmado. Próximamente nos
+          pondremos en contacto para coordinar tu envío.
         </div>
       )}
       <h1 className="mb-2 font-heading text-3xl text-brand-ciruela">
