@@ -32,7 +32,10 @@ function PanelNuevaColeccion({
   onCerrar: () => void;
 }) {
   const cerrarRef = useRef<HTMLButtonElement | null>(null);
-  const { ref } = useCarruselTactil({ total: items.length, autoAvanceMs: 2500 });
+  // Sin autoAvanceMs: el carrusel solo se mueve con el gesto tactil del
+  // usuario (o los controles, si el hook expone alguno mas adelante) --
+  // no debe rotar solo.
+  const { ref } = useCarruselTactil({ total: items.length });
 
   useEffect(() => {
     cerrarRef.current?.focus();
