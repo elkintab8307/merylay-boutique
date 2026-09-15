@@ -440,7 +440,9 @@ describe("createProducto / updateProducto — nueva coleccion", () => {
   }
 
   it("updateProducto: variante ya activa que se guarda sin tocar el checkbox conserva la fecha", async () => {
-    const desdeExistente = "2026-09-10T00:00:00.000Z";
+    // Relativa a "ahora" (no una fecha absoluta) para que el test no se
+    // vuelva flaky al cruzar la ventana de 5 dias con el paso del tiempo.
+    const desdeExistente = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
     const { supabase, variantesUpsertSpy } = mockParaUpdate(desdeExistente);
     vi.mocked(createClient).mockResolvedValue(supabase as never);
     const { updateProducto } = await import("../actions");
@@ -462,7 +464,8 @@ describe("createProducto / updateProducto — nueva coleccion", () => {
   });
 
   it("updateProducto: desmarcar una variante activa pone nueva_coleccion_desde en null", async () => {
-    const { supabase, variantesUpsertSpy } = mockParaUpdate("2026-09-10T00:00:00.000Z");
+    const desdeExistente = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+    const { supabase, variantesUpsertSpy } = mockParaUpdate(desdeExistente);
     vi.mocked(createClient).mockResolvedValue(supabase as never);
     const { updateProducto } = await import("../actions");
 

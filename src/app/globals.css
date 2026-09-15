@@ -62,6 +62,13 @@
   --animate-caer-nieve: caer-nieve 8s linear infinite;
   --animate-marquesina: marquesina 32s linear infinite;
   --animate-nueva-coleccion-in: nueva-coleccion-in 450ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  /* Solo para el panel: entrada con rebote + brillo pulsante continuo, en
+     una unica propiedad `animation` para que `motion-reduce:animate-none`
+     apague ambas de una vez. Las tarjetas siguen usando solo
+     `--animate-nueva-coleccion-in` (sin el brillo, para no saturar). */
+  --animate-nueva-coleccion-panel:
+    nueva-coleccion-in 450ms cubic-bezier(0.34, 1.56, 0.64, 1) both,
+    nueva-coleccion-brillo 2400ms ease-in-out infinite;
 }
 
 /* Marquesina de la franja promocional: la pista se renderiza 2 veces y
@@ -103,6 +110,25 @@
   }
   100% {
     transform: scale(1);
+  }
+}
+
+/* Halo luminoso pulsante del panel de Nueva Coleccion, en los colores de
+   marca. Los dos extremos (0%/100%) ya llevan brillo -- con
+   motion-reduce la animacion se apaga (ver `motion-reduce:animate-none`
+   en el componente) y el `shadow-[...]` estatico de la misma clase queda
+   como brillo fijo, nunca desaparece del todo. */
+@keyframes nueva-coleccion-brillo {
+  0%,
+  100% {
+    box-shadow:
+      0 0 40px 8px rgb(233 106 158 / 0.35),
+      0 0 70px 20px rgb(217 164 65 / 0.2);
+  }
+  50% {
+    box-shadow:
+      0 0 60px 16px rgb(217 164 65 / 0.5),
+      0 0 100px 32px rgb(233 106 158 / 0.4);
   }
 }
 
