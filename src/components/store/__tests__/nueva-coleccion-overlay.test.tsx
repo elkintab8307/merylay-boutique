@@ -12,7 +12,6 @@ vi.mock("next/image", () => ({
 }));
 
 beforeEach(() => {
-  sessionStorage.clear();
   vi.stubGlobal("IntersectionObserver", class { observe() {} disconnect() {} unobserve() {} });
   vi.stubGlobal(
     "matchMedia",
@@ -38,23 +37,23 @@ const item = (over: Partial<NuevaColeccionItem>): NuevaColeccionItem => ({
 });
 
 describe("NuevaColeccionOverlay", () => {
-  it("sin items no renderiza nada ni toca sessionStorage", () => {
-    const setItemSpy = vi.spyOn(Storage.prototype, "setItem");
+  it("sin items no renderiza nada", () => {
     render(<NuevaColeccionOverlay items={[]} />);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(setItemSpy).not.toHaveBeenCalled();
   });
 
-  it("con items y sesion nueva, se muestra y marca sessionStorage", () => {
+  it("con items, se muestra siempre (sin importar visitas previas)", () => {
     render(<NuevaColeccionOverlay items={[item({})]} />);
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(sessionStorage.getItem("nueva-coleccion-vista")).toBe("1");
   });
 
-  it("si sessionStorage ya tiene la marca, no se muestra", () => {
-    sessionStorage.setItem("nueva-coleccion-vista", "1");
+  it("se muestra de nuevo en cada montaje aunque ya se haya visto antes", () => {
+    const { unmount } = render(<NuevaColeccionOverlay items={[item({})]} />);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    unmount();
+
     render(<NuevaColeccionOverlay items={[item({})]} />);
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
   it("cierra con Escape", () => {

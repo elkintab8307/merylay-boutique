@@ -10,20 +10,11 @@ import { calcularDescuento, precioEfectivo } from "@/lib/store/discount";
 import { useCarruselTactil } from "@/lib/store/use-carrusel-tactil";
 import type { NuevaColeccionItem } from "@/lib/store/fetch-nueva-coleccion";
 
-const CLAVE_SESSION_STORAGE = "nueva-coleccion-vista";
-
 export function NuevaColeccionOverlay({ items }: { items: NuevaColeccionItem[] }) {
-  const [mostrar, setMostrar] = useState(false);
-
-  useEffect(() => {
-    if (items.length === 0) return;
-    if (sessionStorage.getItem(CLAVE_SESSION_STORAGE)) return;
-    sessionStorage.setItem(CLAVE_SESSION_STORAGE, "1");
-    // sessionStorage solo existe en el navegador; el estado real se conoce
-    // tras montar, por eso se fija aqui y no durante el render.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMostrar(true);
-  }, [items.length]);
+  // Se muestra en cada carga/visita al home mientras haya variantes
+  // activas -- sin marca de "ya la vi" en sessionStorage. El estado solo
+  // sirve para permitir cerrarla (X/Esc/fondo) durante esta visita.
+  const [mostrar, setMostrar] = useState(items.length > 0);
 
   if (!mostrar || items.length === 0 || typeof document === "undefined") return null;
 
@@ -65,9 +56,9 @@ function PanelNuevaColeccion({
       onClick={(e) => {
         if (e.target === e.currentTarget) onCerrar();
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm"
     >
-      <div className="relative w-full max-w-2xl animate-nueva-coleccion-in rounded-2xl border border-brand-oro bg-brand-crema p-6 shadow-brand-lg motion-reduce:animate-none">
+      <div className="relative w-full max-w-2xl animate-nueva-coleccion-panel rounded-2xl border border-brand-oro/60 bg-brand-crema/80 p-6 shadow-[0_0_40px_8px_rgb(233_106_158_/_0.35),0_0_70px_20px_rgb(217_164_65_/_0.2)] backdrop-blur-xl motion-reduce:animate-none">
         <button
           ref={cerrarRef}
           type="button"
