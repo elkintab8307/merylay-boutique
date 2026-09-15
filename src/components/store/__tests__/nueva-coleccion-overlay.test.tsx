@@ -74,7 +74,7 @@ describe("NuevaColeccionOverlay", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("hace auto-avance del carrusel cuando hay mas de un item y esta en viewport", () => {
+  it("NO hace auto-avance: el carrusel solo se mueve por gesto tactil o control del usuario", () => {
     let ioCallback: (entries: { isIntersecting: boolean }[]) => void = () => {};
     class IntersectionObserverStub {
       constructor(cb: (entries: { isIntersecting: boolean }[]) => void) {
@@ -101,10 +101,10 @@ describe("NuevaColeccionOverlay", () => {
     });
 
     act(() => {
-      vi.advanceTimersByTime(2500);
+      vi.advanceTimersByTime(10_000);
     });
 
-    expect(scrollToMock).toHaveBeenCalled();
+    expect(scrollToMock).not.toHaveBeenCalled();
   });
 
   it("cada tarjeta enlaza al producto correcto", () => {
