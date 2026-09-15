@@ -31,4 +31,15 @@ describe("motivoARemedio", () => {
     expect(r.causa).toContain("error 500 raro");
     expect(r.queHacer).toMatch(/reintentar|sola/i);
   });
+
+  it("si la pestana paso a segundo plano, avisa eso en vez del mensaje generico de conexion", () => {
+    const r = motivoARemedio("Failed to fetch", { sePasoASegundoPlano: true });
+    expect(r.causa).toMatch(/pantalla se bloqueó|cambiaste de app/i);
+    expect(r.queHacer).toMatch(/no cambies de app|mantén.*abierta|visible/i);
+  });
+
+  it("sin marca de segundo plano, sigue clasificando el motivo normalmente", () => {
+    const r = motivoARemedio("Failed to fetch", { sePasoASegundoPlano: false });
+    expect(r.causa).toMatch(/conexión/i);
+  });
 });

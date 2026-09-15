@@ -40,15 +40,17 @@ describe("subirImagenesProductoCliente", () => {
     expect(resultado.fallos).toEqual([]);
   });
 
-  it("reintenta hasta 3 veces una subida que falla por red y termina subiendola", async () => {
+  it("reintenta hasta 5 veces una subida que falla por red y termina subiendola", async () => {
     upload
+      .mockResolvedValueOnce({ error: { message: "network error" } })
+      .mockResolvedValueOnce({ error: { message: "network error" } })
       .mockResolvedValueOnce({ error: { message: "network error" } })
       .mockResolvedValueOnce({ error: { message: "network error" } })
       .mockResolvedValueOnce({ error: null });
 
     const resultado = await subirImagenesProductoCliente([foto("a.jpg")], SIN_ESPERA);
 
-    expect(upload).toHaveBeenCalledTimes(3);
+    expect(upload).toHaveBeenCalledTimes(5);
     expect(resultado.urls).toHaveLength(1);
     expect(resultado.fallos).toEqual([]);
   });
@@ -66,8 +68,31 @@ describe("subirImagenesProductoCliente", () => {
       expect.objectContaining({
         nombre: "pijama-frente.jpg",
         motivo: expect.stringContaining("Payload too large"),
+        sePasoASegundoPlano: false,
       }),
     ]);
+  });
+
+  it("marca el fallo cuando la pestana paso a segundo plano durante la subida", async () => {
+    upload.mockImplementation(async () => {
+      Object.defineProperty(document, "visibilityState", {
+        value: "hidden",
+        configurable: true,
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+      return { error: { message: "Failed to fetch" } };
+    });
+
+    const resultado = await subirImagenesProductoCliente([foto("x.jpg")], SIN_ESPERA);
+
+    expect(resultado.fallos).toEqual([
+      expect.objectContaining({ nombre: "x.jpg", sePasoASegundoPlano: true }),
+    ]);
+
+    Object.defineProperty(document, "visibilityState", {
+      value: "visible",
+      configurable: true,
+    });
   });
 
   it("una imagen que falla no impide que las demas se suban", async () => {

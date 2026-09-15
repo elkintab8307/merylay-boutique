@@ -8,7 +8,22 @@
 
 export type Remedio = { causa: string; queHacer: string };
 
-export function motivoARemedio(motivo: string): Remedio {
+export function motivoARemedio(
+  motivo: string,
+  opciones: { sePasoASegundoPlano?: boolean } = {},
+): Remedio {
+  // Se detecto en el momento (no se infiere del texto del error) que la
+  // pestana se oculto mientras se subia esta imagen -- diagnostico mas
+  // preciso que el generico de conexion, aunque el navegador reporte un
+  // mensaje que tambien calzaria con esa otra categoria.
+  if (opciones.sePasoASegundoPlano) {
+    return {
+      causa: "La pantalla se bloqueó o cambiaste de app mientras se subía la imagen.",
+      queHacer:
+        "No cambies de app ni bloquees el celular mientras guardas: mantén esta pestaña abierta y visible, y vuelve a pulsar «Guardar».",
+    };
+  }
+
   const m = motivo.toLowerCase();
 
   if (/failed to fetch|networkerror|network error|load failed|conexión|conexion|timeout|timed out/.test(m)) {
