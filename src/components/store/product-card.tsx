@@ -29,9 +29,15 @@ export function ProductCard({
   return (
     <Link
       href={`/producto/${product.slug}`}
-      className="flex flex-col gap-2 rounded-lg border border-brand-rosa-claro bg-white p-3 shadow-brand-sm transition hover:shadow-brand-md"
+      className="flex flex-col gap-1.5 rounded-lg border border-brand-rosa-claro bg-white p-2 shadow-brand-sm transition hover:shadow-brand-md sm:gap-2 sm:p-3"
     >
-      <div className="relative aspect-square w-full overflow-hidden rounded-md bg-brand-rosa-claro">
+      {/* En movil, aspect-[3/4] (vertical) en vez de cuadrado: las fotos de
+          producto son naturalmente verticales (fotografia de moda), asi que
+          un cuadro cuadrado con object-contain las deja con bandas vacias a
+          los lados y el estampado se ve chico. Un cuadro con forma parecida
+          a la foto real llena mucho mas del espacio, sin recortar nada.
+          Desde `sm:` (tablet/escritorio) vuelve a cuadrado, sin cambios. */}
+      <div className="relative aspect-[3/4] w-full overflow-hidden rounded-md bg-brand-rosa-claro sm:aspect-square">
         <TarjetaGaleria images={product.imageUrls} alt={product.name} />
         {descuento !== null && (
           <span className="absolute left-2 top-2 rounded-full bg-brand-rosa px-2 py-0.5 text-xs font-semibold text-brand-crema">

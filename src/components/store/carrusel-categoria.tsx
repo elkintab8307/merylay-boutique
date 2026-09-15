@@ -67,12 +67,12 @@ export function CarruselCategoria({
       </div>
       <div
         ref={ref}
-        className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1 sm:gap-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {productos.map((producto) => (
           <div
             key={producto.slug}
-            className="w-[45%] shrink-0 snap-start sm:w-[31%] md:w-[23%] lg:w-[18%]"
+            className="w-[46%] shrink-0 snap-start sm:w-[31%] md:w-[23%] lg:w-[18%]"
           >
             <ProductCard
               product={producto}

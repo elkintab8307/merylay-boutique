@@ -205,7 +205,7 @@ export default async function HomePage() {
       {productos.length > 0 && (
         <section className="flex flex-col gap-6">
           <h2 className="font-heading text-2xl text-brand-ciruela">Destacados</h2>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4">
             {productos.map((producto) => (
               <ProductCard
                 key={producto.slug}
