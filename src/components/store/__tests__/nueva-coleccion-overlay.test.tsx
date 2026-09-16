@@ -119,4 +119,48 @@ describe("NuevaColeccionOverlay", () => {
       "/producto/pijama-dos",
     ]);
   });
+
+  it("con un solo item no muestra controles anterior/siguiente", () => {
+    render(<NuevaColeccionOverlay items={[item({})]} />);
+    expect(screen.queryByRole("button", { name: /anterior/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /siguiente/i })).not.toBeInTheDocument();
+  });
+
+  it("con varios items muestra controles anterior/siguiente; anterior empieza deshabilitado", () => {
+    render(
+      <NuevaColeccionOverlay
+        items={[item({ variantId: "v1" }), item({ variantId: "v2" }), item({ variantId: "v3" })]}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /anterior/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /siguiente/i })).toBeEnabled();
+  });
+
+  it("el control siguiente desplaza el carrusel y habilita anterior", () => {
+    const scrollToMock = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", { configurable: true, value: scrollToMock });
+
+    render(
+      <NuevaColeccionOverlay
+        items={[item({ variantId: "v1" }), item({ variantId: "v2" }), item({ variantId: "v3" })]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /siguiente/i }));
+
+    expect(scrollToMock).toHaveBeenCalledWith(
+      expect.objectContaining({ left: 100 }),
+    );
+    expect(screen.getByRole("button", { name: /anterior/i })).toBeEnabled();
+  });
+
+  it("el control siguiente se deshabilita en la ultima tarjeta", () => {
+    render(
+      <NuevaColeccionOverlay items={[item({ variantId: "v1" }), item({ variantId: "v2" })]} />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /siguiente/i }));
+
+    expect(screen.getByRole("button", { name: /siguiente/i })).toBeDisabled();
+  });
 });
