@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
 import Link from "next/link";
-import { X } from "lucide-react";
+import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import { formatPrice } from "@/lib/format";
 import { calcularDescuento, precioEfectivo } from "@/lib/store/discount";
 import { useCarruselTactil } from "@/lib/store/use-carrusel-tactil";
@@ -33,9 +33,9 @@ function PanelNuevaColeccion({
 }) {
   const cerrarRef = useRef<HTMLButtonElement | null>(null);
   // Sin autoAvanceMs: el carrusel solo se mueve con el gesto tactil del
-  // usuario (o los controles, si el hook expone alguno mas adelante) --
-  // no debe rotar solo.
-  const { ref } = useCarruselTactil({ total: items.length });
+  // usuario o los controles ‹ › (estos ultimos solo en escritorio, ver
+  // mas abajo) -- no debe rotar solo.
+  const { ref, indice, irA } = useCarruselTactil({ total: items.length });
 
   useEffect(() => {
     cerrarRef.current?.focus();
@@ -76,38 +76,62 @@ function PanelNuevaColeccion({
           ✨ Nueva Colección ✨
         </h2>
 
-        <div
-          ref={ref}
-          className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        >
-          {items.map((item, i) => {
-            const descuento = calcularDescuento(item.price, item.promoPrice);
-            const precioMostrado = precioEfectivo(item.price, item.promoPrice);
-            return (
-              <Link
-                key={item.variantId}
-                href={`/producto/${item.productSlug}`}
-                style={{ animationDelay: `${i * 80}ms` }}
-                className="w-40 shrink-0 snap-start animate-nueva-coleccion-in rounded-xl bg-white p-2 shadow-brand-sm motion-reduce:animate-none"
+        <div className="relative">
+          {items.length > 1 && (
+            <>
+              <button
+                type="button"
+                aria-label="Anterior"
+                disabled={indice === 0}
+                onClick={() => irA(indice - 1)}
+                className="absolute left-1 top-1/2 z-10 hidden -translate-y-1/2 rounded-full bg-black/10 p-2 text-brand-ciruela hover:bg-black/20 disabled:opacity-30 sm:flex"
               >
-                <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-brand-rosa-claro">
-                  <Image src={item.imageUrl} alt={item.productName} fill className="object-cover" sizes="160px" />
-                  <span className="absolute left-1 top-1 animate-pulse rounded-full bg-brand-rosa px-2 py-0.5 text-[10px] font-semibold text-brand-crema motion-reduce:animate-none">
-                    NUEVO
-                  </span>
-                </div>
-                <p className="mt-1 truncate text-xs text-brand-ciruela">{item.productName}</p>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-sm font-heading text-brand-rosa">{formatPrice(precioMostrado)}</span>
-                  {descuento !== null && (
-                    <span className="text-[10px] text-brand-ciruela/50 line-through">
-                      {formatPrice(item.price)}
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                aria-label="Siguiente"
+                disabled={indice === items.length - 1}
+                onClick={() => irA(indice + 1)}
+                className="absolute right-1 top-1/2 z-10 hidden -translate-y-1/2 rounded-full bg-black/10 p-2 text-brand-ciruela hover:bg-black/20 disabled:opacity-30 sm:flex"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </>
+          )}
+          <div
+            ref={ref}
+            className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
+            {items.map((item, i) => {
+              const descuento = calcularDescuento(item.price, item.promoPrice);
+              const precioMostrado = precioEfectivo(item.price, item.promoPrice);
+              return (
+                <Link
+                  key={item.variantId}
+                  href={`/producto/${item.productSlug}`}
+                  style={{ animationDelay: `${i * 80}ms` }}
+                  className="w-40 shrink-0 snap-start animate-nueva-coleccion-in rounded-xl bg-white p-2 shadow-brand-sm motion-reduce:animate-none"
+                >
+                  <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-brand-rosa-claro">
+                    <Image src={item.imageUrl} alt={item.productName} fill className="object-cover" sizes="160px" />
+                    <span className="absolute left-1 top-1 animate-pulse rounded-full bg-brand-rosa px-2 py-0.5 text-[10px] font-semibold text-brand-crema motion-reduce:animate-none">
+                      NUEVO
                     </span>
-                  )}
-                </div>
-              </Link>
-            );
-          })}
+                  </div>
+                  <p className="mt-1 truncate text-xs text-brand-ciruela">{item.productName}</p>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-sm font-heading text-brand-rosa">{formatPrice(precioMostrado)}</span>
+                    {descuento !== null && (
+                      <span className="text-[10px] text-brand-ciruela/50 line-through">
+                        {formatPrice(item.price)}
+                      </span>
+                    )}
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>
