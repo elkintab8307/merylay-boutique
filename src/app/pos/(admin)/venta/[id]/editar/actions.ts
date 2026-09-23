@@ -8,12 +8,18 @@ import type { LocalCartItem } from "@/lib/cart/local-cart";
 
 type PaymentMethod = Database["public"]["Enums"]["payment_method"];
 
+// Adonde vuelve el usuario tras guardar. Son dos destinos fijos (no una URL
+// que llegue del cliente) para que la accion no pueda usarse como redirect
+// abierto.
+export type DestinoTrasEditar = "recibo" | "credito";
+
 export async function actualizarVenta(
   saleId: string,
   items: LocalCartItem[],
   paymentMethod: PaymentMethod,
   discount: number,
   customerId: string | null,
+  destino: DestinoTrasEditar = "recibo",
 ): Promise<{ error?: string }> {
   await requireAdmin();
 
@@ -40,5 +46,5 @@ export async function actualizarVenta(
     return { error: error?.message ?? "No se pudo actualizar la venta." };
   }
 
-  redirect(`/pos/venta/${data.id}`);
+  redirect(destino === "credito" ? `/pos/creditos/${data.id}` : `/pos/venta/${data.id}`);
 }

@@ -47,6 +47,7 @@ export function VentaItemsEditor({
   clienteObligatorio = false,
   permitirCredito = true,
   mobileVistaDoble = false,
+  resumenPrimeroEnMovil = false,
   persistirVentaEnCurso = false,
   textoBoton,
   textoBotonEnviando,
@@ -62,6 +63,11 @@ export function VentaItemsEditor({
   clienteObligatorio?: boolean;
   permitirCredito?: boolean;
   mobileVistaDoble?: boolean;
+  // En movil (una sola columna) el resumen de la venta -- items, descuento,
+  // cliente, total y el boton de guardar -- sube arriba y el buscador de
+  // productos queda debajo. Sin esto el resumen queda al final de una lista
+  // larguisima de productos. Desde `md:` el orden no cambia (dos columnas).
+  resumenPrimeroEnMovil?: boolean;
   // Solo la pantalla de "nueva venta" del POS activa esto: guarda los items
   // en localStorage para no perderlos si se recarga la pagina. Los
   // formularios de EDITAR una venta/pedido ya existente no lo pasan -- ahi
@@ -208,15 +214,19 @@ export function VentaItemsEditor({
 
   return (
     <>
-      <div className="grid gap-8 md:grid-cols-2">
-        <div className={mobileVistaDoble && mostrandoCarritoMovil ? "hidden md:contents" : "block md:contents"}>
+      <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+        <div
+          className={`${
+            mobileVistaDoble && mostrandoCarritoMovil ? "hidden md:contents" : "block md:contents"
+          } ${resumenPrimeroEnMovil ? "order-2 md:order-none" : ""}`}
+        >
           <ProductBrowser onAdd={handleAdd} />
         </div>
 
         <div
           className={`flex-col gap-4 rounded-lg border border-brand-rosa-claro bg-white p-4 shadow-brand-sm ${
             mobileVistaDoble && !mostrandoCarritoMovil ? "hidden md:flex" : "flex"
-          }`}
+          } ${resumenPrimeroEnMovil ? "order-1 md:order-none" : ""}`}
         >
           {mobileVistaDoble && (
             <div className="flex items-center gap-2 md:hidden">

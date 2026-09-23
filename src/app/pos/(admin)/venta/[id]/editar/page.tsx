@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/get-current-user";
-import type { LocalCartItem } from "@/lib/cart/local-cart";
+import { cargarVentaEditable } from "@/lib/pos/cargar-venta-editable";
 import { EditarVentaForm } from "./editar-venta-form";
 
 export default async function EditarVentaPage({
@@ -19,112 +19,34 @@ export default async function EditarVentaPage({
   }
 
   const supabase = await createClient();
-  const { data: venta } = await supabase
-    .from("pos_sales")
-    .select("id, discount, payment_method, customer_id, total")
-    .eq("id", id)
-    .single();
+  const datos = await cargarVentaEditable(supabase, id);
 
-  if (!venta) {
+  if (!datos) {
     notFound();
   }
 
-  const ventaEsCredito = venta.payment_method === "credito";
-
-  // Solo un credito tiene abonos: el saldo es total - abonado (misma
-  // definicion que usa registrar_abono_credito en la base de datos).
-  const { data: abonos } = ventaEsCredito
-    ? await supabase.from("credit_payments").select("amount").eq("sale_id", venta.id)
-    : { data: [] as { amount: number }[] };
-  const abonado = (abonos ?? []).reduce((suma, abono) => suma + abono.amount, 0);
-
-  const { data: items } = await supabase
-    .from("pos_sale_items")
-    .select("qty, unit_price, product_id, variant_id, image_id")
-    .eq("sale_id", venta.id);
-
-  const productIds = (items ?? [])
-    .map((i) => i.product_id)
-    .filter((v): v is string => Boolean(v));
-  const variantIds = (items ?? [])
-    .map((i) => i.variant_id)
-    .filter((v): v is string => Boolean(v));
-
-  const [{ data: products }, { data: variants }] = await Promise.all([
-    productIds.length > 0
-      ? supabase.from("products").select("id, name, stock").in("id", productIds)
-      : Promise.resolve({ data: [] as { id: string; name: string; stock: number }[] }),
-    variantIds.length > 0
-      ? supabase
-          .from("product_variants")
-          .select("id, talla, color, stock")
-          .in("id", variantIds)
-      : Promise.resolve({
-          data: [] as {
-            id: string;
-            talla: string | null;
-            color: string | null;
-            stock: number;
-          }[],
-        }),
-  ]);
-
-  const productById = new Map((products ?? []).map((p) => [p.id, p]));
-  const variantById = new Map((variants ?? []).map((v) => [v.id, v]));
-
-  const itemsIniciales: LocalCartItem[] = (items ?? []).map((item) => {
-    const producto = item.product_id ? productById.get(item.product_id) : undefined;
-    const variante = item.variant_id ? variantById.get(item.variant_id) : undefined;
-    const varianteLabel = variante
-      ? [variante.talla, variante.color].filter(Boolean).join(" / ")
-      : null;
-    const nombreBase = producto?.name ?? "Producto";
-    // El stock "editable" de una linea ya vendida es el stock actual mas lo
-    // que esta venta ya tiene reservado: esa cantidad sigue descontada del
-    // stock real hasta que se guarde la edicion, asi que hay que sumarla de
-    // vuelta para no subestimar el maximo disponible en el editor.
-    const stockActual = variante?.stock ?? producto?.stock ?? 0;
-
-    return {
-      productId: item.product_id ?? "",
-      variantId: item.variant_id,
-      imageId: item.image_id,
-      slug: "",
-      name: varianteLabel ? `${nombreBase} (${varianteLabel})` : nombreBase,
-      unitPrice: item.unit_price,
-      qty: item.qty,
-      imageUrl: null,
-      stock: stockActual + item.qty,
-    };
-  });
-
-  const { data: clienteData } = venta.customer_id
-    ? await supabase
-        .from("pos_customers")
-        .select("id, nombre, telefono")
-        .eq("id", venta.customer_id)
-        .single()
-    : { data: null };
+  // Los creditos se editan desde la seccion de Creditos (ahi vuelve el
+  // usuario al guardar y ve el saldo y las cuotas).
+  if (datos.venta.payment_method === "credito") {
+    redirect(`/pos/creditos/${id}/editar`);
+  }
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-12">
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-12">
       <Link
-        href={`/pos/venta/${venta.id}`}
+        href={`/pos/venta/${datos.venta.id}`}
         className="mb-4 inline-flex items-center gap-1.5 text-sm text-brand-ciruela hover:text-brand-rosa"
       >
         <ArrowLeft className="h-4 w-4" />
         Volver al recibo
       </Link>
-      <h1 className="mb-8 font-heading text-3xl text-brand-ciruela">Editar venta</h1>
+      <h1 className="mb-6 font-heading text-3xl text-brand-ciruela sm:mb-8">Editar venta</h1>
       <EditarVentaForm
-        saleId={venta.id}
-        itemsIniciales={itemsIniciales}
-        discountInicial={venta.discount}
-        paymentMethodInicial={venta.payment_method}
-        clienteInicial={clienteData}
-        credito={
-          ventaEsCredito ? { abonado, saldo: venta.total - abonado } : undefined
-        }
+        saleId={datos.venta.id}
+        itemsIniciales={datos.itemsIniciales}
+        discountInicial={datos.venta.discount}
+        paymentMethodInicial={datos.venta.payment_method}
+        clienteInicial={datos.cliente}
       />
     </div>
   );

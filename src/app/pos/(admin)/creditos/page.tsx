@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { Pencil } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentProfile } from "@/lib/auth/get-current-user";
 import { formatPrice } from "@/lib/format";
 import { calcularEstadoCredito, type EstadoCredito } from "@/lib/pos/estado-credito";
 import { rangoHoy } from "@/lib/informes/rango-fecha";
@@ -24,6 +26,12 @@ export default async function CreditosPage({
   const { estado } = await searchParams;
   const supabase = await createClient();
   const hoy = rangoHoy().desde;
+
+  // Solo admin/superadmin puede editar un credito (la base de datos tambien
+  // lo exige); al resto no se le muestra el enlace.
+  const currentUser = await getCurrentProfile();
+  const puedeEditar =
+    currentUser?.profile.role === "admin" || currentUser?.profile.role === "superadmin";
 
   const { data: ventas } = await supabase
     .from("pos_sales")
@@ -112,6 +120,11 @@ export default async function CreditosPage({
               <TableHeaderCell>Total</TableHeaderCell>
               <TableHeaderCell>Saldo</TableHeaderCell>
               <TableHeaderCell>Estado</TableHeaderCell>
+              {puedeEditar && (
+                <TableHeaderCell>
+                  <span className="sr-only">Acciones</span>
+                </TableHeaderCell>
+              )}
             </TableRow>
           </TableHeader>
           <tbody>
@@ -133,6 +146,17 @@ export default async function CreditosPage({
                     {ESTADO_LABEL[venta.estadoCredito]}
                   </Badge>
                 </TableCell>
+                {puedeEditar && (
+                  <TableCell>
+                    <Link
+                      href={`/pos/creditos/${venta.id}/editar`}
+                      className="inline-flex items-center gap-1 text-sm text-brand-rosa hover:underline"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      Editar
+                    </Link>
+                  </TableCell>
+                )}
               </TableRow>
             ))}
           </tbody>

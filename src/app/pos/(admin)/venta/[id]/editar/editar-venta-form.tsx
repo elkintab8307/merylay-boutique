@@ -5,7 +5,7 @@ import type { ClienteSeleccionado } from "@/app/pos/cliente-selector";
 import type { LocalCartItem } from "@/lib/cart/local-cart";
 import { formatPrice } from "@/lib/format";
 import type { Database } from "@/lib/supabase/database.types";
-import { actualizarVenta } from "./actions";
+import { actualizarVenta, type DestinoTrasEditar } from "./actions";
 
 type PaymentMethod = Database["public"]["Enums"]["payment_method"];
 
@@ -16,6 +16,7 @@ export function EditarVentaForm({
   paymentMethodInicial,
   clienteInicial,
   credito,
+  destino = "recibo",
 }: {
   saleId: string;
   itemsIniciales: LocalCartItem[];
@@ -25,6 +26,9 @@ export function EditarVentaForm({
   // Solo se pasa cuando la venta es un credito: lo ya abonado y el saldo
   // actual (total - abonado), para el aviso de arriba.
   credito?: { abonado: number; saldo: number };
+  // Adonde vuelve el usuario al guardar: el recibo de la venta (Ventas) o el
+  // detalle del credito (Creditos).
+  destino?: DestinoTrasEditar;
 }) {
   const esCredito = credito !== undefined;
 
@@ -57,10 +61,13 @@ export function EditarVentaForm({
         // pago, y siempre debe tener cliente.
         mostrarMetodoPago={!esCredito}
         clienteObligatorio={esCredito}
+        // En movil el resumen (items, descuento, cliente, total y guardar)
+        // va arriba y los productos debajo.
+        resumenPrimeroEnMovil
         textoBoton="Guardar cambios"
         textoBotonEnviando="Guardando..."
         onGuardar={(items, paymentMethod, discount, _credito, customerId) =>
-          actualizarVenta(saleId, items, paymentMethod, discount, customerId)
+          actualizarVenta(saleId, items, paymentMethod, discount, customerId, destino)
         }
       />
     </>

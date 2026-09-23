@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Pencil } from "lucide-react";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentProfile } from "@/lib/auth/get-current-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatPrice } from "@/lib/format";
 import { calcularEstadoCredito, type EstadoCredito } from "@/lib/pos/estado-credito";
@@ -34,6 +35,12 @@ export default async function CreditoDetallePage({
 }: PageProps<"/pos/creditos/[id]">) {
   const { id } = await params;
   const supabase = await createClient();
+
+  // Solo admin/superadmin puede editar un credito (la base de datos tambien
+  // lo exige); al resto no se le muestra el boton.
+  const currentUser = await getCurrentProfile();
+  const puedeEditar =
+    currentUser?.profile.role === "admin" || currentUser?.profile.role === "superadmin";
 
   const { data: venta } = await supabase
     .from("pos_sales")
@@ -100,6 +107,16 @@ export default async function CreditoDetallePage({
           <PrintButton />
         </div>
       </div>
+
+      {puedeEditar && (
+        <Link
+          href={`/pos/creditos/${venta.id}/editar`}
+          className="mb-6 inline-flex items-center gap-2 rounded-md bg-brand-rosa px-4 py-2 text-sm font-medium text-brand-crema hover:bg-brand-rosa/90"
+        >
+          <Pencil className="h-4 w-4" />
+          Editar crédito
+        </Link>
+      )}
 
       <div className="mb-8 grid grid-cols-2 gap-4">
         <div className="rounded-lg border border-brand-rosa-claro bg-white p-4 shadow-brand-sm">
