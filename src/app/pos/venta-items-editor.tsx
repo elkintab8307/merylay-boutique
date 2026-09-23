@@ -257,44 +257,52 @@ export function VentaItemsEditor({
               {items.map((item) => (
                 <div
                   key={`${item.productId}-${item.variantId ?? "base"}-${item.imageId ?? "sin-estampado"}`}
-                  className="flex items-center gap-2 py-2"
+                  className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-start gap-x-3 gap-y-2 py-3"
                 >
-                  <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-md bg-brand-rosa-claro">
+                  <div className="relative row-span-2 h-11 w-11 overflow-hidden rounded-md bg-brand-rosa-claro">
                     {item.imageUrl && (
                       <Image src={item.imageUrl} alt={item.name} fill className="object-contain" />
                     )}
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm text-brand-ciruela">{item.name}</p>
+                  <div className="min-w-0">
+                    <p className="line-clamp-3 break-words text-sm leading-snug text-brand-ciruela">
+                      {item.name}
+                    </p>
                     <p className="text-xs text-brand-ciruela/60">{formatPrice(item.unitPrice)}</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleUpdateQty(item.productId, item.variantId, item.imageId, item.qty - 1)
-                    }
-                    className="h-11 w-11 shrink-0 rounded-md border border-brand-rosa-claro text-brand-ciruela"
-                  >
-                    -
-                  </button>
-                  <span className="w-6 text-center text-sm">{item.qty}</span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleUpdateQty(item.productId, item.variantId, item.imageId, item.qty + 1)
-                    }
-                    disabled={Boolean(item.imageId)}
-                    className="h-11 w-11 shrink-0 rounded-md border border-brand-rosa-claro text-brand-ciruela"
-                  >
-                    +
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleRemove(item.productId, item.variantId, item.imageId)}
-                    className="ml-2 text-sm text-red-600 hover:underline"
-                  >
-                    Quitar
-                  </button>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        aria-label="Disminuir cantidad"
+                        onClick={() =>
+                          handleUpdateQty(item.productId, item.variantId, item.imageId, item.qty - 1)
+                        }
+                        className="h-9 w-9 shrink-0 rounded-md border border-brand-rosa-claro text-brand-ciruela"
+                      >
+                        -
+                      </button>
+                      <span className="min-w-8 text-center text-sm">{item.qty}</span>
+                      <button
+                        type="button"
+                        aria-label="Aumentar cantidad"
+                        onClick={() =>
+                          handleUpdateQty(item.productId, item.variantId, item.imageId, item.qty + 1)
+                        }
+                        disabled={Boolean(item.imageId)}
+                        className="h-9 w-9 shrink-0 rounded-md border border-brand-rosa-claro text-brand-ciruela"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemove(item.productId, item.variantId, item.imageId)}
+                      className="text-sm text-red-600 hover:underline"
+                    >
+                      Quitar
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

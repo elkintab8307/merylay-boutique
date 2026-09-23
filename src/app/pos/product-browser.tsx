@@ -149,10 +149,11 @@ export function ProductBrowser({ onAdd }: { onAdd: (item: LocalCartItem) => void
           type="button"
           disabled
           title="Próximamente"
+          aria-label="Scanner"
           className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-brand-rosa-claro px-3 py-2 text-sm text-brand-ciruela/50 opacity-50"
         >
           <ScanBarcode className="h-4 w-4" />
-          Scanner
+          <span className="hidden sm:inline">Scanner</span>
         </button>
       </div>
 

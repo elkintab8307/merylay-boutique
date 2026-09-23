@@ -109,15 +109,15 @@ export function ProductCardPos({
   };
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-brand-rosa-claro bg-white p-3 shadow-brand-sm">
+    <div className="flex min-w-0 flex-col gap-2 rounded-lg border border-brand-rosa-claro bg-white p-3 shadow-brand-sm">
       <div className="relative aspect-square w-full overflow-hidden rounded-md bg-brand-rosa-claro">
         {imagenPrincipal && (
           <Image src={imagenPrincipal} alt={product.name} fill className="object-contain" />
         )}
       </div>
-      <p className="text-sm text-brand-ciruela">{product.name}</p>
-      <div className="flex items-center justify-between">
-        <span className="font-heading text-brand-rosa">{formatPrice(unitPrice)}</span>
+      <p className="line-clamp-2 break-words text-sm leading-snug text-brand-ciruela">{product.name}</p>
+      <div className="flex flex-col items-start gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-2">
+        <span className="whitespace-nowrap font-heading text-brand-rosa">{formatPrice(unitPrice)}</span>
         <Badge variant={stockBadge.variant}>{stockBadge.label}</Badge>
       </div>
 
