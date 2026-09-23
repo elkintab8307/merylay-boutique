@@ -21,7 +21,7 @@ export default async function EditarVentaPage({
   const supabase = await createClient();
   const { data: venta } = await supabase
     .from("pos_sales")
-    .select("id, discount, payment_method, customer_id")
+    .select("id, discount, payment_method, customer_id, total")
     .eq("id", id)
     .single();
 
@@ -30,6 +30,13 @@ export default async function EditarVentaPage({
   }
 
   const ventaEsCredito = venta.payment_method === "credito";
+
+  // Solo un credito tiene abonos: el saldo es total - abonado (misma
+  // definicion que usa registrar_abono_credito en la base de datos).
+  const { data: abonos } = ventaEsCredito
+    ? await supabase.from("credit_payments").select("amount").eq("sale_id", venta.id)
+    : { data: [] as { amount: number }[] };
+  const abonado = (abonos ?? []).reduce((suma, abono) => suma + abono.amount, 0);
 
   const { data: items } = await supabase
     .from("pos_sale_items")
@@ -109,28 +116,16 @@ export default async function EditarVentaPage({
         Volver al recibo
       </Link>
       <h1 className="mb-8 font-heading text-3xl text-brand-ciruela">Editar venta</h1>
-      {ventaEsCredito ? (
-        <div className="rounded-lg border border-brand-oro bg-brand-oro/10 p-4 text-sm text-brand-ciruela">
-          <p className="font-semibold">Esta venta no se puede editar</p>
-          <p>
-            Es un crédito — para no dañar los abonos ya registrados, no se
-            pueden cambiar sus productos ni su total. Gestiona los abonos
-            desde{" "}
-            <Link href={`/pos/creditos/${venta.id}`} className="underline">
-              Créditos
-            </Link>
-            .
-          </p>
-        </div>
-      ) : (
-        <EditarVentaForm
-          saleId={venta.id}
-          itemsIniciales={itemsIniciales}
-          discountInicial={venta.discount}
-          paymentMethodInicial={venta.payment_method}
-          clienteInicial={clienteData}
-        />
-      )}
+      <EditarVentaForm
+        saleId={venta.id}
+        itemsIniciales={itemsIniciales}
+        discountInicial={venta.discount}
+        paymentMethodInicial={venta.payment_method}
+        clienteInicial={clienteData}
+        credito={
+          ventaEsCredito ? { abonado, saldo: venta.total - abonado } : undefined
+        }
+      />
     </div>
   );
 }

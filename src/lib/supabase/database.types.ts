@@ -1262,6 +1262,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      reprogramar_cuotas_credito: {
+        Args: { p_nuevo_total: number; p_sale_id: string }
+        Returns: undefined
+      }
       update_order_items: {
         Args: { p_items: Json; p_order_id: string }
         Returns: {
