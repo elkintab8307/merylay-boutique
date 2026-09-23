@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { urlImagenDeLinea, type ImagenProducto } from "@/lib/pos/imagen-linea";
 import { ArrowLeft } from "lucide-react";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -78,14 +79,13 @@ export default async function ReciboVentaPage({
   const productById = new Map((products ?? []).map((p) => [p.id, p.name]));
   const variantById = new Map((variants ?? []).map((v) => [v.id, v]));
 
-  const imageIds = (items ?? [])
-    .map((i) => i.image_id)
-    .filter((v): v is string => Boolean(v));
-  const { data: imagenesEstampado } =
-    imageIds.length > 0
-      ? await supabase.from("product_images").select("id, url").in("id", imageIds)
-      : { data: [] as { id: string; url: string }[] };
-  const urlPorImagen = new Map((imagenesEstampado ?? []).map((img) => [img.id, img.url]));
+  const { data: imagenes } =
+    productIds.length > 0
+      ? await supabase
+          .from("product_images")
+          .select("id, product_id, variant_id, url, is_primary, sort_order")
+          .in("product_id", productIds)
+      : { data: [] as ImagenProducto[] };
 
   return (
     <div className="mx-auto max-w-md px-6 py-12">
@@ -134,7 +134,7 @@ export default async function ReciboVentaPage({
             const varianteLabel = variante
               ? [variante.talla, variante.color].filter(Boolean).join(" / ")
               : null;
-            const miniatura = item.image_id ? urlPorImagen.get(item.image_id) : null;
+            const miniatura = urlImagenDeLinea(item, imagenes ?? []);
             return (
               <div key={index} className="flex items-center justify-between py-1">
                 <span className="flex items-center gap-2">

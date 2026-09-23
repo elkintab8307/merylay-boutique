@@ -35,6 +35,9 @@ describe("cargarVentaEditable", () => {
       ],
       products: [{ id: "p1", name: "Camiseta", stock: 9 }],
       product_variants: [{ id: "var1", talla: "M", color: "Rosa", stock: 3 }],
+      product_images: [
+        { id: "img1", product_id: "p1", variant_id: "var1", url: "rosa.jpg", is_primary: false, sort_order: 0 },
+      ],
     });
 
     const resultado = await cargarVentaEditable(supabase, "v1");
@@ -47,6 +50,7 @@ describe("cargarVentaEditable", () => {
         unitPrice: 35000,
         qty: 2,
         stock: 5,
+        imageUrl: "rosa.jpg",
       }),
     ]);
     expect(resultado?.abonado).toBe(0);

@@ -2,6 +2,7 @@ import type { createClient } from "@/lib/supabase/server";
 import type { LocalCartItem } from "@/lib/cart/local-cart";
 import type { ClienteSeleccionado } from "@/app/pos/cliente-selector";
 import type { Database } from "@/lib/supabase/database.types";
+import { urlImagenDeLinea, type ImagenProducto } from "./imagen-linea";
 
 type PaymentMethod = Database["public"]["Enums"]["payment_method"];
 
@@ -57,7 +58,7 @@ export async function cargarVentaEditable(
     .map((i) => i.variant_id)
     .filter((v): v is string => Boolean(v));
 
-  const [{ data: products }, { data: variants }] = await Promise.all([
+  const [{ data: products }, { data: variants }, { data: imagenes }] = await Promise.all([
     productIds.length > 0
       ? supabase.from("products").select("id, name, stock").in("id", productIds)
       : Promise.resolve({ data: [] as { id: string; name: string; stock: number }[] }),
@@ -71,6 +72,14 @@ export async function cargarVentaEditable(
             stock: number;
           }[],
         }),
+    // Las fotos de la venta se leen aunque esten marcadas como vendidas: asi
+    // el editor muestra que producto se vendio.
+    productIds.length > 0
+      ? supabase
+          .from("product_images")
+          .select("id, product_id, variant_id, url, is_primary, sort_order")
+          .in("product_id", productIds)
+      : Promise.resolve({ data: [] as ImagenProducto[] }),
   ]);
 
   const productById = new Map((products ?? []).map((p) => [p.id, p]));
@@ -97,7 +106,7 @@ export async function cargarVentaEditable(
       name: varianteLabel ? `${nombreBase} (${varianteLabel})` : nombreBase,
       unitPrice: item.unit_price,
       qty: item.qty,
-      imageUrl: null,
+      imageUrl: urlImagenDeLinea(item, imagenes ?? []),
       stock: stockActual + item.qty,
     };
   });

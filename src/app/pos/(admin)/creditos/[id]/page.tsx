@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowLeft, Pencil } from "lucide-react";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -7,6 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { formatPrice } from "@/lib/format";
 import { calcularEstadoCredito, type EstadoCredito } from "@/lib/pos/estado-credito";
 import { rangoHoy } from "@/lib/informes/rango-fecha";
+import { urlImagenDeLinea } from "@/lib/pos/imagen-linea";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableHeader, TableRow, TableCell, TableHeaderCell } from "@/components/ui/table";
 import { PrintButton } from "@/app/pos/(admin)/venta/[id]/print-button";
@@ -69,6 +71,42 @@ export default async function CreditoDetallePage({
       .order("created_at", { ascending: false }),
   ]);
 
+  // Productos de la venta con su foto (la exacta que se vendio, aunque ya
+  // este marcada como vendida en el catalogo).
+  const { data: lineas } = await supabase
+    .from("pos_sale_items")
+    .select("id, qty, unit_price, line_total, product_id, variant_id, image_id")
+    .eq("sale_id", id);
+  const productIds = [...new Set((lineas ?? []).map((l) => l.product_id).filter((v): v is string => Boolean(v)))];
+  const variantIds = [...new Set((lineas ?? []).map((l) => l.variant_id).filter((v): v is string => Boolean(v)))];
+  const [{ data: productos }, { data: variantes }, { data: imagenes }] = await Promise.all([
+    productIds.length > 0
+      ? supabase.from("products").select("id, name").in("id", productIds)
+      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    variantIds.length > 0
+      ? supabase.from("product_variants").select("id, talla, color").in("id", variantIds)
+      : Promise.resolve({ data: [] as { id: string; talla: string | null; color: string | null }[] }),
+    productIds.length > 0
+      ? supabase
+          .from("product_images")
+          .select("id, product_id, variant_id, url, is_primary, sort_order")
+          .in("product_id", productIds)
+      : Promise.resolve({
+          data: [] as {
+            id: string;
+            product_id: string;
+            variant_id: string | null;
+            url: string;
+            is_primary: boolean;
+            sort_order: number;
+          }[],
+        }),
+  ]);
+  const nombreProducto = new Map((productos ?? []).map((p) => [p.id, p.name]));
+  const varianteLabel = new Map(
+    (variantes ?? []).map((v) => [v.id, [v.talla, v.color].filter(Boolean).join(" / ")]),
+  );
+
   const staffIds = [...new Set((pagos ?? []).map((p) => p.staff_id))];
   const adminClient = createAdminClient();
   const { data: staff } =
@@ -128,6 +166,34 @@ export default async function CreditoDetallePage({
           <p className="font-heading text-2xl text-brand-rosa">{formatPrice(saldo)}</p>
         </div>
       </div>
+
+      <h2 className="mb-4 font-heading text-xl text-brand-ciruela">Productos</h2>
+      <ul className="mb-8 divide-y divide-brand-rosa-claro rounded-lg border border-brand-rosa-claro bg-white shadow-brand-sm">
+        {(lineas ?? []).map((linea) => {
+          const foto = urlImagenDeLinea(linea, imagenes ?? []);
+          const nombre = nombreProducto.get(linea.product_id ?? "") ?? "Producto";
+          const variante = linea.variant_id ? varianteLabel.get(linea.variant_id) : null;
+          return (
+            <li key={linea.id} className="flex items-center gap-3 p-3">
+              <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-md bg-brand-rosa-claro">
+                {foto && <Image src={foto} alt={nombre} fill className="object-contain" />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="break-words text-sm text-brand-ciruela">
+                  {nombre}
+                  {variante ? ` (${variante})` : ""}
+                </p>
+                <p className="text-xs text-brand-ciruela/60">
+                  {linea.qty} × {formatPrice(linea.unit_price)}
+                </p>
+              </div>
+              <p className="shrink-0 text-sm font-medium text-brand-ciruela">
+                {formatPrice(linea.line_total)}
+              </p>
+            </li>
+          );
+        })}
+      </ul>
 
       <h2 className="mb-4 font-heading text-xl text-brand-ciruela">Cuotas</h2>
       <Table>
