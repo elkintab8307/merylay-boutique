@@ -14,6 +14,11 @@ const nextConfig: NextConfig = {
           },
         ]
       : [],
+    // La cuota de optimizacion de imagenes de Vercel se agoto (402
+    // OPTIMIZED_IMAGE_REQUEST_PAYMENT_REQUIRED en /_next/image), lo que
+    // rompia TODAS las imagenes del sitio (producto y logo). Mientras no
+    // se actualice el plan, se sirven sin pasar por el optimizador.
+    unoptimized: true,
   },
   experimental: {
     serverActions: {
