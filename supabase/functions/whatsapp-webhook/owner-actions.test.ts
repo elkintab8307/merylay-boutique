@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../_shared/db.ts", () => ({ getSupabase: vi.fn() }));
 
@@ -210,6 +210,11 @@ describe("consultarVentas", () => {
 });
 
 describe("buscarInventario", () => {
+  afterEach(() => {
+    vi.doUnmock("./catalog.ts");
+    vi.resetModules();
+  });
+
   it("resume cuantos productos coinciden y el total de unidades en stock, con hasta 10 fotos", async () => {
     vi.resetModules();
     vi.doMock("./catalog.ts", () => ({
@@ -226,8 +231,6 @@ describe("buscarInventario", () => {
     expect(resultado.texto).toContain("4 unidad(es) en stock en total");
     expect(resultado.fotos).toHaveLength(2);
     expect(resultado.fotos[0]).toEqual({ url: "https://x/a.jpg", caption: expect.stringContaining("Camiseta A") });
-    vi.doUnmock("./catalog.ts");
-    vi.resetModules();
   });
 
   it("avisa truncamiento y limita a 10 fotos cuando hay mas de 10 coincidencias", async () => {
@@ -243,8 +246,6 @@ describe("buscarInventario", () => {
 
     expect(resultado.texto).toContain("Encontré 15 producto(s)");
     expect(resultado.fotos).toHaveLength(10);
-    vi.doUnmock("./catalog.ts");
-    vi.resetModules();
   });
 
   it("sin coincidencias, responde un mensaje claro y sin fotos", async () => {
@@ -256,12 +257,15 @@ describe("buscarInventario", () => {
 
     expect(resultado.texto).toContain("No encontré ningún producto");
     expect(resultado.fotos).toHaveLength(0);
-    vi.doUnmock("./catalog.ts");
-    vi.resetModules();
   });
 });
 
 describe("generarInformePdf", () => {
+  afterEach(() => {
+    vi.doUnmock("./catalog.ts");
+    vi.resetModules();
+  });
+
   it("genera el PDF con todas las coincidencias (sin el tope de 10) y lo manda como documento", async () => {
     const productos = Array.from({ length: 15 }, (_, i) => ({
       productId: `p${i}`, variantId: null, nombre: `Producto ${i}`, talla: null, color: null,
@@ -278,8 +282,6 @@ describe("generarInformePdf", () => {
     const resultado = await generarInformePdf({ texto: "producto" });
 
     expect(resultado.documentos).toEqual([{ link: "https://x/informe-firmado.pdf", filename: "informe-merylay.pdf" }]);
-    vi.doUnmock("./catalog.ts");
-    vi.resetModules();
   });
 
   it("sin coincidencias, no genera ningun PDF", async () => {
@@ -295,8 +297,6 @@ describe("generarInformePdf", () => {
 
     expect(resultado.texto).toContain("No encontré ningún producto");
     expect(resultado.documentos).toHaveLength(0);
-    vi.doUnmock("./catalog.ts");
-    vi.resetModules();
   });
 });
 
