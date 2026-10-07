@@ -72,11 +72,15 @@ async function subirYFirmar(bytes: Uint8Array, nombreArchivo: string): Promise<s
 
 export async function generarCatalogoPdf(): Promise<string> {
   const supabase = getSupabase();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("products")
     .select("name, price, stock")
     .eq("is_active", true)
     .order("name");
+
+  if (error) {
+    throw new Error(`No se pudo consultar los productos para el catalogo: ${error.message}`);
+  }
 
   const lineas = ((data ?? []) as Array<{ name: string; price: number; stock: number }>).map(
     (p) => `${p.name} — $${p.price.toLocaleString("es-CO")} (stock: ${p.stock})`,

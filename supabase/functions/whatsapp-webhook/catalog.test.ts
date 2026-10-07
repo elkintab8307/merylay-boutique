@@ -21,6 +21,48 @@ describe("buscarProductos", () => {
   });
 });
 
+describe("generarCatalogoPdf", () => {
+  it("sube un PDF al bucket whatsapp-docs y devuelve una URL firmada", async () => {
+    const productos = [
+      { name: "Pijama Rosa", price: 89900, stock: 5 },
+      { name: "Bata Dorada", price: 120000, stock: 2 },
+    ];
+    const order = vi.fn(async () => ({ data: productos, error: null }));
+    const upload = vi.fn(async () => ({ error: null }));
+    const createSignedUrl = vi.fn(async () => ({ data: { signedUrl: "https://x/catalogo-firmado.pdf" }, error: null }));
+    const supabase = {
+      from: vi.fn(() => ({ select: vi.fn(() => ({ eq: vi.fn(() => ({ order })) })) })),
+      storage: { from: vi.fn(() => ({ upload, createSignedUrl })) },
+    };
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { generarCatalogoPdf } = await import("./catalog.ts");
+    const url = await generarCatalogoPdf();
+
+    expect(url).toBe("https://x/catalogo-firmado.pdf");
+    expect(upload).toHaveBeenCalled();
+    expect(createSignedUrl).toHaveBeenCalledWith(expect.stringContaining(".pdf"), 600);
+  });
+
+  it("lanza un error descriptivo si la consulta de productos falla", async () => {
+    const order = vi.fn(async () => ({ data: null, error: { message: "fallo de red" } }));
+    const upload = vi.fn(async () => ({ error: null }));
+    const createSignedUrl = vi.fn(async () => ({ data: { signedUrl: "https://x/no-deberia-llegar.pdf" }, error: null }));
+    const supabase = {
+      from: vi.fn(() => ({ select: vi.fn(() => ({ eq: vi.fn(() => ({ order })) })) })),
+      storage: { from: vi.fn(() => ({ upload, createSignedUrl })) },
+    };
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { generarCatalogoPdf } = await import("./catalog.ts");
+
+    await expect(generarCatalogoPdf()).rejects.toThrow(/fallo de red/);
+    expect(upload).not.toHaveBeenCalled();
+  });
+});
+
 describe("generarCotizacionPdf", () => {
   it("sube un PDF al bucket whatsapp-docs y devuelve una URL firmada", async () => {
     const upload = vi.fn(async () => ({ error: null }));
