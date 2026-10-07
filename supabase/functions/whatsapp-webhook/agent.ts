@@ -28,6 +28,11 @@ function esperar(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Marca un error de OpenAI como no transitorio (ej. 401 por API key invalida):
+// reintentar no cambiaria el resultado, asi que debe escapar el bucle de
+// reintentos de inmediato en lugar de agotar los 3 intentos con backoff.
+class ErrorNoReintentable extends Error {}
+
 async function llamarOpenAI(mensajes: { role: string; content: string }[]): Promise<string> {
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) {
@@ -55,10 +60,13 @@ async function llamarOpenAI(mensajes: { role: string; content: string }[]): Prom
       }
 
       if (![429, 500, 503].includes(respuesta.status)) {
-        throw new Error(`OpenAI respondio ${respuesta.status}`);
+        throw new ErrorNoReintentable(`OpenAI respondio ${respuesta.status}`);
       }
       ultimoError = new Error(`OpenAI respondio ${respuesta.status}`);
     } catch (e) {
+      if (e instanceof ErrorNoReintentable) {
+        throw e;
+      }
       ultimoError = e;
     }
     await esperar(500 * 2 ** intento);

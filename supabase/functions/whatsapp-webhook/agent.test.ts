@@ -55,4 +55,17 @@ describe("decidirAccion", () => {
     const promptSistema = cuerpo.messages[0].content as string;
     expect(promptSistema).toContain("Elkin");
   });
+
+  it("no reintenta y falla rapido si OpenAI responde un error no transitorio (401)", async () => {
+    const fetchMock = vi.fn(async () => new Response("no autorizado", { status: 401 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const { decidirAccion } = await import("./agent.ts");
+    const resultado = await decidirAccion({ rol: "customer", historial: [], mensajeEntrante: "hola" });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(resultado.action).toBe("error");
+    expect(consoleErrorSpy).toHaveBeenCalled();
+  });
 });
