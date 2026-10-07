@@ -10,7 +10,7 @@ export async function transcribirAudio(mediaId: string): Promise<string> {
   const bytes = await descargarMedia(url);
 
   const formulario = new FormData();
-  formulario.append("file", new Blob([bytes]), "audio.ogg");
+  formulario.append("file", new Blob([bytes.buffer as ArrayBuffer]), "audio.ogg");
   formulario.append("model", "whisper-1");
 
   const respuesta = await fetch("https://api.openai.com/v1/audio/transcriptions", {
