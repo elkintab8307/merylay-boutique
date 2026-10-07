@@ -20,40 +20,149 @@ describe("consultarStockBajo", () => {
   });
 });
 
-describe("actualizarPrecioProducto", () => {
-  it("actualiza el precio por id o sku y confirma en texto", async () => {
-    const eq = vi.fn(async () => ({ error: null }));
-    const or = vi.fn(() => ({ eq }));
-    const supabase = { from: vi.fn(() => ({ update: vi.fn(() => ({ or })) })) };
+const UUID = "33333333-3333-4333-8333-333333333333";
+
+// Mock de supabase.from(tabla).update(valores).eq(col, val).select("id").
+function mockUpdate(filasActualizadas: unknown[] | null, error: unknown = null) {
+  const select = vi.fn(async () => ({ data: filasActualizadas, error }));
+  const eq = vi.fn(() => ({ select }));
+  const update = vi.fn(() => ({ eq }));
+  const or = vi.fn();
+  const supabase = { from: vi.fn(() => ({ update, or })) };
+  return { supabase, update, eq, select, or };
+}
+
+describe.each([
+  {
+    nombre: "actualizarPrecioProducto",
+    llamar: async (m: typeof import("./owner-actions.ts"), id: string) => m.actualizarPrecioProducto(id, 95000),
+    valores: { price: 95000 },
+    exito: "95.000",
+  },
+  {
+    nombre: "actualizarStock",
+    llamar: async (m: typeof import("./owner-actions.ts"), id: string) => m.actualizarStock(id, 12),
+    valores: { stock: 12 },
+    exito: "12 unidades",
+  },
+  {
+    nombre: "activarODesactivarProducto",
+    llamar: async (m: typeof import("./owner-actions.ts"), id: string) => m.activarODesactivarProducto(id, false),
+    valores: { is_active: false },
+    exito: "desactivado",
+  },
+])("$nombre", ({ llamar, valores, exito }) => {
+  it("con un SKU (no uuid) filtra por sku con .eq, sin .or()", async () => {
+    const { supabase, update, eq, select, or } = mockUpdate([{ id: UUID }]);
     const { getSupabase } = await import("../_shared/db.ts");
     (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
 
-    const { actualizarPrecioProducto } = await import("./owner-actions.ts");
-    const resultado = await actualizarPrecioProducto("PIJ-001", 95000);
+    const modulo = await import("./owner-actions.ts");
+    const resultado = await llamar(modulo, "PIJ-001");
 
-    expect(resultado).toContain("95.000");
-    expect(or).toHaveBeenCalledWith('id.eq."PIJ-001",sku.eq."PIJ-001"');
+    expect(update).toHaveBeenCalledWith(valores);
+    expect(eq).toHaveBeenCalledWith("sku", "PIJ-001");
+    expect(select).toHaveBeenCalledWith("id");
+    expect(or).not.toHaveBeenCalled();
+    expect(resultado).toContain(exito);
   });
 
-  it("escapa un valor con coma para que no inyecte una clausula extra en el filtro", async () => {
-    const eq = vi.fn(async () => ({ error: null }));
-    const or = vi.fn(() => ({ eq }));
-    const supabase = { from: vi.fn(() => ({ update: vi.fn(() => ({ or })) })) };
+  it("con un uuid filtra por id", async () => {
+    const { supabase, eq } = mockUpdate([{ id: UUID }]);
     const { getSupabase } = await import("../_shared/db.ts");
     (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
 
-    const { actualizarPrecioProducto } = await import("./owner-actions.ts");
-    const idMalicioso = 'P1,is_active.eq.false';
-    await actualizarPrecioProducto(idMalicioso, 95000);
+    const modulo = await import("./owner-actions.ts");
+    await llamar(modulo, UUID);
 
-    const filtroEnviado = or.mock.calls[0][0] as string;
-    // El valor completo, con su coma interna, debe viajar entre comillas
-    // como un unico literal — no debe aparecer una clausula adicional
-    // "is_active.eq.false" fuera de las comillas del valor original.
-    expect(filtroEnviado).toBe(
-      `id.eq."${idMalicioso}",sku.eq."${idMalicioso}"`,
-    );
-    expect(filtroEnviado).not.toContain('id.eq.P1,is_active.eq.false,sku');
+    expect(eq).toHaveBeenCalledWith("id", UUID);
+  });
+
+  it("si ninguna fila coincide responde 'no encontre' en vez de un exito falso", async () => {
+    const { supabase } = mockUpdate([]);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const modulo = await import("./owner-actions.ts");
+    const resultado = await llamar(modulo, "NO-EXISTE");
+
+    expect(resultado).toContain("No encontré ningún producto con id/sku NO-EXISTE");
+    expect(resultado).not.toContain(exito);
+  });
+
+  it("lanza un error descriptivo si la actualizacion falla", async () => {
+    const { supabase } = mockUpdate(null, { message: "fallo de red" });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const modulo = await import("./owner-actions.ts");
+    await expect(llamar(modulo, "PIJ-001")).rejects.toThrow(/fallo de red/);
+  });
+});
+
+describe("cambiarEstadoPedido", () => {
+  it("si ningun pedido coincide responde 'no encontre' en vez de un exito falso", async () => {
+    const { supabase, eq } = mockUpdate([]);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { cambiarEstadoPedido } = await import("./owner-actions.ts");
+    const resultado = await cambiarEstadoPedido("ML-NOEXISTE", "enviado");
+
+    expect(eq).toHaveBeenCalledWith("order_number", "ML-NOEXISTE");
+    expect(resultado).toContain("No encontré ningún pedido");
+  });
+});
+
+describe("consultarPedido", () => {
+  function mockConsulta(pedido: unknown) {
+    const maybeSingle = vi.fn(async () => ({ data: pedido, error: null }));
+    const eq = vi.fn(() => ({ maybeSingle }));
+    const or = vi.fn();
+    const supabase = { from: vi.fn(() => ({ select: vi.fn(() => ({ eq, or })) })) };
+    return { supabase, eq, or };
+  }
+
+  it("con un numero de pedido filtra por order_number", async () => {
+    const { supabase, eq, or } = mockConsulta({ order_number: "ML-20261006-abc123", status: "pagado", total: 150000, channel: "whatsapp" });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { consultarPedido } = await import("./owner-actions.ts");
+    const resultado = await consultarPedido("ML-20261006-abc123");
+
+    expect(eq).toHaveBeenCalledWith("order_number", "ML-20261006-abc123");
+    expect(or).not.toHaveBeenCalled();
+    expect(resultado).toContain("pagado");
+  });
+
+  it("con un uuid filtra por id", async () => {
+    const { supabase, eq } = mockConsulta(null);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { consultarPedido } = await import("./owner-actions.ts");
+    const resultado = await consultarPedido(UUID);
+
+    expect(eq).toHaveBeenCalledWith("id", UUID);
+    expect(resultado).toContain("No encontre ningun pedido");
+  });
+});
+
+describe("buscarCliente", () => {
+  it("escapa la barra invertida antes que las comillas dentro del literal del filtro", async () => {
+    const limit = vi.fn(async () => ({ data: [], error: null }));
+    const or = vi.fn(() => ({ limit }));
+    const supabase = { from: vi.fn(() => ({ select: vi.fn(() => ({ or })) })) };
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { buscarCliente } = await import("./owner-actions.ts");
+    await buscarCliente('a\\"b,x');
+
+    // Entrada: a\"b,x  ->  literal: "%a\\\"b,x%"
+    const literal = '"%a\\\\\\"b,x%"';
+    expect(or).toHaveBeenCalledWith(`full_name.ilike.${literal},whatsapp.ilike.${literal}`);
   });
 });
 

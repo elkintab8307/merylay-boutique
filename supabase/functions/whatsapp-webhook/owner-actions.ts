@@ -4,17 +4,31 @@ const formatoMoneda = (valor: number) => `$${valor.toLocaleString("es-CO")}`;
 
 // Los valores interpolados en un filtro .or() de PostgREST vienen, en
 // ultima instancia, de un mensaje de WhatsApp interpretado por un LLM
-// (idOSku, consulta, numeroOId) y se ejecutan con el cliente de
-// service_role (sin RLS). PostgREST trata comas, puntos y parentesis
-// como separadores de su sintaxis de filtros, asi que un valor con una
-// coma podria inyectar una clausula adicional al .or() — mas grave aun
-// en las funciones de escritura, donde amplia el alcance de un .update().
-// Envolver el valor en comillas dobles (escapando las comillas internas)
-// hace que PostgREST lo trate como un unico literal, sin partirlo por
-// las comas que contenga.
+// (consulta) y se ejecutan con el cliente de service_role (sin RLS).
+// PostgREST trata comas, puntos y parentesis como separadores de su
+// sintaxis de filtros, asi que un valor con una coma podria inyectar una
+// clausula adicional al .or(). Envolver el valor en comillas dobles hace
+// que PostgREST lo trate como un unico literal, sin partirlo por las
+// comas que contenga. Dentro del literal se escapa primero la barra
+// invertida y DESPUES las comillas: al reves, un valor con \ y " a la
+// vez desincronizaria el escape.
 function escaparValorFiltro(valor: string): string {
-  return `"${valor.replace(/"/g, '\\"')}"`;
+  return `"${valor.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
+
+// products.id y orders.id son uuid: un .or("id.eq.X,sku.eq.X") con un X
+// que no sea uuid hace que Postgres rechace TODA la expresion ("invalid
+// input syntax for type uuid"), y el error terminaba tratado como "no
+// encontrado". Por eso se decide la columna antes de consultar y se
+// filtra con un unico .eq() (que ademas no necesita escaparValorFiltro:
+// .eq() no se parsea como expresion de filtros).
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function columnaProducto(idOSku: string): "id" | "sku" {
+  return UUID_RE.test(idOSku) ? "id" : "sku";
+}
+
+const noEncontreProducto = (idOSku: string) => `No encontré ningún producto con id/sku ${idOSku}.`;
 
 export async function consultarVentas(dias: number): Promise<string> {
   const supabase = getSupabase();
@@ -58,11 +72,10 @@ export async function buscarCliente(consulta: string): Promise<string> {
 
 export async function consultarPedido(numeroOId: string): Promise<string> {
   const supabase = getSupabase();
-  const valor = escaparValorFiltro(numeroOId);
   const { data } = await supabase
     .from("orders")
     .select("order_number, status, total, channel")
-    .or(`id.eq.${valor},order_number.eq.${valor}`)
+    .eq(UUID_RE.test(numeroOId) ? "id" : "order_number", numeroOId)
     .maybeSingle();
 
   if (!data) return `No encontre ningun pedido "${numeroOId}".`;
@@ -85,48 +98,53 @@ export async function consultarProducto(consulta: string): Promise<string> {
 
 export async function actualizarPrecioProducto(idOSku: string, nuevoPrecio: number): Promise<string> {
   const supabase = getSupabase();
-  const valor = escaparValorFiltro(idOSku);
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("products")
     .update({ price: nuevoPrecio })
-    .or(`id.eq.${valor},sku.eq.${valor}`);
+    .eq(columnaProducto(idOSku), idOSku)
+    .select("id");
 
   if (error) throw new Error(`No se pudo actualizar el precio: ${error.message}`);
+  if (!data || data.length === 0) return noEncontreProducto(idOSku);
   return `Precio actualizado a ${formatoMoneda(nuevoPrecio)}.`;
 }
 
 export async function actualizarStock(idOSku: string, nuevoStock: number): Promise<string> {
   const supabase = getSupabase();
-  const valor = escaparValorFiltro(idOSku);
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("products")
     .update({ stock: nuevoStock })
-    .or(`id.eq.${valor},sku.eq.${valor}`);
+    .eq(columnaProducto(idOSku), idOSku)
+    .select("id");
 
   if (error) throw new Error(`No se pudo actualizar el stock: ${error.message}`);
+  if (!data || data.length === 0) return noEncontreProducto(idOSku);
   return `Stock actualizado a ${nuevoStock} unidades.`;
 }
 
 export async function cambiarEstadoPedido(numeroPedido: string, nuevoEstado: string): Promise<string> {
   const supabase = getSupabase();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("orders")
     .update({ status: nuevoEstado })
-    .eq("order_number", numeroPedido);
+    .eq("order_number", numeroPedido)
+    .select("id");
 
   if (error) throw new Error(`No se pudo cambiar el estado del pedido: ${error.message}`);
+  if (!data || data.length === 0) return `No encontré ningún pedido con número ${numeroPedido}.`;
   return `Pedido ${numeroPedido} actualizado a "${nuevoEstado}".`;
 }
 
 export async function activarODesactivarProducto(idOSku: string, activo: boolean): Promise<string> {
   const supabase = getSupabase();
-  const valor = escaparValorFiltro(idOSku);
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("products")
     .update({ is_active: activo })
-    .or(`id.eq.${valor},sku.eq.${valor}`);
+    .eq(columnaProducto(idOSku), idOSku)
+    .select("id");
 
   if (error) throw new Error(`No se pudo ${activo ? "activar" : "desactivar"} el producto: ${error.message}`);
+  if (!data || data.length === 0) return noEncontreProducto(idOSku);
   return `Producto ${activo ? "activado" : "desactivado"}.`;
 }
 
