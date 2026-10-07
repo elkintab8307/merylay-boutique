@@ -195,3 +195,78 @@ describe("productosMasVendidos", () => {
     expect(resultado.documentos).toHaveLength(1);
   });
 });
+
+describe("informeClientes", () => {
+  it("fusiona en una sola fila a un cliente que compra por web/WhatsApp y por POS (pos_customers.profile_id vinculado)", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      orders: [{ data: [{ user_id: "profile-1", total: 100000 }], error: null }],
+      pos_sales: [{ data: [{ customer_id: "pos-cliente-1", total: 50000 }], error: null }],
+      pos_customers: [{ data: [{ id: "pos-cliente-1", profile_id: "profile-1", nombre: "Juan (POS)" }], error: null }],
+      profiles: [{ data: [{ id: "profile-1", full_name: "Juan Pérez", username: "juan" }], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { informeClientes } = await import("./reports.ts");
+    const resultado = await informeClientes(30, 10, false);
+
+    expect(resultado.texto).toContain("Juan Pérez — $150.000 en 2 compra(s)");
+    expect(resultado.texto.match(/Juan/g)).toHaveLength(1);
+  });
+
+  it("excluye ventas de POS sin customer_id (venta de mostrador sin cliente)", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      orders: [{ data: [], error: null }],
+      pos_sales: [{ data: [{ customer_id: null, total: 50000 }], error: null }],
+      pos_customers: [{ data: [], error: null }],
+      profiles: [{ data: [], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { informeClientes } = await import("./reports.ts");
+    const resultado = await informeClientes(30, 10, false);
+
+    expect(resultado.texto).toContain("No hubo clientes identificados");
+  });
+
+  it("ordena por total gastado de mayor a menor", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      orders: [{
+        data: [
+          { user_id: "profile-1", total: 50000 },
+          { user_id: "profile-2", total: 200000 },
+        ],
+        error: null,
+      }],
+      pos_sales: [{ data: [], error: null }],
+      pos_customers: [{ data: [], error: null }],
+      profiles: [{ data: [{ id: "profile-1", full_name: "Cliente Chico", username: "c1" }, { id: "profile-2", full_name: "Cliente Grande", username: "c2" }], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { informeClientes } = await import("./reports.ts");
+    const resultado = await informeClientes(30, 10, false);
+
+    expect(resultado.texto.indexOf("Cliente Grande")).toBeLessThan(resultado.texto.indexOf("Cliente Chico"));
+  });
+
+  it("con conPdf=true, genera el PDF", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      orders: [{ data: [{ user_id: "profile-1", total: 100000 }], error: null }],
+      pos_sales: [{ data: [], error: null }],
+      pos_customers: [{ data: [], error: null }],
+      profiles: [{ data: [{ id: "profile-1", full_name: "Juan Pérez", username: "juan" }], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+    const { subirYFirmar } = await import("./catalog.ts");
+
+    const { informeClientes } = await import("./reports.ts");
+    const resultado = await informeClientes(30, 10, true);
+
+    expect(subirYFirmar).toHaveBeenCalled();
+    expect(resultado.documentos).toHaveLength(1);
+  });
+});

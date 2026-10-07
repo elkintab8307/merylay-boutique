@@ -151,3 +151,79 @@ export async function productosMasVendidos(dias: number, limite: number, conPdf:
 
   return { texto, fotos: [], documentos: [{ link, filename: "productos-mas-vendidos-merylay.pdf" }] };
 }
+
+export async function informeClientes(dias: number, limite: number, conPdf: boolean): Promise<RespuestaLectura> {
+  const supabase = getSupabase();
+  const desde = new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString();
+
+  const [pedidos, ventasPos, clientesPos] = await Promise.all([
+    supabase.from("orders").select("user_id, total").gte("created_at", desde).in("status", ESTADOS_PEDIDO_VENDIDO),
+    supabase.from("pos_sales").select("customer_id, total").gte("created_at", desde),
+    supabase.from("pos_customers").select("id, profile_id, nombre"),
+  ]);
+  if (pedidos.error) throw new Error(`No se pudieron consultar los pedidos: ${pedidos.error.message}`);
+  if (ventasPos.error) throw new Error(`No se pudieron consultar las ventas POS: ${ventasPos.error.message}`);
+  if (clientesPos.error) throw new Error(`No se pudieron consultar los clientes de POS: ${clientesPos.error.message}`);
+
+  const filasPedidos = (pedidos.data ?? []) as { user_id: string; total: number }[];
+  const filasPos = (ventasPos.data ?? []) as { customer_id: string | null; total: number }[];
+  const posCustomers = (clientesPos.data ?? []) as { id: string; profile_id: string | null; nombre: string }[];
+  const posCustomerPorId = new Map(posCustomers.map((c) => [c.id, c]));
+
+  // Clave de agrupacion: profile_id cuando existe (web/whatsapp, o POS
+  // vinculado a un perfil) -- asi un cliente que compra por ambos canales
+  // suma en UNA sola fila. Si un pos_customer no tiene profile_id, se usa
+  // su propio id como clave (cliente solo-POS).
+  const acumulado = new Map<string, { total: number; compras: number; nombrePos?: string }>();
+
+  for (const p of filasPedidos) {
+    const actual = acumulado.get(p.user_id) ?? { total: 0, compras: 0 };
+    actual.total += Number(p.total);
+    actual.compras += 1;
+    acumulado.set(p.user_id, actual);
+  }
+
+  for (const v of filasPos) {
+    if (!v.customer_id) continue; // venta de mostrador sin cliente identificado
+    const posCustomer = posCustomerPorId.get(v.customer_id);
+    const clave = posCustomer?.profile_id ?? v.customer_id;
+    // nombrePos solo aplica a clientes solo-POS (sin profile_id vinculado):
+    // si hay profile_id, el nombre debe salir de `profiles` mas abajo, para
+    // que un cliente fusionado muestre su nombre de perfil, no el nombre
+    // (potencialmente distinto) con el que quedo registrado en el POS.
+    const nombrePosSoloSiNoVinculado = posCustomer?.profile_id ? undefined : posCustomer?.nombre;
+    const actual = acumulado.get(clave) ?? { total: 0, compras: 0, nombrePos: nombrePosSoloSiNoVinculado };
+    actual.total += Number(v.total);
+    actual.compras += 1;
+    if (!actual.nombrePos) actual.nombrePos = nombrePosSoloSiNoVinculado;
+    acumulado.set(clave, actual);
+  }
+
+  if (acumulado.size === 0) {
+    return { texto: `No hubo clientes identificados con compras en los últimos ${dias} día(s).`, fotos: [], documentos: [] };
+  }
+
+  const clavesSinNombrePos = [...acumulado.entries()].filter(([, v]) => !v.nombrePos).map(([clave]) => clave);
+  const { data: perfiles, error: errorPerfiles } = clavesSinNombrePos.length > 0
+    ? await supabase.from("profiles").select("id, full_name, username").in("id", clavesSinNombrePos)
+    : { data: [] as { id: string; full_name: string | null; username: string }[], error: null };
+  if (errorPerfiles) throw new Error(`No se pudieron consultar los nombres de clientes: ${errorPerfiles.message}`);
+  const nombrePorProfile = new Map(((perfiles ?? []) as { id: string; full_name: string | null; username: string }[]).map((p) => [p.id, p.full_name ?? p.username]));
+
+  const ranking = [...acumulado.entries()]
+    .map(([clave, v]) => ({ nombre: v.nombrePos ?? nombrePorProfile.get(clave) ?? "Cliente", total: v.total, compras: v.compras }))
+    .sort((a, b) => b.total - a.total);
+
+  const textoTabla = ranking.slice(0, limite).map((c, i) => `${i + 1}. ${c.nombre} — ${formatoMoneda(c.total)} en ${c.compras} compra(s)`).join("\n");
+  const texto = `Mejores clientes de los últimos ${dias} día(s):\n${textoTabla}`;
+
+  if (!conPdf) {
+    return { texto, fotos: [], documentos: [] };
+  }
+
+  const filasTabla = ranking.slice(0, TOPE_FILAS_PDF_RANKING).map((c) => [c.nombre, formatoMoneda(c.total), String(c.compras)]);
+  const bytes = await generarPdfTabla(`Mejores clientes — últimos ${dias} día(s)`, ["Cliente", "Total gastado", "Compras"], filasTabla);
+  const link = await subirYFirmar(bytes, "informe-clientes.pdf");
+
+  return { texto, fotos: [], documentos: [{ link, filename: "informe-clientes-merylay.pdf" }] };
+}
