@@ -109,6 +109,7 @@ async function ejecutarAccionCliente(
   params: Record<string, unknown>,
   profileId: string,
   sessionData: SessionData,
+  mensajeDeRespaldo: string,
 ): Promise<{ texto: string; documentos: { link: string; filename: string }[] }> {
   switch (accion) {
     case "buscar_producto": {
@@ -188,7 +189,7 @@ async function ejecutarAccionCliente(
     }
 
     default:
-      return { texto: "chat", documentos: [] }; // sobreescrito por response_message en el caller
+      return { texto: mensajeDeRespaldo, documentos: [] };
   }
 }
 
@@ -236,7 +237,7 @@ export async function procesarMensajeEntrante(payload: unknown): Promise<void> {
     } else if (decision.action === "chat") {
       respuesta = decision.response_message;
     } else {
-      const resultado = await ejecutarAccionCliente(decision.action, decision.params, profileId, sessionData);
+      const resultado = await ejecutarAccionCliente(decision.action, decision.params, profileId, sessionData, decision.response_message);
       respuesta = resultado.texto;
       await guardarSesion(sessionId, sessionData);
       for (const documento of resultado.documentos) {

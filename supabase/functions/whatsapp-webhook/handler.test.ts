@@ -220,4 +220,18 @@ describe("ejecutarAccionCliente via procesarMensajeEntrante", () => {
     expect(clienteMocks.crearPedidoWompiDesdeCarrito).not.toHaveBeenCalled();
     expect(mocks.enviarTexto).toHaveBeenCalledWith("573009998888", expect.stringContaining("carrito está vacío"));
   });
+
+  it("usa el response_message del modelo como respaldo si la accion no es reconocida", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.14", from: "573009998888", texto: "algo raro" });
+    mocks.decidirAccion.mockResolvedValue({
+      action: "accion_inexistente",
+      params: {},
+      response_message: "No entendí tu mensaje, ¿puedes repetirlo?",
+    });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.enviarTexto).toHaveBeenCalledWith("573009998888", "No entendí tu mensaje, ¿puedes repetirlo?");
+  });
 });
