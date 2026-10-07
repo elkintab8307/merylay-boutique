@@ -62,4 +62,37 @@ describe("handleRequest", () => {
     expect(respuesta.status).toBe(200);
     expect(enviarTextoMock).toHaveBeenCalledWith("573215879805", expect.stringContaining("POS-001"));
   });
+
+  it("si el envio a un dueno falla, igual se intenta con el otro y se loguea el error", async () => {
+    const razonFallo = new Error("no reachable");
+    enviarTextoMock.mockImplementation((numero: string) => {
+      if (numero === "573215879805") return Promise.reject(razonFallo);
+      return Promise.resolve();
+    });
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const { handleRequest } = await import("./index.ts");
+    const req = new Request("https://x/notificar-pedido", {
+      method: "POST",
+      headers: { "x-notificar-pedido-secret": "secreto-del-trigger" },
+      body: JSON.stringify({
+        type: "INSERT",
+        table: "pos_sales",
+        record: { sale_number: "POS-002", total: 1000 },
+      }),
+    });
+
+    const respuesta = await handleRequest(req);
+
+    expect(respuesta.status).toBe(200);
+    expect(enviarTextoMock).toHaveBeenCalledTimes(2);
+    expect(enviarTextoMock).toHaveBeenCalledWith("573215879805", expect.stringContaining("POS-002"));
+    expect(enviarTextoMock).toHaveBeenCalledWith("573102862373", expect.stringContaining("POS-002"));
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("573215879805"),
+      razonFallo,
+    );
+
+    consoleErrorSpy.mockRestore();
+  });
 });
