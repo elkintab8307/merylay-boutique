@@ -131,11 +131,16 @@ export async function buscarInventario(filtros: FiltrosCatalogo, conFotos: boole
   // buscarCatalogo tiene un tope interno (TOPE_BUSCAR_CATALOGO filas); si lo
   // alcanzamos exactamente, puede haber mas coincidencias reales de las que
   // se ven -- se avisa con "o mas" en el conteo de productos.
-  const posibleTruncado = productos.length === TOPE_BUSCAR_CATALOGO ? " o más" : "";
+  // "X o más" sonaba confuso pegado al numero (un dueño real pregunto que
+  // significaba) -- "al menos X... alcance el limite de busqueda" separa
+  // la cifra real de la advertencia de que podria haber mas.
+  const alcanzoElTope = productos.length === TOPE_BUSCAR_CATALOGO;
+  const prefijoConteo = alcanzoElTope ? "al menos " : "";
+  const avisoTope = alcanzoElTope ? " (alcancé el límite de búsqueda; podría haber más)" : "";
   const truncadoFotos = conFotos && productos.length > TOPE_FOTOS_EN_VIVO
     ? ` (mostrando ${TOPE_FOTOS_EN_VIVO} fotos; pide el informe en PDF para ver el resto)`
     : "";
-  const texto = `Encontré ${productosUnicos}${posibleTruncado} producto(s) con ${totalUnidades} unidad(es) en stock en total${truncadoFotos}.`;
+  const texto = `Encontré ${prefijoConteo}${productosUnicos} producto(s) con ${totalUnidades} unidad(es) en stock en total${avisoTope}${truncadoFotos}.`;
 
   const fotos = conFotos
     ? productos.slice(0, TOPE_FOTOS_EN_VIVO).filter((p) => p.fotoUrl).map((p) => ({ url: p.fotoUrl as string, caption: caption(p) }))

@@ -308,7 +308,8 @@ describe("buscarInventario", () => {
     const { buscarInventario } = await import("./owner-actions.ts");
     const resultado = await buscarInventario({ texto: "producto" }, true);
 
-    expect(resultado.texto).toContain("Encontré 50 o más producto(s)");
+    expect(resultado.texto).toContain("Encontré al menos 50 producto(s)");
+    expect(resultado.texto).toContain("alcancé el límite de búsqueda");
   });
 
   it("cuando buscarCatalogo devuelve menos del tope, no avisa de posible truncamiento", async () => {

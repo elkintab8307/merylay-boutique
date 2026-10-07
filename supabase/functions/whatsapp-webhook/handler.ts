@@ -91,18 +91,32 @@ async function ejecutarAccionLectura(accion: string, params: Record<string, unkn
       return { texto: await ownerActions.buscarCliente(params.consulta as string), fotos: [], documentos: [] };
     case "consultar_pedido":
       return { texto: await ownerActions.consultarPedido(params.numeroOId as string), fotos: [], documentos: [] };
-    case "buscar_inventario":
-      return ownerActions.buscarInventario({
+    case "buscar_inventario": {
+      const filtros = {
         texto: params.texto as string | undefined,
         talla: params.talla as string | undefined,
         color: params.color as string | undefined,
-      }, Boolean(params.conFotos));
-    case "generar_informe_pdf":
-      return ownerActions.generarInformePdf({
+      };
+      // buscarCatalogo exige al menos un filtro y lanza si no lo recibe; el
+      // modelo a veces manda esta accion sin ninguno (ej. confundio "informe
+      // de ventas" con esta busqueda de productos). Preguntar en vez de
+      // dejar que la excepcion caiga al mensaje generico de error.
+      if (!filtros.texto && !filtros.talla && !filtros.color) {
+        return { texto: "¿Qué producto o categoría quieres que busque? Dime el nombre, la talla o el color.", fotos: [], documentos: [] };
+      }
+      return ownerActions.buscarInventario(filtros, Boolean(params.conFotos));
+    }
+    case "generar_informe_pdf": {
+      const filtros = {
         texto: params.texto as string | undefined,
         talla: params.talla as string | undefined,
         color: params.color as string | undefined,
-      });
+      };
+      if (!filtros.texto && !filtros.talla && !filtros.color) {
+        return { texto: "¿Sobre qué producto o categoría quieres el informe? Dime un nombre, talla o color para buscar.", fotos: [], documentos: [] };
+      }
+      return ownerActions.generarInformePdf(filtros);
+    }
     default:
       return { texto: "No reconozco esa consulta todavia.", fotos: [], documentos: [] };
   }

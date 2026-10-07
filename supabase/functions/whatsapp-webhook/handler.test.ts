@@ -428,6 +428,28 @@ describe("acciones de lectura del dueño con fotos/documentos", () => {
     expect(mocks.enviarImagenPorLink).not.toHaveBeenCalled();
   });
 
+  it("buscar_inventario sin ningun filtro responde pidiendo mas detalle, sin llamar a ownerActions (no debe reventar)", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.1c", from: "573215879805", texto: "dame un informe" });
+    mocks.decidirAccion.mockResolvedValue({ action: "buscar_inventario", params: {}, response_message: "" });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.buscarInventario).not.toHaveBeenCalled();
+    expect(mocks.enviarTexto).toHaveBeenCalledWith("573215879805", expect.stringContaining("producto"));
+  });
+
+  it("generar_informe_pdf sin ningun filtro responde pidiendo mas detalle, sin llamar a ownerActions (no debe reventar)", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.2b", from: "573215879805", texto: "dame un informe de ventas" });
+    mocks.decidirAccion.mockResolvedValue({ action: "generar_informe_pdf", params: {}, response_message: "" });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.generarInformePdf).not.toHaveBeenCalled();
+    expect(mocks.enviarTexto).toHaveBeenCalledWith("573215879805", expect.stringContaining("informe"));
+  });
+
   it("generar_informe_pdf manda el documento", async () => {
     mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.2", from: "573215879805", texto: "mandame el informe" });
     mocks.decidirAccion.mockResolvedValue({ action: "generar_informe_pdf", params: { texto: "camiseta" }, response_message: "" });
