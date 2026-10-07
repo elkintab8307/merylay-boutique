@@ -32,7 +32,28 @@ describe("actualizarPrecioProducto", () => {
     const resultado = await actualizarPrecioProducto("PIJ-001", 95000);
 
     expect(resultado).toContain("95.000");
-    expect(or).toHaveBeenCalledWith("id.eq.PIJ-001,sku.eq.PIJ-001");
+    expect(or).toHaveBeenCalledWith('id.eq."PIJ-001",sku.eq."PIJ-001"');
+  });
+
+  it("escapa un valor con coma para que no inyecte una clausula extra en el filtro", async () => {
+    const eq = vi.fn(async () => ({ error: null }));
+    const or = vi.fn(() => ({ eq }));
+    const supabase = { from: vi.fn(() => ({ update: vi.fn(() => ({ or })) })) };
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { actualizarPrecioProducto } = await import("./owner-actions.ts");
+    const idMalicioso = 'P1,is_active.eq.false';
+    await actualizarPrecioProducto(idMalicioso, 95000);
+
+    const filtroEnviado = or.mock.calls[0][0] as string;
+    // El valor completo, con su coma interna, debe viajar entre comillas
+    // como un unico literal — no debe aparecer una clausula adicional
+    // "is_active.eq.false" fuera de las comillas del valor original.
+    expect(filtroEnviado).toBe(
+      `id.eq."${idMalicioso}",sku.eq."${idMalicioso}"`,
+    );
+    expect(filtroEnviado).not.toContain('id.eq.P1,is_active.eq.false,sku');
   });
 });
 

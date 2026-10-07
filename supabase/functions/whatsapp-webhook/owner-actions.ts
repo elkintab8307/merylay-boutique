@@ -2,6 +2,20 @@ import { getSupabase } from "../_shared/db.ts";
 
 const formatoMoneda = (valor: number) => `$${valor.toLocaleString("es-CO")}`;
 
+// Los valores interpolados en un filtro .or() de PostgREST vienen, en
+// ultima instancia, de un mensaje de WhatsApp interpretado por un LLM
+// (idOSku, consulta, numeroOId) y se ejecutan con el cliente de
+// service_role (sin RLS). PostgREST trata comas, puntos y parentesis
+// como separadores de su sintaxis de filtros, asi que un valor con una
+// coma podria inyectar una clausula adicional al .or() — mas grave aun
+// en las funciones de escritura, donde amplia el alcance de un .update().
+// Envolver el valor en comillas dobles (escapando las comillas internas)
+// hace que PostgREST lo trate como un unico literal, sin partirlo por
+// las comas que contenga.
+function escaparValorFiltro(valor: string): string {
+  return `"${valor.replace(/"/g, '\\"')}"`;
+}
+
 export async function consultarVentas(dias: number): Promise<string> {
   const supabase = getSupabase();
   const desde = new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString();
@@ -30,10 +44,11 @@ export async function consultarStockBajo(umbral: number): Promise<string> {
 
 export async function buscarCliente(consulta: string): Promise<string> {
   const supabase = getSupabase();
+  const patron = escaparValorFiltro(`%${consulta}%`);
   const { data } = await supabase
     .from("profiles")
     .select("full_name, whatsapp, username")
-    .or(`full_name.ilike.%${consulta}%,whatsapp.ilike.%${consulta}%`)
+    .or(`full_name.ilike.${patron},whatsapp.ilike.${patron}`)
     .limit(5);
 
   const filas = (data ?? []) as { full_name: string | null; whatsapp: string | null; username: string }[];
@@ -43,10 +58,11 @@ export async function buscarCliente(consulta: string): Promise<string> {
 
 export async function consultarPedido(numeroOId: string): Promise<string> {
   const supabase = getSupabase();
+  const valor = escaparValorFiltro(numeroOId);
   const { data } = await supabase
     .from("orders")
     .select("order_number, status, total, channel")
-    .or(`id.eq.${numeroOId},order_number.eq.${numeroOId}`)
+    .or(`id.eq.${valor},order_number.eq.${valor}`)
     .maybeSingle();
 
   if (!data) return `No encontre ningun pedido "${numeroOId}".`;
@@ -59,7 +75,7 @@ export async function consultarProducto(consulta: string): Promise<string> {
   const { data } = await supabase
     .from("products")
     .select("name, price, stock, sku")
-    .or(`name.ilike.%${consulta}%,sku.eq.${consulta}`)
+    .or(`name.ilike.${escaparValorFiltro(`%${consulta}%`)},sku.eq.${escaparValorFiltro(consulta)}`)
     .limit(5);
 
   const filas = (data ?? []) as { name: string; price: number; stock: number; sku: string }[];
@@ -69,10 +85,11 @@ export async function consultarProducto(consulta: string): Promise<string> {
 
 export async function actualizarPrecioProducto(idOSku: string, nuevoPrecio: number): Promise<string> {
   const supabase = getSupabase();
+  const valor = escaparValorFiltro(idOSku);
   const { error } = await supabase
     .from("products")
     .update({ price: nuevoPrecio })
-    .or(`id.eq.${idOSku},sku.eq.${idOSku}`);
+    .or(`id.eq.${valor},sku.eq.${valor}`);
 
   if (error) throw new Error(`No se pudo actualizar el precio: ${error.message}`);
   return `Precio actualizado a ${formatoMoneda(nuevoPrecio)}.`;
@@ -80,10 +97,11 @@ export async function actualizarPrecioProducto(idOSku: string, nuevoPrecio: numb
 
 export async function actualizarStock(idOSku: string, nuevoStock: number): Promise<string> {
   const supabase = getSupabase();
+  const valor = escaparValorFiltro(idOSku);
   const { error } = await supabase
     .from("products")
     .update({ stock: nuevoStock })
-    .or(`id.eq.${idOSku},sku.eq.${idOSku}`);
+    .or(`id.eq.${valor},sku.eq.${valor}`);
 
   if (error) throw new Error(`No se pudo actualizar el stock: ${error.message}`);
   return `Stock actualizado a ${nuevoStock} unidades.`;
@@ -102,10 +120,11 @@ export async function cambiarEstadoPedido(numeroPedido: string, nuevoEstado: str
 
 export async function activarODesactivarProducto(idOSku: string, activo: boolean): Promise<string> {
   const supabase = getSupabase();
+  const valor = escaparValorFiltro(idOSku);
   const { error } = await supabase
     .from("products")
     .update({ is_active: activo })
-    .or(`id.eq.${idOSku},sku.eq.${idOSku}`);
+    .or(`id.eq.${valor},sku.eq.${valor}`);
 
   if (error) throw new Error(`No se pudo ${activo ? "activar" : "desactivar"} el producto: ${error.message}`);
   return `Producto ${activo ? "activado" : "desactivado"}.`;
