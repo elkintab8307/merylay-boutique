@@ -1,7 +1,7 @@
 import { getSupabase } from "../_shared/db.ts";
 import { buscarCatalogo, generarPdfConFotos, subirYFirmar, TOPE_BUSCAR_CATALOGO, type FiltrosCatalogo, type FilaPdf } from "./catalog.ts";
 
-const formatoMoneda = (valor: number) => `$${valor.toLocaleString("es-CO")}`;
+export const formatoMoneda = (valor: number) => `$${valor.toLocaleString("es-CO")}`;
 
 // Los valores interpolados en un filtro .or() de PostgREST vienen, en
 // ultima instancia, de un mensaje de WhatsApp interpretado por un LLM
@@ -13,7 +13,7 @@ const formatoMoneda = (valor: number) => `$${valor.toLocaleString("es-CO")}`;
 // comas que contenga. Dentro del literal se escapa primero la barra
 // invertida y DESPUES las comillas: al reves, un valor con \ y " a la
 // vez desincronizaria el escape.
-function escaparValorFiltro(valor: string): string {
+export function escaparValorFiltro(valor: string): string {
   return `"${valor.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
@@ -33,7 +33,7 @@ const noEncontreProducto = (idOSku: string) => `No encontré ningún producto co
 
 // Mismo criterio que los informes (migracion 018_informes.sql): un pedido
 // enviado o entregado ya fue pagado, tambien cuenta como venta.
-const ESTADOS_PEDIDO_VENDIDO = ["pagado", "enviado", "entregado"];
+export const ESTADOS_PEDIDO_VENDIDO = ["pagado", "enviado", "entregado"];
 
 // Suma las dos fuentes de ventas del negocio: pedidos de tienda/WhatsApp
 // (orders) y ventas presenciales (pos_sales, que no tienen estado: se
