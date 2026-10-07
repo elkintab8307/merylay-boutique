@@ -30,5 +30,14 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    // Codigo de Supabase Edge Functions (runtime Deno, con su propio
+    // import map en supabase/functions/deno.json). No es parte del
+    // proyecto TypeScript de Next.js: usa el global `Deno` (no declarado
+    // aqui) e imports con extension .ts explicita (estilo Deno), que
+    // rompen `tsc`/`next build` si se incluyen. Vitest lo sigue probando
+    // igual porque su transform no type-checkea.
+    "supabase/functions"
+  ]
 }
