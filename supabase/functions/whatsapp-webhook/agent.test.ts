@@ -81,11 +81,13 @@ describe("decidirAccion", () => {
 
     const cuerpo = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
     const prompt = cuerpo.messages[0].content as string;
-    for (const clave of ["consulta", "productId", "variantId", "qty", "fullName", "phone", "address", "city"]) {
+    for (const clave of ["consulta", "productId", "variantId", "qty", "fullName", "phone", "address", "city", "talla", "color"]) {
       expect(prompt).toContain(clave);
     }
     expect(prompt).not.toContain("unitPrice");
     expect(prompt).toMatch(/buscar_producto/);
+    expect(prompt).toContain("buscar_producto");
+    expect(prompt).toContain("generar_catalogo_pdf");
   });
 
   it("documenta en el prompt del dueño los parametros exactos de cada accion", async () => {
@@ -102,6 +104,9 @@ describe("decidirAccion", () => {
     for (const clave of ["dias", "umbral", "consulta", "numeroOId", "idOSku", "nuevoPrecio", "nuevoStock", "numeroPedido", "nuevoEstado", "activo"]) {
       expect(prompt).toContain(clave);
     }
+    expect(prompt).toContain("buscar_inventario");
+    expect(prompt).toContain("generar_informe_pdf");
+    expect(prompt).not.toContain("consultar_producto:");
   });
 
   it("envia el historial a OpenAI en orden, como mensajes user/assistant", async () => {
@@ -139,5 +144,19 @@ describe("decidirAccion", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(resultado.action).toBe("error");
     expect(consoleErrorSpy).toHaveBeenCalled();
+  });
+
+  it("el prompt de cliente instruye saludar con cordialidad y preguntar que necesita", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({ action: "chat", params: {}, response_message: "Hola" }) } }],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { decidirAccion } = await import("./agent.ts");
+    await decidirAccion({ rol: "customer", historial: [], mensajeEntrante: "hola" });
+
+    const cuerpo = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    const prompt = cuerpo.messages[0].content as string;
+    expect(prompt).toMatch(/saluda|cordial/i);
   });
 });

@@ -5,10 +5,10 @@ import type { AgentDecision, RolRemitente } from "../_shared/types.ts";
 // Si se agrega o renombra un parametro alla, hay que actualizarlo aqui:
 // el modelo no tiene otra forma de saber como se llaman.
 const ACCIONES_CLIENTE = `
-- buscar_producto: params {"consulta": string} — texto a buscar en el nombre del producto (ej. "pijama"). Devuelve una lista numerada donde cada opcion trae sus ids entre corchetes: [productId:<uuid> variantId:<uuid>] (variantId solo aparece si el producto tiene tallas/colores).
+- buscar_producto: params {"consulta": string, "talla": string | null, "color": string | null} — "consulta" es texto libre (nombre o categoria, ej. "pijama" o "camisetas"); "talla"/"color" son opcionales. El sistema manda hasta 10 tarjetas con foto, precio, stock y un boton de "Agregar al carrito" por cada coincidencia — nunca describas tu ni inventes la lista en response_message, solo confirma que las vas a mandar o pide mas detalle si "consulta" quedo vacio.
 - agregar_al_carrito: params {"productId": string uuid, "variantId": string uuid | null, "qty": entero >= 1} — productId y variantId deben copiarse TAL CUAL de un resultado previo de buscar_producto que aparezca en esta conversacion; NUNCA los inventes ni los deduzcas del nombre. Si el producto tiene variantes, variantId es obligatorio (la de la talla/color que eligio el cliente). Si en la conversacion no hay un resultado de buscar_producto con esos ids, usa primero buscar_producto. Si el cliente no ha dicho talla/color y hay varias opciones, pregunta con "chat".
 - quitar_del_carrito: params {"productId": string uuid, "variantId": string uuid | null (opcional)} — mismos ids con los que se agrego al carrito.
-- generar_catalogo_pdf: params {} — envia el catalogo completo en PDF.
+- generar_catalogo_pdf: params {"texto": string | null, "talla": string | null, "color": string | null} — envia el catalogo en PDF con fotos; sin ningun parametro, manda el catalogo completo. Usala cuando el cliente pida "el catalogo"/"todo lo que tengan" de una categoria o en general.
 - generar_cotizacion_pdf: params {} — envia una cotizacion en PDF con lo que hay en el carrito.
 - confirmar_pedido: params {"fullName": string, "phone": string, "address": string, "city": string} — datos de envio; los cuatro son obligatorios. Si falta alguno, pidelo con "chat" en lugar de inventarlo.
 - generar_acceso_web: params {} — cuando el cliente quiere entrar a la pagina web a ver sus pedidos.
@@ -20,7 +20,8 @@ Lectura (se ejecutan de inmediato):
 - consultar_stock_bajo: params {"umbral": entero >= 0} — productos activos con stock menor al umbral (por defecto 5).
 - buscar_cliente: params {"consulta": string} — nombre o telefono del cliente.
 - consultar_pedido: params {"numeroOId": string} — numero de pedido (ej. "ML-20261006-abc123") o su id uuid.
-- consultar_producto: params {"consulta": string} — nombre (o parte del nombre) o SKU del producto. Usala tambien para preguntas de "cuantos/cuantas tenemos de X" o "cuanto stock hay de X": la respuesta trae el conteo de productos que coinciden y el total de unidades en stock, ademas del detalle de cada uno.
+- buscar_inventario: params {"texto": string | null, "talla": string | null, "color": string | null} — al menos uno de los tres es obligatorio. Usala para "cuantos/cuantas tenemos de X", "que stock hay de X/en talla Y", o para pedir ver productos de una categoria con fotos. Responde con el conteo, el stock total y hasta 10 fotos.
+- generar_informe_pdf: params {"texto": string | null, "talla": string | null, "color": string | null} — mismos filtros que buscar_inventario, pero manda TODAS las coincidencias en un PDF con fotos (no solo 10). Usala cuando el dueño pida "el informe"/"todas las fotos"/"mandamelo en pdf".
 Escritura (se le pide confirmacion al dueño antes de ejecutarlas):
 - actualizar_precio_producto: params {"idOSku": string, "nuevoPrecio": number} — idOSku es el SKU o el id uuid del producto; nuevoPrecio en pesos colombianos, sin puntos ni signos.
 - actualizar_stock: params {"idOSku": string, "nuevoStock": entero >= 0}.
@@ -43,7 +44,8 @@ function promptSistema(rol: RolRemitente, nombreDueno?: "Elkin" | "Mary"): strin
   return `Eres el asistente de ventas de MeryLay Boutique ("Inspiracion Femenina"), atendiendo a un cliente por WhatsApp. ` +
     `${FORMATO_RESPUESTA}\n` +
     `Acciones disponibles y sus params:${ACCIONES_CLIENTE}\n` +
-    `Los precios, nombres y stock los obtiene el sistema de la base de datos: nunca los incluyas en params.`;
+    `Los precios, nombres y stock los obtiene el sistema de la base de datos: nunca los incluyas en params. ` +
+    `Saluda con cordialidad en el primer mensaje de la conversación y pregunta qué necesita el cliente antes de asumir una acción. Mantén un tono cálido, acorde a "Inspiración Femenina".`;
 }
 
 function esperar(ms: number): Promise<void> {
