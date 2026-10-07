@@ -414,3 +414,66 @@ describe("historialCliente", () => {
     expect(resultado.texto).toContain("no tiene compras registradas");
   });
 });
+
+describe("informeGastos", () => {
+  it("desglosa el total por categoria", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      expenses: [{
+        data: [
+          { description: "Arriendo", amount: 500000, expense_date: "2026-10-01", expense_categories: { name: "Renta" } },
+          { description: "Internet", amount: 80000, expense_date: "2026-10-03", expense_categories: { name: "Servicios" } },
+        ],
+        error: null,
+      }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { informeGastos } = await import("./reports.ts");
+    const resultado = await informeGastos(30, false);
+
+    expect(resultado.texto).toContain("$580.000");
+    expect(resultado.texto).toContain("Renta: $500.000");
+    expect(resultado.texto).toContain("Servicios: $80.000");
+    expect(resultado.documentos).toHaveLength(0);
+  });
+
+  it("agrupa los gastos sin categoria como 'Sin categoría'", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      expenses: [{ data: [{ description: "Varios", amount: 20000, expense_date: "2026-10-03", expense_categories: null }], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { informeGastos } = await import("./reports.ts");
+    const resultado = await informeGastos(30, false);
+
+    expect(resultado.texto).toContain("Sin categoría: $20.000");
+  });
+
+  it("sin gastos en el periodo, responde un mensaje claro", async () => {
+    const supabase = mockSupabaseDesdeTablas({ expenses: [{ data: [], error: null }] });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { informeGastos } = await import("./reports.ts");
+    const resultado = await informeGastos(1, false);
+
+    expect(resultado.texto).toContain("No hubo gastos registrados");
+  });
+
+  it("con conPdf=true, genera el PDF con el detalle", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      expenses: [{ data: [{ description: "Arriendo", amount: 500000, expense_date: "2026-10-01", expense_categories: { name: "Renta" } }], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+    const { subirYFirmar } = await import("./catalog.ts");
+
+    const { informeGastos } = await import("./reports.ts");
+    const resultado = await informeGastos(30, true);
+
+    expect(subirYFirmar).toHaveBeenCalled();
+    expect(resultado.documentos).toEqual([{ link: "https://x/informe-firmado.pdf", filename: "informe-gastos-merylay.pdf" }]);
+  });
+});

@@ -309,3 +309,50 @@ export async function historialCliente(nombreOTelefono: string): Promise<Respues
 
   return { texto, fotos: [], documentos: [] };
 }
+
+export async function informeGastos(dias: number, conPdf: boolean): Promise<RespuestaLectura> {
+  const supabase = getSupabase();
+  // expense_date es tipo `date` (no timestamptz) -- se compara con una
+  // fecha YYYY-MM-DD, no con una marca de tiempo completa.
+  const desde = new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  const { data, error } = await supabase
+    .from("expenses")
+    .select("description, amount, expense_date, expense_categories(name)")
+    .gte("expense_date", desde);
+  if (error) throw new Error(`No se pudieron consultar los gastos: ${error.message}`);
+
+  const filas = (data ?? []) as { description: string; amount: number; expense_date: string; expense_categories: { name: string } | null }[];
+  if (filas.length === 0) {
+    return { texto: `No hubo gastos registrados en los últimos ${dias} día(s).`, fotos: [], documentos: [] };
+  }
+
+  const total = filas.reduce((suma, g) => suma + Number(g.amount), 0);
+  const porCategoria = new Map<string, number>();
+  for (const g of filas) {
+    const categoria = g.expense_categories?.name ?? "Sin categoría";
+    porCategoria.set(categoria, (porCategoria.get(categoria) ?? 0) + Number(g.amount));
+  }
+  const lineaCategorias = [...porCategoria.entries()].map(([categoria, monto]) => `${categoria}: ${formatoMoneda(monto)}`).join(", ");
+
+  const texto = `Gastos de los últimos ${dias} día(s): ${formatoMoneda(total)}.\nPor categoría: ${lineaCategorias}.`;
+
+  if (!conPdf) {
+    return { texto, fotos: [], documentos: [] };
+  }
+
+  const filasTabla = [...filas]
+    .sort((a, b) => (a.expense_date > b.expense_date ? -1 : 1))
+    .slice(0, TOPE_FILAS_PDF_DETALLE)
+    .map((g) => [
+      new Date(g.expense_date).toLocaleDateString("es-CO"),
+      g.expense_categories?.name ?? "Sin categoría",
+      g.description,
+      formatoMoneda(Number(g.amount)),
+    ]);
+
+  const bytes = await generarPdfTabla(`Informe de gastos — últimos ${dias} día(s)`, ["Fecha", "Categoría", "Descripción", "Monto"], filasTabla);
+  const link = await subirYFirmar(bytes, "informe-gastos.pdf");
+
+  return { texto, fotos: [], documentos: [{ link, filename: "informe-gastos-merylay.pdf" }] };
+}
