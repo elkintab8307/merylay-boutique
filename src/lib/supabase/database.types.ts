@@ -1142,6 +1142,29 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      crear_pedido_wompi_whatsapp: {
+        Args: { p_items: Json; p_shipping_address: Json; p_user_id: string }
+        Returns: {
+          channel: string
+          created_at: string
+          id: string
+          order_number: string
+          payment_method: string | null
+          shipping: number
+          shipping_address: Json | null
+          status: Database["public"]["Enums"]["order_status"]
+          subtotal: number
+          total: number
+          user_id: string
+          wompi_transaction_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       create_order: {
         Args: { p_payment_method: string; p_shipping_address: Json }
         Returns: {
