@@ -1,5 +1,5 @@
 import { getSupabase } from "../_shared/db.ts";
-import { buscarCatalogo, generarPdfConFotos, subirYFirmar, type FiltrosCatalogo, type FilaPdf } from "./catalog.ts";
+import { buscarCatalogo, generarPdfConFotos, subirYFirmar, TOPE_BUSCAR_CATALOGO, type FiltrosCatalogo, type FilaPdf } from "./catalog.ts";
 
 const formatoMoneda = (valor: number) => `$${valor.toLocaleString("es-CO")}`;
 
@@ -119,9 +119,17 @@ export async function buscarInventario(filtros: FiltrosCatalogo): Promise<Respue
     return { texto: `No encontré ningún producto que coincida con esa búsqueda.`, fotos: [], documentos: [] };
   }
 
+  // buscarCatalogo devuelve una fila por VARIANTE (un producto con 3
+  // talla/color produce 3 filas), asi que productos.length sobreestima el
+  // numero de productos distintos -- se cuenta por productId unico.
+  const productosUnicos = new Set(productos.map((p) => p.productId)).size;
   const totalUnidades = productos.reduce((suma, p) => suma + p.stock, 0);
-  const truncado = productos.length > TOPE_FOTOS_EN_VIVO ? ` (mostrando ${TOPE_FOTOS_EN_VIVO}; pide el informe en PDF para ver el resto)` : "";
-  const texto = `Encontré ${productos.length} producto(s) con ${totalUnidades} unidad(es) en stock en total${truncado}.`;
+  // buscarCatalogo tiene un tope interno (TOPE_BUSCAR_CATALOGO filas); si lo
+  // alcanzamos exactamente, puede haber mas coincidencias reales de las que
+  // se ven -- se avisa con "o mas" en el conteo de productos.
+  const posibleTruncado = productos.length === TOPE_BUSCAR_CATALOGO ? " o más" : "";
+  const truncadoFotos = productos.length > TOPE_FOTOS_EN_VIVO ? ` (mostrando ${TOPE_FOTOS_EN_VIVO} fotos; pide el informe en PDF para ver el resto)` : "";
+  const texto = `Encontré ${productosUnicos}${posibleTruncado} producto(s) con ${totalUnidades} unidad(es) en stock en total${truncadoFotos}.`;
 
   const fotos = productos
     .slice(0, TOPE_FOTOS_EN_VIVO)

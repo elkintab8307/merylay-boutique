@@ -90,6 +90,30 @@ describe("decidirAccion", () => {
     expect(prompt).toContain("generar_catalogo_pdf");
   });
 
+  it("la instruccion de agregar_al_carrito ya no promete ids de buscar_producto en el texto de la conversacion", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({ action: "chat", params: {}, response_message: "Hola" }) } }],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { decidirAccion } = await import("./agent.ts");
+    await decidirAccion({ rol: "customer", historial: [], mensajeEntrante: "hola" });
+
+    const cuerpo = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    const prompt = cuerpo.messages[0].content as string;
+
+    // buscar_producto ya no deja ids en texto (manda tarjetas con boton), asi
+    // que la vieja instruccion de "copialos TAL CUAL de un resultado previo
+    // de buscar_producto" ya no aplica -- debe haber sido retirada.
+    expect(prompt).not.toMatch(/TAL CUAL de un resultado previo de buscar_producto/);
+    // La nueva instruccion debe decirle al modelo que pida al cliente tocar
+    // el boton (o describir el producto de nuevo) cuando no haya un id real.
+    expect(prompt).toContain("boton");
+    expect(prompt).toContain("Agregar al carrito");
+    // La prohibicion de inventar/deducir los ids del nombre se mantiene.
+    expect(prompt).toMatch(/NUNCA los inventes ni los deduzcas del nombre/);
+  });
+
   it("documenta en el prompt del dueño los parametros exactos de cada accion", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({
       choices: [{ message: { content: JSON.stringify({ action: "chat", params: {}, response_message: "Hola" }) } }],

@@ -222,6 +222,7 @@ describe("buscarInventario", () => {
         { productId: "p1", variantId: null, nombre: "Camiseta A", talla: null, color: null, precio: 40000, stock: 1, imageId: null, fotoUrl: "https://x/a.jpg" },
         { productId: "p2", variantId: null, nombre: "Camiseta B", talla: null, color: null, precio: 40000, stock: 3, imageId: null, fotoUrl: "https://x/b.jpg" },
       ]),
+      TOPE_BUSCAR_CATALOGO: 50,
     }));
 
     const { buscarInventario } = await import("./owner-actions.ts");
@@ -239,7 +240,7 @@ describe("buscarInventario", () => {
       precio: 1000, stock: 1, imageId: null, fotoUrl: `https://x/${i}.jpg`,
     }));
     vi.resetModules();
-    vi.doMock("./catalog.ts", () => ({ buscarCatalogo: vi.fn(async () => productos) }));
+    vi.doMock("./catalog.ts", () => ({ buscarCatalogo: vi.fn(async () => productos), TOPE_BUSCAR_CATALOGO: 50 }));
 
     const { buscarInventario } = await import("./owner-actions.ts");
     const resultado = await buscarInventario({ texto: "producto" });
@@ -250,13 +251,60 @@ describe("buscarInventario", () => {
 
   it("sin coincidencias, responde un mensaje claro y sin fotos", async () => {
     vi.resetModules();
-    vi.doMock("./catalog.ts", () => ({ buscarCatalogo: vi.fn(async () => []) }));
+    vi.doMock("./catalog.ts", () => ({ buscarCatalogo: vi.fn(async () => []), TOPE_BUSCAR_CATALOGO: 50 }));
 
     const { buscarInventario } = await import("./owner-actions.ts");
     const resultado = await buscarInventario({ texto: "inexistente" });
 
     expect(resultado.texto).toContain("No encontré ningún producto");
     expect(resultado.fotos).toHaveLength(0);
+  });
+
+  it("cuenta productos distintos, no filas: 3 variantes del mismo producto cuentan como 1 producto, pero el stock de las 3 se suma", async () => {
+    vi.resetModules();
+    vi.doMock("./catalog.ts", () => ({
+      buscarCatalogo: vi.fn(async () => [
+        { productId: "p1", variantId: "v1", nombre: "Pijama Rosa (Talla S)", talla: "S", color: "Rosa", precio: 89900, stock: 2, imageId: null, fotoUrl: "https://x/s.jpg" },
+        { productId: "p1", variantId: "v2", nombre: "Pijama Rosa (Talla M)", talla: "M", color: "Rosa", precio: 89900, stock: 3, imageId: null, fotoUrl: "https://x/m.jpg" },
+        { productId: "p1", variantId: "v3", nombre: "Pijama Rosa (Talla L)", talla: "L", color: "Rosa", precio: 89900, stock: 1, imageId: null, fotoUrl: "https://x/l.jpg" },
+      ]),
+      TOPE_BUSCAR_CATALOGO: 50,
+    }));
+
+    const { buscarInventario } = await import("./owner-actions.ts");
+    const resultado = await buscarInventario({ texto: "pijama" });
+
+    expect(resultado.texto).toContain("Encontré 1 producto(s)");
+    expect(resultado.texto).toContain("6 unidad(es) en stock en total");
+  });
+
+  it("cuando buscarCatalogo devuelve exactamente el tope (50 filas), avisa que podria haber mas", async () => {
+    const productos = Array.from({ length: 50 }, (_, i) => ({
+      productId: `p${i}`, variantId: null, nombre: `Producto ${i}`, talla: null, color: null,
+      precio: 1000, stock: 1, imageId: null, fotoUrl: `https://x/${i}.jpg`,
+    }));
+    vi.resetModules();
+    vi.doMock("./catalog.ts", () => ({ buscarCatalogo: vi.fn(async () => productos), TOPE_BUSCAR_CATALOGO: 50 }));
+
+    const { buscarInventario } = await import("./owner-actions.ts");
+    const resultado = await buscarInventario({ texto: "producto" });
+
+    expect(resultado.texto).toContain("Encontré 50 o más producto(s)");
+  });
+
+  it("cuando buscarCatalogo devuelve menos del tope, no avisa de posible truncamiento", async () => {
+    const productos = Array.from({ length: 20 }, (_, i) => ({
+      productId: `p${i}`, variantId: null, nombre: `Producto ${i}`, talla: null, color: null,
+      precio: 1000, stock: 1, imageId: null, fotoUrl: `https://x/${i}.jpg`,
+    }));
+    vi.resetModules();
+    vi.doMock("./catalog.ts", () => ({ buscarCatalogo: vi.fn(async () => productos), TOPE_BUSCAR_CATALOGO: 50 }));
+
+    const { buscarInventario } = await import("./owner-actions.ts");
+    const resultado = await buscarInventario({ texto: "producto" });
+
+    expect(resultado.texto).toContain("Encontré 20 producto(s)");
+    expect(resultado.texto).not.toContain("o más");
   });
 });
 

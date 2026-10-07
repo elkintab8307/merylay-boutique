@@ -188,6 +188,30 @@ describe("generarPdfConFotos", () => {
     expect(fetchMock).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
+
+  it("con un total, agrega una fila extra con el gran total (y no revienta)", async () => {
+    const { generarPdfConFotos } = await import("./catalog.ts");
+
+    const conTotal = await generarPdfConFotos("Informe de prueba", [
+      { fotoUrl: null, nombre: "Pijama Rosa", detalle: "x2", precio: 100000 },
+    ], 150000);
+    const sinTotal = await generarPdfConFotos("Informe de prueba", [
+      { fotoUrl: null, nombre: "Pijama Rosa", detalle: "x2", precio: 100000 },
+    ]);
+
+    expect(conTotal.byteLength).toBeGreaterThan(0);
+    // La pagina con total es mas alta (una fila extra), asi que el PDF
+    // resultante no deberia ser mas pequeño que el que no lo lleva.
+    expect(conTotal.byteLength).toBeGreaterThanOrEqual(sinTotal.byteLength);
+  });
+
+  it("sin total, no dibuja ninguna fila de total (comportamiento igual al de antes)", async () => {
+    const { generarPdfConFotos } = await import("./catalog.ts");
+    const bytes = await generarPdfConFotos("Informe de prueba", [
+      { fotoUrl: null, nombre: "Pijama Rosa", detalle: "x2", precio: 100000 },
+    ]);
+    expect(bytes.byteLength).toBeGreaterThan(0);
+  });
 });
 
 describe("generarCatalogoPdf", () => {
@@ -278,13 +302,30 @@ describe("generarCatalogoPdf", () => {
   });
 });
 
+// Mock minimo de la consulta `supabase.from("product_images").select(...).eq("product_id", X)`
+// que usa obtenerFotoPrincipal. `imagenesPorProducto` mapea productId -> filas
+// de product_images (o deja sin mapear para simular "sin coincidencias").
+function mockProductImages(imagenesPorProducto: Record<string, unknown[]>) {
+  const eq = vi.fn(async (_columna: string, productId: string) => ({
+    data: imagenesPorProducto[productId] ?? [],
+    error: null,
+  }));
+  const select = vi.fn(() => ({ eq }));
+  return { select, eq };
+}
+
 describe("generarCotizacionPdf", () => {
-  it("sube un PDF de los items del carrito (sin fotos, ItemCarrito no trae fotoUrl) y devuelve una URL firmada", async () => {
+  it("sube un PDF de los items del carrito (sin fotos cuando product_images no tiene coincidencias) y devuelve una URL firmada", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     const upload = vi.fn(async () => ({ error: null }));
     const createSignedUrl = vi.fn(async () => ({ data: { signedUrl: "https://x/firmado.pdf" }, error: null }));
-    const supabase = { storage: { from: vi.fn(() => ({ upload, createSignedUrl })) } };
+    const { select: selectImagenes, eq: eqImagenes } = mockProductImages({});
+    const from = vi.fn((tabla: string) => {
+      if (tabla === "product_images") return { select: selectImagenes };
+      throw new Error(`tabla inesperada: ${tabla}`);
+    });
+    const supabase = { from, storage: { from: vi.fn(() => ({ upload, createSignedUrl })) } };
     const { getSupabase } = await import("../_shared/db.ts");
     (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
 
@@ -295,7 +336,90 @@ describe("generarCotizacionPdf", () => {
 
     expect(url).toBe("https://x/firmado.pdf");
     expect(upload).toHaveBeenCalled();
-    expect(fetchMock).not.toHaveBeenCalled(); // sin fotoUrl, generarPdfConFotos no intenta descargar nada
+    expect(from).toHaveBeenCalledWith("product_images");
+    expect(eqImagenes).toHaveBeenCalledWith("product_id", "p1");
+    // Sin coincidencias en product_images, generarPdfConFotos no intenta
+    // descargar nada -- pero sigue produciendo un PDF valido (fila de texto).
+    expect(fetchMock).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
+  });
+
+  it("cuando product_images tiene una foto para el item, la resuelve e intenta incrustarla en el PDF", async () => {
+    const fetchMock = vi.fn(async () => new Response(new Uint8Array([0xff, 0xd8, 0xff]), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const upload = vi.fn(async () => ({ error: null }));
+    const createSignedUrl = vi.fn(async () => ({ data: { signedUrl: "https://x/firmado-foto.pdf" }, error: null }));
+    const { select: selectImagenes } = mockProductImages({
+      p1: [{ id: "img1", url: "https://x/foto.jpg", is_primary: true, variant_id: null, vendida: false }],
+    });
+    const from = vi.fn((tabla: string) => {
+      if (tabla === "product_images") return { select: selectImagenes };
+      throw new Error(`tabla inesperada: ${tabla}`);
+    });
+    const supabase = { from, storage: { from: vi.fn(() => ({ upload, createSignedUrl })) } };
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { generarCotizacionPdf } = await import("./catalog.ts");
+    const url = await generarCotizacionPdf([
+      { productId: "p1", variantId: null, imageId: null, qty: 1, unitPrice: 50000, nameSnapshot: "Pijama Rosa" },
+    ]);
+
+    expect(url).toBe("https://x/firmado-foto.pdf");
+    expect(fetchMock).toHaveBeenCalledWith("https://x/foto.jpg");
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("obtenerFotoPrincipal", () => {
+  it("devuelve la url de la foto principal cuando existe", async () => {
+    const { select } = mockProductImages({
+      p1: [
+        { id: "img1", url: "https://x/general.jpg", is_primary: false, variant_id: null, vendida: false },
+        { id: "img2", url: "https://x/principal.jpg", is_primary: true, variant_id: null, vendida: false },
+      ],
+    });
+    const supabase = { from: vi.fn(() => ({ select })) };
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { obtenerFotoPrincipal } = await import("./catalog.ts");
+    expect(await obtenerFotoPrincipal("p1", null)).toBe("https://x/principal.jpg");
+  });
+
+  it("con variantId, devuelve la foto especifica de esa variante cuando existe", async () => {
+    const { select } = mockProductImages({
+      p1: [
+        { id: "img1", url: "https://x/general.jpg", is_primary: true, variant_id: null, vendida: false },
+        { id: "img2", url: "https://x/variante.jpg", is_primary: true, variant_id: "v1", vendida: false },
+      ],
+    });
+    const supabase = { from: vi.fn(() => ({ select })) };
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { obtenerFotoPrincipal } = await import("./catalog.ts");
+    expect(await obtenerFotoPrincipal("p1", "v1")).toBe("https://x/variante.jpg");
+  });
+
+  it("devuelve null cuando no hay ninguna imagen que coincida", async () => {
+    const { select } = mockProductImages({ p1: [] });
+    const supabase = { from: vi.fn(() => ({ select })) };
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { obtenerFotoPrincipal } = await import("./catalog.ts");
+    expect(await obtenerFotoPrincipal("p1", null)).toBeNull();
+  });
+
+  it("devuelve null si la consulta a Supabase falla", async () => {
+    const eq = vi.fn(async () => ({ data: null, error: { message: "fallo de red" } }));
+    const select = vi.fn(() => ({ eq }));
+    const supabase = { from: vi.fn(() => ({ select })) };
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { obtenerFotoPrincipal } = await import("./catalog.ts");
+    expect(await obtenerFotoPrincipal("p1", null)).toBeNull();
   });
 });

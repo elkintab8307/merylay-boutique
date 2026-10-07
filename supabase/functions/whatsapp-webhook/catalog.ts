@@ -49,7 +49,7 @@ export interface FiltrosCatalogo {
   color?: string;
 }
 
-const TOPE_BUSCAR_CATALOGO = 50;
+export const TOPE_BUSCAR_CATALOGO = 50;
 
 export async function buscarCatalogo(filtros: FiltrosCatalogo): Promise<ProductoEncontrado[]> {
   if (!filtros.texto && !filtros.talla && !filtros.color) {
@@ -232,9 +232,10 @@ export interface FilaPdf {
 
 const ALTO_FILA_PDF = 70;
 
-export async function generarPdfConFotos(titulo: string, filas: FilaPdf[]): Promise<Uint8Array> {
+export async function generarPdfConFotos(titulo: string, filas: FilaPdf[], total?: number): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
-  const pagina = pdf.addPage([450, 140 + filas.length * ALTO_FILA_PDF]);
+  const alturaExtra = total !== undefined ? ALTO_FILA_PDF : 0;
+  const pagina = pdf.addPage([450, 140 + filas.length * ALTO_FILA_PDF + alturaExtra]);
   const fuente = await pdf.embedFont(StandardFonts.Helvetica);
   let y = pagina.getHeight() - 40;
   pagina.drawText(titulo, { x: 20, y, size: 16, font: fuente });
@@ -265,6 +266,10 @@ export async function generarPdfConFotos(titulo: string, filas: FilaPdf[]): Prom
       { x: anchoTexto, y: y - 18, size: 10, font: fuente },
     );
     y -= ALTO_FILA_PDF;
+  }
+
+  if (total !== undefined) {
+    pagina.drawText(`Total: $${total.toLocaleString("es-CO")}`, { x: 20, y, size: 12, font: fuente });
   }
 
   return pdf.save();
@@ -328,13 +333,29 @@ export async function generarCatalogoPdf(filtros?: FiltrosCatalogo): Promise<str
   return subirYFirmar(bytes, "catalogo.pdf");
 }
 
+// Resuelve la foto principal de un producto/variante con una consulta
+// fresca a product_images: ItemCarrito (lo que trae el carrito en sesion)
+// no guarda fotoUrl, solo imageId, asi que no hay forma barata de mostrar
+// la foto en la cotizacion sin volver a consultar la base de datos.
+export async function obtenerFotoPrincipal(productId: string, variantId: string | null): Promise<string | null> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("product_images")
+    .select("id, url, is_primary, variant_id, vendida")
+    .eq("product_id", productId);
+  if (error || !data) return null;
+  const imagen = elegirImagen(data as ImagenProducto[], variantId);
+  return imagen?.url ?? null;
+}
+
 export async function generarCotizacionPdf(items: ItemCarrito[]): Promise<string> {
-  const filas: FilaPdf[] = items.map((item) => ({
-    fotoUrl: null,
+  const total = items.reduce((suma, item) => suma + item.unitPrice * item.qty, 0);
+  const filas: FilaPdf[] = await Promise.all(items.map(async (item) => ({
+    fotoUrl: await obtenerFotoPrincipal(item.productId, item.variantId),
     nombre: item.nameSnapshot,
     detalle: `x${item.qty}`,
     precio: item.unitPrice * item.qty,
-  }));
-  const bytes = await generarPdfConFotos("Cotizacion MeryLay Boutique", filas);
+  })));
+  const bytes = await generarPdfConFotos("Cotizacion MeryLay Boutique", filas, total);
   return subirYFirmar(bytes, "cotizacion.pdf");
 }
