@@ -212,6 +212,34 @@ describe("generarCatalogoPdf", () => {
     expect(upload).toHaveBeenCalled();
   });
 
+  it("con un objeto de filtros sin ningun campo realmente seteado, usa el catalogo completo (no llama a buscarCatalogo)", async () => {
+    // Este es exactamente el objeto que arma handler.ts para
+    // "generar_catalogo_pdf" cuando el cliente no pide ningun filtro:
+    // {texto: undefined, talla: undefined, color: undefined}. Un objeto
+    // truthy, pero sin contenido real -- debe comportarse igual que
+    // llamar generarCatalogoPdf() sin argumentos, no lanzar el error de
+    // buscarCatalogo ("requiere al menos un filtro").
+    const order = vi.fn(async () => ({
+      data: [{ name: "Pijama Rosa", price: 89900, stock: 5, categories: null, product_variants: [], product_images: [] }],
+      error: null,
+    }));
+    const select = vi.fn(() => ({ eq: vi.fn(() => ({ order })) }));
+    const upload = vi.fn(async () => ({ error: null }));
+    const createSignedUrl = vi.fn(async () => ({ data: { signedUrl: "https://x/catalogo-completo.pdf" }, error: null }));
+    const supabase = {
+      from: vi.fn(() => ({ select })),
+      storage: { from: vi.fn(() => ({ upload, createSignedUrl })) },
+    };
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { generarCatalogoPdf } = await import("./catalog.ts");
+    const url = await generarCatalogoPdf({ texto: undefined, talla: undefined, color: undefined });
+
+    expect(url).toBe("https://x/catalogo-completo.pdf");
+    expect(order).toHaveBeenCalled();
+  });
+
   it("con filtros, usa buscarCatalogo en vez del catalogo completo", async () => {
     const query: Record<string, unknown> = {};
     query.eq = vi.fn(() => query);

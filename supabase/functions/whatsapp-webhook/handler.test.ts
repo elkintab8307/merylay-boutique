@@ -455,6 +455,62 @@ describe("buscar_producto con tarjetas de foto y boton", () => {
     expect(mocks.enviarBotonProducto).not.toHaveBeenCalled();
     expect(mocks.enviarTexto).toHaveBeenCalledWith("573001234567", expect.stringContaining("No encontré"));
   });
+
+  it("manda un boton por cada producto encontrado cuando hay varios", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.6", from: "573001234567", texto: "pijamas" });
+    mocks.decidirAccion.mockResolvedValue({ action: "buscar_producto", params: { consulta: "pijama" }, response_message: "" });
+    clienteMocks.buscarCatalogo.mockResolvedValue([
+      { productId: "p-1", variantId: null, nombre: "Pijama Rosa", talla: null, color: null, precio: 89900, stock: 5, imageId: null, fotoUrl: "https://x/p1.jpg" },
+      { productId: "p-2", variantId: "v-2", nombre: "Pijama Azul", talla: "M", color: "Azul", precio: 95000, stock: 3, imageId: null, fotoUrl: "https://x/p2.jpg" },
+    ]);
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.enviarBotonProducto).toHaveBeenCalledTimes(2);
+    expect(mocks.enviarBotonProducto).toHaveBeenNthCalledWith(1, "573001234567", expect.objectContaining({
+      fotoUrl: "https://x/p1.jpg",
+      botonId: "add:p-1:-",
+    }));
+    expect(mocks.enviarBotonProducto).toHaveBeenNthCalledWith(2, "573001234567", expect.objectContaining({
+      fotoUrl: "https://x/p2.jpg",
+      botonId: "add:p-2:v-2",
+    }));
+  });
+
+  it("excluye del boton los productos sin fotoUrl", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.7", from: "573001234567", texto: "pijamas" });
+    mocks.decidirAccion.mockResolvedValue({ action: "buscar_producto", params: { consulta: "pijama" }, response_message: "" });
+    clienteMocks.buscarCatalogo.mockResolvedValue([
+      { productId: "p-sin-foto", variantId: null, nombre: "Pijama Sin Foto", talla: null, color: null, precio: 70000, stock: 2, imageId: null, fotoUrl: null },
+      { productId: "p-con-foto", variantId: null, nombre: "Pijama Con Foto", talla: null, color: null, precio: 80000, stock: 1, imageId: null, fotoUrl: "https://x/con-foto.jpg" },
+    ]);
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.enviarBotonProducto).toHaveBeenCalledTimes(1);
+    expect(mocks.enviarBotonProducto).toHaveBeenCalledWith("573001234567", expect.objectContaining({
+      fotoUrl: "https://x/con-foto.jpg",
+      botonId: "add:p-con-foto:-",
+    }));
+  });
+
+  it("con mas de 10 coincidencias, manda a lo sumo 10 botones y avisa del total en el texto", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.8", from: "573001234567", texto: "pijamas" });
+    mocks.decidirAccion.mockResolvedValue({ action: "buscar_producto", params: { consulta: "pijama" }, response_message: "" });
+    const productos = Array.from({ length: 11 }, (_, i) => ({
+      productId: `p-${i}`, variantId: null, nombre: `Pijama ${i}`, talla: null, color: null,
+      precio: 50000, stock: 1, imageId: null, fotoUrl: `https://x/p${i}.jpg`,
+    }));
+    clienteMocks.buscarCatalogo.mockResolvedValue(productos);
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.enviarBotonProducto).toHaveBeenCalledTimes(10);
+    expect(mocks.enviarTexto).toHaveBeenCalledWith("573001234567", expect.stringContaining("Encontré 11 en total"));
+  });
 });
 
 describe("generar_catalogo_pdf con filtros", () => {

@@ -290,8 +290,16 @@ export async function subirYFirmar(bytes: Uint8Array, nombreArchivo: string): Pr
 }
 
 export async function generarCatalogoPdf(filtros?: FiltrosCatalogo): Promise<string> {
-  const productos = filtros
-    ? await buscarCatalogo(filtros)
+  // No basta con comprobar que `filtros` sea un objeto: un llamador (como
+  // el caso "generar_catalogo_pdf" de handler.ts) puede mandar siempre
+  // {texto, talla, color} aunque el cliente no haya pedido ningun filtro,
+  // y ese objeto llega con sus tres campos en undefined. Hay que mirar si
+  // ALGUN campo tiene contenido real antes de decidir si se usa
+  // buscarCatalogo (que lanza si no recibe ningun filtro) o el catalogo
+  // completo.
+  const tieneFiltros = Boolean(filtros?.texto || filtros?.talla || filtros?.color);
+  const productos = tieneFiltros
+    ? await buscarCatalogo(filtros!)
     : await (async () => {
         const supabase = getSupabase();
         const { data, error } = await supabase
