@@ -56,6 +56,64 @@ describe("decidirAccion", () => {
     expect(promptSistema).toContain("Elkin");
   });
 
+  it("documenta en el prompt de cliente los parametros exactos de cada accion", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({ action: "chat", params: {}, response_message: "Hola" }) } }],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { decidirAccion } = await import("./agent.ts");
+    await decidirAccion({ rol: "customer", historial: [], mensajeEntrante: "hola" });
+
+    const cuerpo = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    const prompt = cuerpo.messages[0].content as string;
+    for (const clave of ["consulta", "productId", "variantId", "qty", "fullName", "phone", "address", "city"]) {
+      expect(prompt).toContain(clave);
+    }
+    expect(prompt).not.toContain("unitPrice");
+    expect(prompt).toMatch(/buscar_producto/);
+  });
+
+  it("documenta en el prompt del dueño los parametros exactos de cada accion", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({ action: "chat", params: {}, response_message: "Hola" }) } }],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { decidirAccion } = await import("./agent.ts");
+    await decidirAccion({ rol: "owner", nombreDueno: "Mary", historial: [], mensajeEntrante: "hola" });
+
+    const cuerpo = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    const prompt = cuerpo.messages[0].content as string;
+    for (const clave of ["dias", "umbral", "consulta", "numeroOId", "idOSku", "nuevoPrecio", "nuevoStock", "numeroPedido", "nuevoEstado", "activo"]) {
+      expect(prompt).toContain(clave);
+    }
+  });
+
+  it("envia el historial a OpenAI en orden, como mensajes user/assistant", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({ action: "chat", params: {}, response_message: "Hola" }) } }],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { decidirAccion } = await import("./agent.ts");
+    await decidirAccion({
+      rol: "customer",
+      historial: [
+        { direction: "inbound", message_body: "busco batas" },
+        { direction: "outbound", message_body: "1. Bata [productId:p1]" },
+      ],
+      mensajeEntrante: "agrega la 1",
+    });
+
+    const cuerpo = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(cuerpo.messages.slice(1)).toEqual([
+      { role: "user", content: "busco batas" },
+      { role: "assistant", content: "1. Bata [productId:p1]" },
+      { role: "user", content: "agrega la 1" },
+    ]);
+  });
+
   it("no reintenta y falla rapido si OpenAI responde un error no transitorio (401)", async () => {
     const fetchMock = vi.fn(async () => new Response("no autorizado", { status: 401 }));
     vi.stubGlobal("fetch", fetchMock);

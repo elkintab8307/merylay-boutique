@@ -1,27 +1,49 @@
 import type { AgentDecision, RolRemitente } from "../_shared/types.ts";
 
-const ACCIONES_CLIENTE = [
-  "buscar_producto", "agregar_al_carrito", "quitar_del_carrito",
-  "generar_catalogo_pdf", "generar_cotizacion_pdf", "confirmar_pedido",
-  "generar_acceso_web", "chat",
-].join(", ");
+// Cada accion con las claves EXACTAS de "params" que lee handler.ts
+// (ejecutarAccionCliente / ejecutarAccionLectura / ejecutarAccionEscritura).
+// Si se agrega o renombra un parametro alla, hay que actualizarlo aqui:
+// el modelo no tiene otra forma de saber como se llaman.
+const ACCIONES_CLIENTE = `
+- buscar_producto: params {"consulta": string} — texto a buscar en el nombre del producto (ej. "pijama"). Devuelve una lista numerada donde cada opcion trae sus ids entre corchetes: [productId:<uuid> variantId:<uuid>] (variantId solo aparece si el producto tiene tallas/colores).
+- agregar_al_carrito: params {"productId": string uuid, "variantId": string uuid | null, "qty": entero >= 1} — productId y variantId deben copiarse TAL CUAL de un resultado previo de buscar_producto que aparezca en esta conversacion; NUNCA los inventes ni los deduzcas del nombre. Si el producto tiene variantes, variantId es obligatorio (la de la talla/color que eligio el cliente). Si en la conversacion no hay un resultado de buscar_producto con esos ids, usa primero buscar_producto. Si el cliente no ha dicho talla/color y hay varias opciones, pregunta con "chat".
+- quitar_del_carrito: params {"productId": string uuid, "variantId": string uuid | null (opcional)} — mismos ids con los que se agrego al carrito.
+- generar_catalogo_pdf: params {} — envia el catalogo completo en PDF.
+- generar_cotizacion_pdf: params {} — envia una cotizacion en PDF con lo que hay en el carrito.
+- confirmar_pedido: params {"fullName": string, "phone": string, "address": string, "city": string} — datos de envio; los cuatro son obligatorios. Si falta alguno, pidelo con "chat" en lugar de inventarlo.
+- generar_acceso_web: params {} — cuando el cliente quiere entrar a la pagina web a ver sus pedidos.
+- chat: params {} — respuesta libre en response_message (saludos, preguntas generales, pedir datos que faltan).`;
 
-const ACCIONES_DUENO = [
-  "consultar_ventas", "consultar_stock_bajo", "buscar_cliente", "consultar_pedido",
-  "consultar_producto", "actualizar_precio_producto", "actualizar_stock",
-  "cambiar_estado_pedido", "activar_o_desactivar_producto", "chat",
-].join(", ");
+const ACCIONES_DUENO = `
+Lectura (se ejecutan de inmediato):
+- consultar_ventas: params {"dias": entero >= 1} — ventas pagadas de los ultimos N dias (tienda/WhatsApp + POS). "hoy" = 1.
+- consultar_stock_bajo: params {"umbral": entero >= 0} — productos activos con stock menor al umbral (por defecto 5).
+- buscar_cliente: params {"consulta": string} — nombre o telefono del cliente.
+- consultar_pedido: params {"numeroOId": string} — numero de pedido (ej. "ML-20261006-abc123") o su id uuid.
+- consultar_producto: params {"consulta": string} — nombre o SKU del producto.
+Escritura (se le pide confirmacion al dueño antes de ejecutarlas):
+- actualizar_precio_producto: params {"idOSku": string, "nuevoPrecio": number} — idOSku es el SKU o el id uuid del producto; nuevoPrecio en pesos colombianos, sin puntos ni signos.
+- actualizar_stock: params {"idOSku": string, "nuevoStock": entero >= 0}.
+- cambiar_estado_pedido: params {"numeroPedido": string, "nuevoEstado": "pendiente" | "pagado" | "enviado" | "entregado" | "cancelado"} — numeroPedido es el numero de pedido (ej. "ML-20261006-abc123").
+- activar_o_desactivar_producto: params {"idOSku": string, "activo": boolean}.
+- chat: params {} — respuesta libre en response_message.`;
+
+const FORMATO_RESPUESTA =
+  `Responde SIEMPRE con un JSON {"action": string, "params": object, "response_message": string}. ` +
+  `"params" debe usar EXACTAMENTE las claves documentadas para esa accion (mismos nombres, mismos tipos). ` +
+  `Usa "chat" solo si ninguna otra accion aplica o si te falta un dato obligatorio para otra accion.`;
 
 function promptSistema(rol: RolRemitente, nombreDueno?: "Elkin" | "Mary"): string {
   if (rol === "owner") {
     return `Eres el asistente interno de MeryLay Boutique, hablando con ${nombreDueno}, dueño del negocio. ` +
       `Tiene acceso total de lectura y escritura sobre el negocio. ` +
-      `Responde SIEMPRE con un JSON {"action": string, "params": object, "response_message": string}. ` +
-      `"action" debe ser una de: ${ACCIONES_DUENO}. Usa "chat" solo si ninguna otra aplica.`;
+      `${FORMATO_RESPUESTA}\n` +
+      `Acciones disponibles y sus params:${ACCIONES_DUENO}`;
   }
   return `Eres el asistente de ventas de MeryLay Boutique ("Inspiracion Femenina"), atendiendo a un cliente por WhatsApp. ` +
-    `Responde SIEMPRE con un JSON {"action": string, "params": object, "response_message": string}. ` +
-    `"action" debe ser una de: ${ACCIONES_CLIENTE}. Usa "chat" solo si ninguna otra aplica.`;
+    `${FORMATO_RESPUESTA}\n` +
+    `Acciones disponibles y sus params:${ACCIONES_CLIENTE}\n` +
+    `Los precios, nombres y stock los obtiene el sistema de la base de datos: nunca los incluyas en params.`;
 }
 
 function esperar(ms: number): Promise<void> {

@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   buscarOCrearCliente: vi.fn(),
   obtenerOCrearSesion: vi.fn(),
   guardarSesion: vi.fn(),
+  cargarHistorial: vi.fn(),
   decidirAccion: vi.fn(),
   enviarTexto: vi.fn(),
   consultarStockBajo: vi.fn(),
@@ -13,6 +14,7 @@ const mocks = vi.hoisted(() => ({
 
 const clienteMocks = vi.hoisted(() => ({
   buscarProductos: vi.fn(),
+  obtenerProductoParaCarrito: vi.fn(),
   generarCatalogoPdf: vi.fn(),
   generarCotizacionPdf: vi.fn(),
   crearPedidoWompiDesdeCarrito: vi.fn(),
@@ -26,7 +28,11 @@ vi.mock("./customers.ts", () => ({
   normalizarTelefono: (t: string) => t.replace(/\D/g, ""),
   generarAccesoWeb: clienteMocks.generarAccesoWeb,
 }));
-vi.mock("./sessions.ts", () => ({ obtenerOCrearSesion: mocks.obtenerOCrearSesion, guardarSesion: mocks.guardarSesion }));
+vi.mock("./sessions.ts", () => ({
+  obtenerOCrearSesion: mocks.obtenerOCrearSesion,
+  guardarSesion: mocks.guardarSesion,
+  cargarHistorial: mocks.cargarHistorial,
+}));
 vi.mock("./agent.ts", () => ({ decidirAccion: mocks.decidirAccion }));
 vi.mock("../_shared/meta.ts", () => ({
   enviarTexto: mocks.enviarTexto,
@@ -40,6 +46,7 @@ vi.mock("./owner-actions.ts", () => ({
 }));
 vi.mock("./catalog.ts", () => ({
   buscarProductos: clienteMocks.buscarProductos,
+  obtenerProductoParaCarrito: clienteMocks.obtenerProductoParaCarrito,
   generarCatalogoPdf: clienteMocks.generarCatalogoPdf,
   generarCotizacionPdf: clienteMocks.generarCotizacionPdf,
 }));
@@ -52,12 +59,16 @@ vi.mock("../_shared/db.ts", () => ({
   }),
 }));
 
+const PRODUCTO_ID = "11111111-1111-4111-8111-111111111111";
+const VARIANTE_ID = "22222222-2222-4222-8222-222222222222";
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal("Deno", { env: { get: vi.fn((k: string) => (k === "WHATSAPP_OWNER_NUMBERS" ? "573215879805,573102862373" : undefined)) } });
   dbMocks.insertarMensaje.mockResolvedValue({ error: null });
   mocks.buscarOCrearCliente.mockResolvedValue({ profileId: "perfil-1", esNuevo: false });
   mocks.obtenerOCrearSesion.mockResolvedValue({ id: "sesion-1", sessionData: { cart: [], pendingConfirmation: null } });
+  mocks.cargarHistorial.mockResolvedValue([]);
 });
 
 describe("procesarMensajeEntrante", () => {
@@ -155,21 +166,107 @@ describe("procesarMensajeEntrante", () => {
 });
 
 describe("ejecutarAccionCliente via procesarMensajeEntrante", () => {
-  it("agrega un producto al carrito y responde con el total actualizado", async () => {
+  it("agrega un producto al carrito con nombre y precio de la base de datos, ignorando unitPrice/nombre del modelo", async () => {
     mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.10", from: "573009998888", texto: "agrega la pijama rosa" });
     mocks.decidirAccion.mockResolvedValue({
       action: "agregar_al_carrito",
-      params: { productId: "p1", variantId: null, imageId: null, qty: 1, unitPrice: 89900, nombre: "Pijama Rosa" },
+      params: { productId: PRODUCTO_ID, variantId: VARIANTE_ID, qty: 2, unitPrice: 1, nombre: "Nombre inventado" },
       response_message: "Agregando...",
+    });
+    clienteMocks.obtenerProductoParaCarrito.mockResolvedValue({
+      productId: PRODUCTO_ID, variantId: VARIANTE_ID, nombre: "Pijama Rosa (Talla M)", precio: 89900, stock: 5, imageId: "img-1",
     });
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
     await procesarMensajeEntrante({});
 
-    expect(mocks.enviarTexto).toHaveBeenCalledWith("573009998888", expect.stringContaining("89.900"));
+    expect(clienteMocks.obtenerProductoParaCarrito).toHaveBeenCalledWith(PRODUCTO_ID, VARIANTE_ID);
+    expect(mocks.enviarTexto).toHaveBeenCalledWith("573009998888", expect.stringContaining("179.800"));
     expect(mocks.guardarSesion).toHaveBeenCalledWith("sesion-1", expect.objectContaining({
-      cart: [{ productId: "p1", variantId: null, imageId: null, qty: 1, unitPrice: 89900, nameSnapshot: "Pijama Rosa" }],
+      cart: [{ productId: PRODUCTO_ID, variantId: VARIANTE_ID, imageId: "img-1", qty: 2, unitPrice: 89900, nameSnapshot: "Pijama Rosa (Talla M)" }],
     }));
+  });
+
+  it("rechaza con un mensaje amable un agregar_al_carrito con params invalidos (sin consultar la base de datos)", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.10b", from: "573009998888", texto: "agrega la rosa" });
+    mocks.decidirAccion.mockResolvedValue({
+      action: "agregar_al_carrito",
+      params: { productId: "pijama-rosa", qty: 1 },
+      response_message: "",
+    });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(clienteMocks.obtenerProductoParaCarrito).not.toHaveBeenCalled();
+    expect(mocks.enviarTexto).toHaveBeenCalledWith("573009998888", expect.stringContaining("no entendí qué producto"));
+    expect(mocks.guardarSesion).not.toHaveBeenCalledWith("sesion-1", expect.objectContaining({ cart: [expect.anything()] }));
+  });
+
+  it("rechaza con un mensaje amable una variante que no pertenece al producto (no la agrega)", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.10c", from: "573009998888", texto: "agrega esa" });
+    mocks.decidirAccion.mockResolvedValue({
+      action: "agregar_al_carrito",
+      params: { productId: PRODUCTO_ID, variantId: VARIANTE_ID, qty: 1 },
+      response_message: "",
+    });
+    clienteMocks.obtenerProductoParaCarrito.mockResolvedValue(null);
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.enviarTexto).toHaveBeenCalledWith("573009998888", expect.stringContaining("No encontré ese producto"));
+    expect(mocks.guardarSesion).not.toHaveBeenCalledWith("sesion-1", expect.objectContaining({ cart: [expect.anything()] }));
+  });
+
+  it("no agrega mas unidades de las que hay en stock", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.10d", from: "573009998888", texto: "quiero 10" });
+    mocks.decidirAccion.mockResolvedValue({
+      action: "agregar_al_carrito",
+      params: { productId: PRODUCTO_ID, variantId: null, qty: 10 },
+      response_message: "",
+    });
+    clienteMocks.obtenerProductoParaCarrito.mockResolvedValue({
+      productId: PRODUCTO_ID, variantId: null, nombre: "Pijama Rosa", precio: 89900, stock: 3, imageId: null,
+    });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.enviarTexto).toHaveBeenCalledWith("573009998888", expect.stringContaining("3"));
+    expect(mocks.guardarSesion).not.toHaveBeenCalledWith("sesion-1", expect.objectContaining({ cart: [expect.anything()] }));
+  });
+
+  it("lista los resultados de buscar_producto con sus ids visibles para que el modelo los reuse", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.10e", from: "573009998888", texto: "tienen batas?" });
+    mocks.decidirAccion.mockResolvedValue({ action: "buscar_producto", params: { consulta: "bata" }, response_message: "" });
+    clienteMocks.buscarProductos.mockResolvedValue([
+      { productId: PRODUCTO_ID, variantId: VARIANTE_ID, nombre: "Bata Dorada", talla: "M", color: "Rosa", precio: 120000, stock: 4, imageId: null, fotoUrl: null },
+      { productId: "p-otro", variantId: null, nombre: "Pijama", talla: null, color: null, precio: 89900, stock: 2, imageId: null, fotoUrl: null },
+    ]);
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    const texto = mocks.enviarTexto.mock.calls[0][1] as string;
+    expect(texto).toContain(`1. Bata Dorada (talla M, color Rosa) — $120.000 (stock: 4) [productId:${PRODUCTO_ID} variantId:${VARIANTE_ID}]`);
+    expect(texto).toContain("2. Pijama — $89.900 (stock: 2) [productId:p-otro]");
+  });
+
+  it("pasa a decidirAccion el historial reciente de la conversacion, excluyendo el mensaje actual", async () => {
+    const historial = [
+      { direction: "inbound", message_body: "tienen batas?" },
+      { direction: "outbound", message_body: `1. Bata [productId:${PRODUCTO_ID}]` },
+    ];
+    mocks.cargarHistorial.mockResolvedValue(historial);
+    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.10f", from: "573009998888", texto: "agrega la 1" });
+    mocks.decidirAccion.mockResolvedValue({ action: "chat", params: {}, response_message: "ok" });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.cargarHistorial).toHaveBeenCalledWith("573009998888", "wamid.10f");
+    expect(mocks.decidirAccion).toHaveBeenCalledWith(expect.objectContaining({ historial, mensajeEntrante: "agrega la 1" }));
   });
 
   it("manda el catalogo como documento ademas del texto", async () => {

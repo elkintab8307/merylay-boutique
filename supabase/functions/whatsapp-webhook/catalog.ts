@@ -2,38 +2,184 @@ import { PDFDocument, StandardFonts } from "pdf-lib";
 import { getSupabase } from "../_shared/db.ts";
 import type { ItemCarrito } from "../_shared/types.ts";
 
+// Una fila por "unidad pedible": cada variante de un producto con
+// variantes, o el producto base si no tiene ninguna. Incluye los ids
+// reales (productId/variantId/imageId) para que el modelo pueda copiarlos
+// tal cual del texto de resultados al pedir agregar_al_carrito.
 export interface ProductoEncontrado {
-  id: string;
+  productId: string;
+  variantId: string | null;
+  nombre: string;
+  talla: string | null;
+  color: string | null;
+  precio: number;
+  stock: number;
+  imageId: string | null;
+  fotoUrl: string | null;
+}
+
+export interface ProductoParaCarrito {
+  productId: string;
+  variantId: string | null;
   nombre: string;
   precio: number;
   stock: number;
-  fotoUrl: string | null;
+  imageId: string | null;
+}
+
+interface ImagenProducto {
+  id: string;
+  url: string;
+  is_primary: boolean;
+  variant_id: string | null;
+  vendida: boolean | null;
+}
+
+interface VarianteProducto {
+  id: string;
+  talla: string | null;
+  color: string | null;
+  price_override: number | null;
+  stock: number;
+}
+
+// Elige la foto a mostrar/registrar para una variante (o para el producto
+// base si variantId es null): primero las fotos propias de esa variante,
+// luego las generales (variant_id null); dentro de cada grupo, la
+// principal primero. Las fotos marcadas como `vendida` (estampado ya
+// vendido) se descartan.
+function elegirImagen(imagenes: ImagenProducto[] | null | undefined, variantId: string | null): ImagenProducto | null {
+  const disponibles = (imagenes ?? []).filter((img) => !img.vendida);
+  const deLaVariante = variantId ? disponibles.filter((img) => img.variant_id === variantId) : [];
+  const generales = disponibles.filter((img) => img.variant_id === null);
+  for (const grupo of [deLaVariante, generales]) {
+    const elegida = grupo.find((img) => img.is_primary) ?? grupo[0];
+    if (elegida) return elegida;
+  }
+  return null;
+}
+
+// Escapa los comodines de LIKE (% y _) y el propio caracter de escape (\)
+// para que una busqueda con esos caracteres los trate como literales.
+function escaparPatronLike(texto: string): string {
+  return texto.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
 }
 
 export async function buscarProductos(consulta: string): Promise<ProductoEncontrado[]> {
   const supabase = getSupabase();
   const { data, error } = await supabase
     .from("products")
-    .select("id, name, price, stock, product_images(url, is_primary)")
+    .select(
+      "id, name, price, stock, " +
+        "product_variants(id, talla, color, price_override, stock), " +
+        "product_images(id, url, is_primary, variant_id, vendida)",
+    )
     .eq("is_active", true)
-    .ilike("name", `%${consulta}%`)
+    .ilike("name", `%${escaparPatronLike(consulta)}%`)
     .limit(10);
 
   if (error || !data) return [];
 
-  return (data as Array<{
+  const productos = data as unknown as Array<{
     id: string;
     name: string;
     price: number;
     stock: number;
-    product_images: { url: string; is_primary: boolean }[];
-  }>).map((producto) => ({
-    id: producto.id,
-    nombre: producto.name,
-    precio: producto.price,
-    stock: producto.stock,
-    fotoUrl: producto.product_images.find((img) => img.is_primary)?.url ?? producto.product_images[0]?.url ?? null,
-  }));
+    product_variants: VarianteProducto[] | null;
+    product_images: ImagenProducto[] | null;
+  }>;
+
+  return productos.flatMap((producto): ProductoEncontrado[] => {
+    const variantes = producto.product_variants ?? [];
+    if (variantes.length === 0) {
+      const imagen = elegirImagen(producto.product_images, null);
+      return [{
+        productId: producto.id,
+        variantId: null,
+        nombre: producto.name,
+        talla: null,
+        color: null,
+        precio: producto.price,
+        stock: producto.stock,
+        imageId: imagen?.id ?? null,
+        fotoUrl: imagen?.url ?? null,
+      }];
+    }
+    return variantes.map((variante) => {
+      const imagen = elegirImagen(producto.product_images, variante.id);
+      return {
+        productId: producto.id,
+        variantId: variante.id,
+        nombre: producto.name,
+        talla: variante.talla ?? null,
+        color: variante.color ?? null,
+        precio: variante.price_override ?? producto.price,
+        stock: variante.stock,
+        imageId: imagen?.id ?? null,
+        fotoUrl: imagen?.url ?? null,
+      };
+    });
+  });
+}
+
+// Fuente de verdad para agregar al carrito: nunca se confia en el
+// nombre/precio que mande el modelo. Devuelve null si el producto no
+// existe o no esta activo, si la variante no pertenece a ese producto, o
+// si se pide el producto base de un producto que si tiene variantes
+// (en ese caso hay que elegir una variante concreta).
+export async function obtenerProductoParaCarrito(
+  productId: string,
+  variantId: string | null,
+): Promise<ProductoParaCarrito | null> {
+  const supabase = getSupabase();
+  const { data: producto, error } = await supabase
+    .from("products")
+    .select("id, name, price, stock, product_variants(id), product_images(id, url, is_primary, variant_id, vendida)")
+    .eq("id", productId)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (error || !producto) return null;
+  const p = producto as unknown as {
+    id: string;
+    name: string;
+    price: number;
+    stock: number;
+    product_variants: { id: string }[] | null;
+    product_images: ImagenProducto[] | null;
+  };
+
+  if (!variantId) {
+    if ((p.product_variants ?? []).length > 0) return null;
+    return {
+      productId: p.id,
+      variantId: null,
+      nombre: p.name,
+      precio: p.price,
+      stock: p.stock,
+      imageId: elegirImagen(p.product_images, null)?.id ?? null,
+    };
+  }
+
+  const { data: variante, error: errorVariante } = await supabase
+    .from("product_variants")
+    .select("id, name, price_override, stock, product_id")
+    .eq("id", variantId)
+    .eq("product_id", productId)
+    .maybeSingle();
+
+  if (errorVariante || !variante) return null;
+  const v = variante as { id: string; name: string; price_override: number | null; stock: number; product_id: string };
+  if (v.product_id !== p.id) return null;
+
+  return {
+    productId: p.id,
+    variantId: v.id,
+    nombre: `${p.name} (${v.name})`,
+    precio: v.price_override ?? p.price,
+    stock: v.stock,
+    imageId: elegirImagen(p.product_images, v.id)?.id ?? null,
+  };
 }
 
 async function pdfDesdeLineas(titulo: string, lineas: string[], total: number): Promise<Uint8Array> {

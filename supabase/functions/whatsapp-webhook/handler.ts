@@ -2,7 +2,7 @@ import { getSupabase } from "../_shared/db.ts";
 import { enviarTexto, enviarDocumentoPorLink } from "../_shared/meta.ts";
 import { parsearMensajeEntrante } from "./adapters.ts";
 import { buscarOCrearCliente, normalizarTelefono, generarAccesoWeb } from "./customers.ts";
-import { obtenerOCrearSesion, guardarSesion } from "./sessions.ts";
+import { obtenerOCrearSesion, guardarSesion, cargarHistorial } from "./sessions.ts";
 import { decidirAccion } from "./agent.ts";
 import * as ownerActions from "./owner-actions.ts";
 import { ACCIONES_ESCRITURA } from "./owner-actions.ts";
@@ -97,6 +97,22 @@ async function ejecutarAccionLectura(accion: string, params: Record<string, unkn
   }
 }
 
+// z.guid() (cualquier uuid con forma 8-4-4-4-12) en vez de z.uuid():
+// este ultimo, en zod 4, exige ademas los bits de version/variante del
+// RFC 9562 y rechazaria ids validos de Postgres que no los cumplan.
+const agregarAlCarritoSchema = z.object({
+  productId: z.guid(),
+  variantId: z.guid().nullable().optional(),
+  qty: z.number().int().positive().default(1),
+});
+
+function formatearResultadoBusqueda(p: catalog.ProductoEncontrado): string {
+  const detalles = [p.talla ? `talla ${p.talla}` : null, p.color ? `color ${p.color}` : null].filter(Boolean);
+  const sufijo = detalles.length > 0 ? ` (${detalles.join(", ")})` : "";
+  const ids = `[productId:${p.productId}${p.variantId ? ` variantId:${p.variantId}` : ""}]`;
+  return `${p.nombre}${sufijo} — $${p.precio.toLocaleString("es-CO")} (stock: ${p.stock}) ${ids}`;
+}
+
 const direccionEnvioSchema = z.object({
   fullName: z.string().min(1),
   phone: z.string().min(1),
@@ -113,35 +129,80 @@ async function ejecutarAccionCliente(
 ): Promise<{ texto: string; documentos: { link: string; filename: string }[] }> {
   switch (accion) {
     case "buscar_producto": {
-      const productos = await catalog.buscarProductos(params.consulta as string);
-      if (productos.length === 0) {
-        return { texto: `No encontré productos para "${params.consulta}".`, documentos: [] };
+      const consulta = typeof params.consulta === "string" ? params.consulta.trim() : "";
+      if (!consulta) {
+        return { texto: "¿Qué producto estás buscando?", documentos: [] };
       }
-      const texto = productos
-        .map((p) => `${p.nombre} — $${p.precio.toLocaleString("es-CO")} (stock: ${p.stock})`)
-        .join("\n");
+      const productos = await catalog.buscarProductos(consulta);
+      if (productos.length === 0) {
+        return { texto: `No encontré productos para "${consulta}".`, documentos: [] };
+      }
+      // Los ids van como texto literal en la respuesta: este mensaje
+      // saliente queda en whatsapp_messages y vuelve al modelo como
+      // historial en el turno siguiente, que es de donde copia
+      // productId/variantId para agregar_al_carrito.
+      const texto = productos.map((p, i) => `${i + 1}. ${formatearResultadoBusqueda(p)}`).join("\n");
       return { texto, documentos: [] };
     }
 
     case "agregar_al_carrito": {
-      const item: ItemCarrito = {
-        productId: params.productId as string,
-        variantId: (params.variantId as string) ?? null,
-        imageId: (params.imageId as string) ?? null,
-        qty: (params.qty as number) ?? 1,
-        unitPrice: params.unitPrice as number,
-        nameSnapshot: params.nombre as string,
-      };
-      sessionData.cart.push(item);
+      const validacion = agregarAlCarritoSchema.safeParse(params);
+      if (!validacion.success) {
+        return { texto: "Perdona, no entendí qué producto quieres agregar, ¿puedes repetirlo?", documentos: [] };
+      }
+      const { productId, variantId, qty } = validacion.data;
+
+      // Nombre, precio, stock e imagen salen SIEMPRE de la base de datos,
+      // nunca de params: el modelo solo aporta los ids (ya validados como
+      // uuid) y la cantidad.
+      const producto = await catalog.obtenerProductoParaCarrito(productId, variantId ?? null);
+      if (!producto) {
+        return {
+          texto: "No encontré ese producto (o esa talla/color) en el catálogo. ¿Me dices de nuevo cuál quieres?",
+          documentos: [],
+        };
+      }
+
+      const existente = sessionData.cart.find(
+        (i) => i.productId === producto.productId && i.variantId === producto.variantId,
+      );
+      const qtyTotal = (existente?.qty ?? 0) + qty;
+      if (qtyTotal > producto.stock) {
+        return {
+          texto: producto.stock > 0
+            ? `Solo nos quedan ${producto.stock} unidad(es) de ${producto.nombre}.`
+            : `${producto.nombre} está agotado en este momento.`,
+          documentos: [],
+        };
+      }
+
+      if (existente) {
+        existente.qty = qtyTotal;
+        existente.unitPrice = producto.precio;
+        existente.nameSnapshot = producto.nombre;
+      } else {
+        const item: ItemCarrito = {
+          productId: producto.productId,
+          variantId: producto.variantId,
+          imageId: producto.imageId,
+          qty,
+          unitPrice: producto.precio,
+          nameSnapshot: producto.nombre,
+        };
+        sessionData.cart.push(item);
+      }
       const total = sessionData.cart.reduce((suma, i) => suma + i.unitPrice * i.qty, 0);
       return {
-        texto: `Agregado. Tu carrito tiene ${sessionData.cart.length} producto(s), total $${total.toLocaleString("es-CO")}.`,
+        texto: `Agregado: ${producto.nombre} x${qtyTotal}. Tu carrito tiene ${sessionData.cart.length} producto(s), total $${total.toLocaleString("es-CO")}.`,
         documentos: [],
       };
     }
 
     case "quitar_del_carrito": {
-      sessionData.cart = sessionData.cart.filter((item) => item.productId !== params.productId);
+      const variantId = typeof params.variantId === "string" ? params.variantId : null;
+      sessionData.cart = sessionData.cart.filter(
+        (item) => !(item.productId === params.productId && (variantId === null || item.variantId === variantId)),
+      );
       return { texto: "Listo, lo quité del carrito.", documentos: [] };
     }
 
@@ -221,10 +282,11 @@ export async function procesarMensajeEntrante(payload: unknown): Promise<void> {
       respuesta = "Entendido, no hice ningún cambio. ¿En qué más te ayudo?";
     }
   } else {
+    const historial = await cargarHistorial(telefono, entrante.messageId);
     const decision = await decidirAccion({
       rol,
       nombreDueno: nombreDueno ?? undefined,
-      historial: [],
+      historial,
       mensajeEntrante: entrante.texto,
     });
 
