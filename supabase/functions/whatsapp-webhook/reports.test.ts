@@ -131,7 +131,13 @@ describe("informeVentas", () => {
       const { informeVentas } = await import("./reports.ts");
       await informeVentas(7, true);
     } finally {
-      process.env.TZ = tzOriginal;
+      // tzOriginal es `undefined` cuando TZ no estaba seteada (el caso
+      // normal en esta maquina/CI) -- asignar `process.env.TZ = undefined`
+      // lo convierte en la STRING "undefined", dejando la zona horaria
+      // contaminada para el resto de tests de este archivo. Hay que borrar
+      // la variable en vez de asignarle `undefined`.
+      if (tzOriginal === undefined) delete process.env.TZ;
+      else process.env.TZ = tzOriginal;
     }
 
     expect(pdfLibCapturado.textos).toContain("7/10/2026");
@@ -510,7 +516,10 @@ describe("historialCliente", () => {
       const { historialCliente } = await import("./reports.ts");
       resultado = await historialCliente("Juan");
     } finally {
-      process.env.TZ = tzOriginal;
+      // Ver la nota equivalente en el test de informeVentas arriba: borrar
+      // la variable si no estaba seteada, no asignarle `undefined`.
+      if (tzOriginal === undefined) delete process.env.TZ;
+      else process.env.TZ = tzOriginal;
     }
 
     expect(resultado.texto).toContain("7/10/2026");
@@ -542,6 +551,17 @@ describe("historialCliente", () => {
     expect(resultado.texto).toContain("POS-1");
     expect(resultado.texto).toContain("POS-2");
     expect(resultado.texto).toContain("$120.000 en 2 compra(s)");
+
+    // El mock no filtra pos_sales por el argumento de .eq()/.in() -- sin
+    // esta asercion, el test pasaria igual contra el codigo viejo (que
+    // consultaba con .eq("customer_id", "pos-1"), un solo id). Se verifica
+    // directamente que la consulta real uso .in() con AMBOS ids vinculados,
+    // no un .eq() con uno solo.
+    const llamadaPosSales = supabase.from.mock.calls.findIndex((llamada: unknown[]) => llamada[0] === "pos_sales");
+    expect(llamadaPosSales).toBeGreaterThanOrEqual(0);
+    const queryPosSales = supabase.from.mock.results[llamadaPosSales].value;
+    expect(queryPosSales.in).toHaveBeenCalledWith("customer_id", ["pos-1", "pos-2"]);
+    expect(queryPosSales.eq).not.toHaveBeenCalledWith("customer_id", expect.anything());
   });
 });
 
