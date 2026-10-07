@@ -287,3 +287,92 @@ describe("informeClientes", () => {
     expect(resultado.documentos).toHaveLength(1);
   });
 });
+
+describe("historialCliente", () => {
+  it("encuentra un cliente por nombre parcial y devuelve su historial con el total acumulado", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      profiles: [{ data: [{ id: "profile-1", full_name: "Juan Pérez", username: "juan" }], error: null }],
+      pos_customers: [
+        { data: [], error: null }, // busqueda por texto: sin coincidencias en pos_customers
+        { data: [], error: null }, // busqueda por profile_id vinculado: ninguna
+      ],
+      orders: [{
+        data: [{ order_number: "ML-1", total: 100000, created_at: "2026-10-05T10:00:00Z", channel: "web" }],
+        error: null,
+      }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { historialCliente } = await import("./reports.ts");
+    const resultado = await historialCliente("Juan");
+
+    expect(resultado.texto).toContain("Historial de Juan Pérez");
+    expect(resultado.texto).toContain("$100.000 en 1 compra(s)");
+    expect(resultado.texto).toContain("ML-1");
+  });
+
+  it("cliente no encontrado, responde un mensaje claro", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      profiles: [{ data: [], error: null }],
+      pos_customers: [{ data: [], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { historialCliente } = await import("./reports.ts");
+    const resultado = await historialCliente("Nadie");
+
+    expect(resultado.texto).toContain("No encontré ningún cliente");
+  });
+
+  it("varias coincidencias reales (personas distintas), pide precisar", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      profiles: [{ data: [{ id: "profile-1", full_name: "Juan Pérez", username: "juan" }, { id: "profile-2", full_name: "Juana Gómez", username: "juana" }], error: null }],
+      pos_customers: [{ data: [], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { historialCliente } = await import("./reports.ts");
+    const resultado = await historialCliente("Juan");
+
+    expect(resultado.texto).toContain("varios clientes");
+  });
+
+  it("un pos_customer vinculado (profile_id) a un perfil ya encontrado NO cuenta como candidato adicional (no es ambiguo)", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      profiles: [{ data: [{ id: "profile-1", full_name: "Juan Pérez", username: "juan" }], error: null }],
+      pos_customers: [
+        { data: [{ id: "pos-1", profile_id: "profile-1", nombre: "Juan (POS)" }], error: null }, // busqueda por texto: coincide, pero es el MISMO profile-1
+        { data: [{ id: "pos-1" }], error: null }, // busqueda por profile_id vinculado: la encuentra
+      ],
+      orders: [{ data: [], error: null }],
+      pos_sales: [{ data: [{ sale_number: "POS-1", total: 50000, created_at: "2026-10-06T10:00:00Z" }], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { historialCliente } = await import("./reports.ts");
+    const resultado = await historialCliente("Juan");
+
+    expect(resultado.texto).not.toContain("varios clientes");
+    expect(resultado.texto).toContain("Historial de Juan Pérez");
+    expect(resultado.texto).toContain("POS-1");
+  });
+
+  it("cliente encontrado sin compras registradas, responde un mensaje claro", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      profiles: [{ data: [{ id: "profile-1", full_name: "Juan Pérez", username: "juan" }], error: null }],
+      pos_customers: [{ data: [], error: null }, { data: [], error: null }],
+      orders: [{ data: [], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { historialCliente } = await import("./reports.ts");
+    const resultado = await historialCliente("Juan");
+
+    expect(resultado.texto).toContain("no tiene compras registradas");
+  });
+});

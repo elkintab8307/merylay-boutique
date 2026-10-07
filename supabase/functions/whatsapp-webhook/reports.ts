@@ -1,7 +1,7 @@
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import { getSupabase } from "../_shared/db.ts";
 import { subirYFirmar } from "./catalog.ts";
-import { ESTADOS_PEDIDO_VENDIDO, formatoMoneda, type RespuestaLectura } from "./owner-actions.ts";
+import { ESTADOS_PEDIDO_VENDIDO, escaparValorFiltro, formatoMoneda, type RespuestaLectura } from "./owner-actions.ts";
 
 const TOPE_FILAS_PDF_DETALLE = 200;
 
@@ -226,4 +226,87 @@ export async function informeClientes(dias: number, limite: number, conPdf: bool
   const link = await subirYFirmar(bytes, "informe-clientes.pdf");
 
   return { texto, fotos: [], documentos: [{ link, filename: "informe-clientes-merylay.pdf" }] };
+}
+
+export async function historialCliente(nombreOTelefono: string): Promise<RespuestaLectura> {
+  const supabase = getSupabase();
+  const patron = escaparValorFiltro(`%${nombreOTelefono}%`);
+
+  const { data: perfiles, error: errorPerfiles } = await supabase
+    .from("profiles")
+    .select("id, full_name, username")
+    .eq("role", "customer")
+    .or(`full_name.ilike.${patron},username.ilike.${patron},whatsapp.ilike.${patron},phone.ilike.${patron}`)
+    .limit(5);
+  if (errorPerfiles) throw new Error(`No se pudo buscar el cliente: ${errorPerfiles.message}`);
+
+  const { data: clientesPos, error: errorPos } = await supabase
+    .from("pos_customers")
+    .select("id, profile_id, nombre")
+    .or(`nombre.ilike.${patron},telefono.ilike.${patron}`)
+    .limit(5);
+  if (errorPos) throw new Error(`No se pudo buscar el cliente: ${errorPos.message}`);
+
+  const filasPerfiles = (perfiles ?? []) as { id: string; full_name: string | null; username: string }[];
+  const filasPos = (clientesPos ?? []) as { id: string; profile_id: string | null; nombre: string }[];
+
+  // Un pos_customer vinculado (profile_id) a un perfil que YA aparecio en
+  // la busqueda de perfiles es la MISMA persona, no un candidato adicional.
+  const idsPerfilesEncontrados = new Set(filasPerfiles.map((p) => p.id));
+  const posIndependientes = filasPos.filter((pc) => !pc.profile_id || !idsPerfilesEncontrados.has(pc.profile_id));
+
+  const totalCandidatos = filasPerfiles.length + posIndependientes.length;
+  if (totalCandidatos === 0) {
+    return { texto: `No encontré ningún cliente que coincida con "${nombreOTelefono}".`, fotos: [], documentos: [] };
+  }
+  if (totalCandidatos > 1) {
+    const nombres = [...filasPerfiles.map((p) => p.full_name ?? p.username), ...posIndependientes.map((c) => c.nombre)];
+    return { texto: `Encontré varios clientes que coinciden: ${nombres.join(", ")}. ¿Puedes darme el nombre completo o el teléfono exacto?`, fotos: [], documentos: [] };
+  }
+
+  let profileId: string | null;
+  let posCustomerId: string | null;
+  let nombre: string;
+  if (filasPerfiles.length === 1) {
+    profileId = filasPerfiles[0].id;
+    nombre = filasPerfiles[0].full_name ?? filasPerfiles[0].username;
+    // Este perfil puede tener un pos_customer vinculado que no aparecio en
+    // la busqueda de texto (su nombre de POS puede ser distinto) -- se
+    // busca directo por profile_id, no por texto.
+    const { data: posVinculado } = await supabase.from("pos_customers").select("id").eq("profile_id", profileId).maybeSingle();
+    posCustomerId = (posVinculado as { id: string } | null)?.id ?? null;
+  } else {
+    posCustomerId = posIndependientes[0].id;
+    profileId = posIndependientes[0].profile_id;
+    nombre = posIndependientes[0].nombre;
+  }
+
+  const [pedidos, ventasPos] = await Promise.all([
+    profileId
+      ? supabase.from("orders").select("order_number, total, created_at, channel").eq("user_id", profileId).in("status", ESTADOS_PEDIDO_VENDIDO).order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] as unknown[], error: null }),
+    posCustomerId
+      ? supabase.from("pos_sales").select("sale_number, total, created_at").eq("customer_id", posCustomerId).order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] as unknown[], error: null }),
+  ]);
+  if (pedidos.error) throw new Error(`No se pudo consultar el historial de pedidos: ${pedidos.error.message}`);
+  if (ventasPos.error) throw new Error(`No se pudo consultar el historial de ventas POS: ${ventasPos.error.message}`);
+
+  const filasPedidosHist = (pedidos.data ?? []) as { order_number: string; total: number; created_at: string; channel: string }[];
+  const filasPosHist = (ventasPos.data ?? []) as { sale_number: string; total: number; created_at: string }[];
+
+  const todas = [
+    ...filasPedidosHist.map((p) => ({ numero: p.order_number, canal: p.channel, total: Number(p.total), fecha: p.created_at })),
+    ...filasPosHist.map((v) => ({ numero: v.sale_number, canal: "pos", total: Number(v.total), fecha: v.created_at })),
+  ].sort((a, b) => (a.fecha > b.fecha ? -1 : 1));
+
+  if (todas.length === 0) {
+    return { texto: `${nombre} no tiene compras registradas todavía.`, fotos: [], documentos: [] };
+  }
+
+  const totalGastado = todas.reduce((suma, c) => suma + c.total, 0);
+  const detalle = todas.map((c) => `${new Date(c.fecha).toLocaleDateString("es-CO")} (${c.canal}) — ${c.numero}: ${formatoMoneda(c.total)}`).join("\n");
+  const texto = `Historial de ${nombre}: ${formatoMoneda(totalGastado)} en ${todas.length} compra(s).\n${detalle}`;
+
+  return { texto, fotos: [], documentos: [] };
 }
