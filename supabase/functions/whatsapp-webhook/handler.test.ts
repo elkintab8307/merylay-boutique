@@ -532,6 +532,28 @@ describe("acciones de lectura del dueño con fotos/documentos", () => {
 
     expect(mocks.informeGastos).toHaveBeenCalledWith(30, false);
   });
+
+  it("productos_mas_vendidos acota 'limite' a 10 en texto aunque el modelo pida mas (ej. 100)", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.3f", from: "573215879805", texto: "dame los 100 productos mas vendidos del año" });
+    mocks.decidirAccion.mockResolvedValue({ action: "productos_mas_vendidos", params: { dias: 365, limite: 100 }, response_message: "" });
+    mocks.productosMasVendidos.mockResolvedValue({ texto: "1. Pijama Rosa", fotos: [], documentos: [] });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.productosMasVendidos).toHaveBeenCalledWith(365, 10, false);
+  });
+
+  it("informe_ventas cae al default de 'dias' si el modelo manda un valor no numerico (ej. 'hoy')", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.3g", from: "573215879805", texto: "ventas de hoy" });
+    mocks.decidirAccion.mockResolvedValue({ action: "informe_ventas", params: { dias: "hoy", conPdf: false }, response_message: "" });
+    mocks.informeVentas.mockResolvedValue({ texto: "Ventas: $100.000", fotos: [], documentos: [] });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.informeVentas).toHaveBeenCalledWith(1, false);
+  });
 });
 
 describe("buscar_producto con tarjetas de foto y boton", () => {

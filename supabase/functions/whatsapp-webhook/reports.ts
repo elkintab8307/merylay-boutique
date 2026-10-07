@@ -81,7 +81,7 @@ export async function informeVentas(dias: number, conPdf: boolean): Promise<Resp
   ].sort((a, b) => (a.fecha > b.fecha ? -1 : 1));
 
   const filasTabla = combinadas.slice(0, TOPE_FILAS_PDF_DETALLE).map((f) => [
-    new Date(f.fecha).toLocaleDateString("es-CO"),
+    new Date(f.fecha).toLocaleDateString("es-CO", { timeZone: "America/Bogota" }),
     f.canal,
     f.metodo,
     formatoMoneda(f.total),
@@ -264,18 +264,21 @@ export async function historialCliente(nombreOTelefono: string): Promise<Respues
   }
 
   let profileId: string | null;
-  let posCustomerId: string | null;
+  let posCustomerIds: string[];
   let nombre: string;
   if (filasPerfiles.length === 1) {
     profileId = filasPerfiles[0].id;
     nombre = filasPerfiles[0].full_name ?? filasPerfiles[0].username;
-    // Este perfil puede tener un pos_customer vinculado que no aparecio en
-    // la busqueda de texto (su nombre de POS puede ser distinto) -- se
-    // busca directo por profile_id, no por texto.
-    const { data: posVinculado } = await supabase.from("pos_customers").select("id").eq("profile_id", profileId).maybeSingle();
-    posCustomerId = (posVinculado as { id: string } | null)?.id ?? null;
+    // Este perfil puede tener uno o mas pos_customers vinculados que no
+    // aparecieron en la busqueda de texto (su nombre de POS puede ser
+    // distinto) -- se buscan directo por profile_id, no por texto. No hay
+    // restriccion de unicidad en profile_id, asi que se recogen TODOS los
+    // vinculados, igual que informeClientes ya hace al sumarlos.
+    const { data: posVinculados, error: errorPosVinculados } = await supabase.from("pos_customers").select("id").eq("profile_id", profileId);
+    if (errorPosVinculados) throw new Error(`No se pudo buscar el cliente de POS vinculado: ${errorPosVinculados.message}`);
+    posCustomerIds = ((posVinculados ?? []) as { id: string }[]).map((c) => c.id);
   } else {
-    posCustomerId = posIndependientes[0].id;
+    posCustomerIds = [posIndependientes[0].id];
     profileId = posIndependientes[0].profile_id;
     nombre = posIndependientes[0].nombre;
   }
@@ -284,8 +287,8 @@ export async function historialCliente(nombreOTelefono: string): Promise<Respues
     profileId
       ? supabase.from("orders").select("order_number, total, created_at, channel").eq("user_id", profileId).in("status", ESTADOS_PEDIDO_VENDIDO).order("created_at", { ascending: false })
       : Promise.resolve({ data: [] as unknown[], error: null }),
-    posCustomerId
-      ? supabase.from("pos_sales").select("sale_number, total, created_at").eq("customer_id", posCustomerId).order("created_at", { ascending: false })
+    posCustomerIds.length > 0
+      ? supabase.from("pos_sales").select("sale_number, total, created_at").in("customer_id", posCustomerIds).order("created_at", { ascending: false })
       : Promise.resolve({ data: [] as unknown[], error: null }),
   ]);
   if (pedidos.error) throw new Error(`No se pudo consultar el historial de pedidos: ${pedidos.error.message}`);
@@ -303,9 +306,15 @@ export async function historialCliente(nombreOTelefono: string): Promise<Respues
     return { texto: `${nombre} no tiene compras registradas todavía.`, fotos: [], documentos: [] };
   }
 
+  // El total SIEMPRE se calcula sobre TODAS las compras (`todas`); solo el
+  // texto listado se acota a las 10 mas recientes, para no exceder el
+  // limite de 4096 caracteres de la Graph API de WhatsApp con clientes de
+  // muchas compras.
   const totalGastado = todas.reduce((suma, c) => suma + c.total, 0);
-  const detalle = todas.map((c) => `${new Date(c.fecha).toLocaleDateString("es-CO")} (${c.canal}) — ${c.numero}: ${formatoMoneda(c.total)}`).join("\n");
-  const texto = `Historial de ${nombre}: ${formatoMoneda(totalGastado)} en ${todas.length} compra(s).\n${detalle}`;
+  const TOPE_HISTORIAL_TEXTO = 10;
+  const detalle = todas.slice(0, TOPE_HISTORIAL_TEXTO).map((c) => `${new Date(c.fecha).toLocaleDateString("es-CO", { timeZone: "America/Bogota" })} (${c.canal}) — ${c.numero}: ${formatoMoneda(c.total)}`).join("\n");
+  const notaTruncado = todas.length > TOPE_HISTORIAL_TEXTO ? `\n… y ${todas.length - TOPE_HISTORIAL_TEXTO} compra(s) más.` : "";
+  const texto = `Historial de ${nombre}: ${formatoMoneda(totalGastado)} en ${todas.length} compra(s).\n${detalle}${notaTruncado}`;
 
   return { texto, fotos: [], documentos: [] };
 }
@@ -345,7 +354,14 @@ export async function informeGastos(dias: number, conPdf: boolean): Promise<Resp
     .sort((a, b) => (a.expense_date > b.expense_date ? -1 : 1))
     .slice(0, TOPE_FILAS_PDF_DETALLE)
     .map((g) => [
-      new Date(g.expense_date).toLocaleDateString("es-CO"),
+      // expense_date es `date` (no timestamptz): ya es un dia calendario sin
+      // componente horario, y new Date("YYYY-MM-DD") lo parsea como
+      // medianoche UTC. Fijar explicitamente { timeZone: "UTC" } (en vez de
+      // dejar que toLocaleDateString use la zona horaria de la sesion, o
+      // peor, "America/Bogota") evita que se corra un dia hacia atras; esto
+      // es deliberado y DISTINTO del tratamiento de orders/pos_sales mas
+      // abajo, que si son timestamptz y si necesitan America/Bogota.
+      new Date(g.expense_date).toLocaleDateString("es-CO", { timeZone: "UTC" }),
       g.expense_categories?.name ?? "Sin categoría",
       g.description,
       formatoMoneda(Number(g.amount)),

@@ -3,6 +3,28 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("../_shared/db.ts", () => ({ getSupabase: vi.fn() }));
 vi.mock("./catalog.ts", () => ({ subirYFirmar: vi.fn(async () => "https://x/informe-firmado.pdf") }));
 
+// Mock de pdf-lib que captura cada texto dibujado con drawText, para poder
+// verificar (test de zona horaria, mas abajo) que la fecha de una fila del
+// PDF sale en hora de Bogota y no en UTC. El resto de tests de este archivo
+// que generan PDF no inspeccionan el contenido, solo que subirYFirmar fue
+// llamado -- este mock conserva esa interfaz minima sin tocarlos.
+const pdfLibCapturado = vi.hoisted(() => ({ textos: [] as string[] }));
+vi.mock("pdf-lib", () => ({
+  StandardFonts: { Helvetica: "Helvetica", HelveticaBold: "HelveticaBold" },
+  PDFDocument: {
+    create: vi.fn(async () => ({
+      addPage: vi.fn(() => ({
+        getHeight: () => 800,
+        drawText: vi.fn((texto: string) => {
+          pdfLibCapturado.textos.push(texto);
+        }),
+      })),
+      embedFont: vi.fn(async () => ({})),
+      save: vi.fn(async () => new Uint8Array([1, 2, 3])),
+    })),
+  },
+}));
+
 // Mock generico: cada tabla tiene una cola de respuestas {data, error} que
 // se consume en orden en cada llamada a supabase.from(esa tabla) -- hace
 // falta una cola (no una sola respuesta) porque algunas funciones de este
@@ -88,6 +110,32 @@ describe("informeVentas", () => {
 
     expect(subirYFirmar).toHaveBeenCalled();
     expect(resultado.documentos).toEqual([{ link: "https://x/informe-firmado.pdf", filename: "informe-ventas-merylay.pdf" }]);
+  });
+
+  it("con conPdf=true, la fila del PDF usa la fecha de Bogota, no la de UTC, para una venta tarde en la noche", async () => {
+    // 2026-10-08T01:30:00Z son las 8:30pm del 7 de octubre en Bogota
+    // (UTC-5). Si la fila del PDF usara la zona horaria de la sesion (UTC,
+    // como corre Deno Edge Functions) en vez de America/Bogota, mostraria
+    // 8/10/2026 en lugar de 7/10/2026.
+    const supabase = mockSupabaseDesdeTablas({
+      orders: [{ data: [{ total: 100000, channel: "web", payment_method: "wompi", created_at: "2026-10-08T01:30:00Z" }], error: null }],
+      pos_sales: [{ data: [], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+    pdfLibCapturado.textos.length = 0;
+
+    const tzOriginal = process.env.TZ;
+    process.env.TZ = "UTC"; // simula el runtime real de Edge Functions
+    try {
+      const { informeVentas } = await import("./reports.ts");
+      await informeVentas(7, true);
+    } finally {
+      process.env.TZ = tzOriginal;
+    }
+
+    expect(pdfLibCapturado.textos).toContain("7/10/2026");
+    expect(pdfLibCapturado.textos).not.toContain("8/10/2026");
   });
 
   it("con conPdf=false, no sube ningun PDF", async () => {
@@ -412,6 +460,88 @@ describe("historialCliente", () => {
     const resultado = await historialCliente("Juan");
 
     expect(resultado.texto).toContain("no tiene compras registradas");
+  });
+
+  it("con mas de 10 compras, el total suma TODAS pero el texto solo lista las 10 mas recientes y avisa del resto", async () => {
+    const compras = Array.from({ length: 12 }, (_, i) => ({
+      order_number: `ML-${i + 1}`,
+      total: 10000,
+      created_at: `2026-09-${String(i + 1).padStart(2, "0")}T10:00:00Z`,
+      channel: "web",
+    }));
+    const supabase = mockSupabaseDesdeTablas({
+      profiles: [{ data: [{ id: "profile-1", full_name: "Juan Pérez", username: "juan" }], error: null }],
+      pos_customers: [
+        { data: [], error: null }, // busqueda por texto: sin coincidencias
+        { data: [], error: null }, // busqueda por profile_id vinculado: ninguna
+      ],
+      orders: [{ data: compras, error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { historialCliente } = await import("./reports.ts");
+    const resultado = await historialCliente("Juan");
+
+    // El total ($120.000, 12 compras) refleja las 12 compras completas, no
+    // solo las 10 que aparecen listadas en el texto.
+    expect(resultado.texto).toContain("$120.000 en 12 compra(s)");
+    expect(resultado.texto).toContain("y 2 compra(s) más.");
+    expect(resultado.texto).not.toContain("ML-1:"); // la mas antigua (01-sep) queda fuera de las 10 mas recientes
+  });
+
+  it("la fecha del detalle usa hora de Bogota, no UTC, para una compra tarde en la noche", async () => {
+    // 2026-10-08T01:30:00Z son las 8:30pm del 7 de octubre en Bogota.
+    const supabase = mockSupabaseDesdeTablas({
+      profiles: [{ data: [{ id: "profile-1", full_name: "Juan Pérez", username: "juan" }], error: null }],
+      pos_customers: [
+        { data: [], error: null },
+        { data: [], error: null },
+      ],
+      orders: [{ data: [{ order_number: "ML-1", total: 100000, created_at: "2026-10-08T01:30:00Z", channel: "web" }], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const tzOriginal = process.env.TZ;
+    process.env.TZ = "UTC"; // simula el runtime real de Edge Functions
+    let resultado: Awaited<ReturnType<typeof import("./reports.ts").historialCliente>>;
+    try {
+      const { historialCliente } = await import("./reports.ts");
+      resultado = await historialCliente("Juan");
+    } finally {
+      process.env.TZ = tzOriginal;
+    }
+
+    expect(resultado.texto).toContain("7/10/2026");
+    expect(resultado.texto).not.toContain("8/10/2026");
+  });
+
+  it("un perfil con DOS pos_customers vinculados (sin restriccion de unicidad en profile_id) suma las ventas POS de ambos, no solo una", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      profiles: [{ data: [{ id: "profile-1", full_name: "Juan Pérez", username: "juan" }], error: null }],
+      pos_customers: [
+        { data: [], error: null }, // busqueda por texto: sin coincidencias
+        { data: [{ id: "pos-1" }, { id: "pos-2" }], error: null }, // busqueda por profile_id: AMBOS vinculados
+      ],
+      orders: [{ data: [], error: null }],
+      pos_sales: [{
+        data: [
+          { sale_number: "POS-1", total: 50000, created_at: "2026-10-01T10:00:00Z" },
+          { sale_number: "POS-2", total: 70000, created_at: "2026-10-02T10:00:00Z" },
+        ],
+        error: null,
+      }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { historialCliente } = await import("./reports.ts");
+    const resultado = await historialCliente("Juan");
+
+    expect(resultado.texto).toContain("POS-1");
+    expect(resultado.texto).toContain("POS-2");
+    expect(resultado.texto).toContain("$120.000 en 2 compra(s)");
   });
 });
 
