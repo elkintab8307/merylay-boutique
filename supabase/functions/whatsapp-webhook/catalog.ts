@@ -327,7 +327,7 @@ export async function generarPdfConFotos(titulo: string, filas: FilaPdf[]): Prom
   return pdf.save();
 }
 
-async function subirYFirmar(bytes: Uint8Array, nombreArchivo: string): Promise<string> {
+export async function subirYFirmar(bytes: Uint8Array, nombreArchivo: string): Promise<string> {
   const supabase = getSupabase();
   const ruta = `${crypto.randomUUID()}-${nombreArchivo}`;
 

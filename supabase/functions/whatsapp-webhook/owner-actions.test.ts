@@ -209,55 +209,94 @@ describe("consultarVentas", () => {
   });
 });
 
-describe("consultarProducto", () => {
-  it("resume cuantos productos coinciden y el total de unidades en stock, ademas del detalle", async () => {
-    const limit = vi.fn(async () => ({
-      data: [
-        { name: "Camiseta algodon licrado manga doblada", sku: "CAM-000009", price: 40000, stock: 1 },
-        { name: "Camiseta algodon licrado", sku: "GEN-000003", price: 40000, stock: 0 },
-        { name: "Camiseta tela fria semiajustada", sku: "CAM-000016", price: 35000, stock: 3 },
-      ],
-      error: null,
+describe("buscarInventario", () => {
+  it("resume cuantos productos coinciden y el total de unidades en stock, con hasta 10 fotos", async () => {
+    vi.resetModules();
+    vi.doMock("./catalog.ts", () => ({
+      buscarCatalogo: vi.fn(async () => [
+        { productId: "p1", variantId: null, nombre: "Camiseta A", talla: null, color: null, precio: 40000, stock: 1, imageId: null, fotoUrl: "https://x/a.jpg" },
+        { productId: "p2", variantId: null, nombre: "Camiseta B", talla: null, color: null, precio: 40000, stock: 3, imageId: null, fotoUrl: "https://x/b.jpg" },
+      ]),
     }));
-    const or = vi.fn(() => ({ limit }));
-    const supabase = { from: vi.fn(() => ({ select: vi.fn(() => ({ or })) })) };
-    const { getSupabase } = await import("../_shared/db.ts");
-    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
 
-    const { consultarProducto } = await import("./owner-actions.ts");
-    const resultado = await consultarProducto("camiseta");
+    const { buscarInventario } = await import("./owner-actions.ts");
+    const resultado = await buscarInventario({ texto: "camiseta" });
 
-    expect(resultado).toContain("Encontré 3 producto(s)");
-    expect(resultado).toContain("4 unidad(es) en stock en total");
-    expect(resultado).toContain("Camiseta algodon licrado manga doblada (CAM-000009)");
-    expect(resultado).toContain("Camiseta tela fria semiajustada (CAM-000016)");
+    expect(resultado.texto).toContain("Encontré 2 producto(s)");
+    expect(resultado.texto).toContain("4 unidad(es) en stock en total");
+    expect(resultado.fotos).toHaveLength(2);
+    expect(resultado.fotos[0]).toEqual({ url: "https://x/a.jpg", caption: expect.stringContaining("Camiseta A") });
+    vi.doUnmock("./catalog.ts");
+    vi.resetModules();
   });
 
-  it("avisa que puede haber mas resultados cuando se alcanza el limite de la consulta", async () => {
-    const filas = Array.from({ length: 50 }, (_, i) => ({ name: `Producto ${i}`, sku: `SKU-${i}`, price: 1000, stock: 1 }));
-    const limit = vi.fn(async () => ({ data: filas, error: null }));
-    const or = vi.fn(() => ({ limit }));
-    const supabase = { from: vi.fn(() => ({ select: vi.fn(() => ({ or })) })) };
-    const { getSupabase } = await import("../_shared/db.ts");
-    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+  it("avisa truncamiento y limita a 10 fotos cuando hay mas de 10 coincidencias", async () => {
+    const productos = Array.from({ length: 15 }, (_, i) => ({
+      productId: `p${i}`, variantId: null, nombre: `Producto ${i}`, talla: null, color: null,
+      precio: 1000, stock: 1, imageId: null, fotoUrl: `https://x/${i}.jpg`,
+    }));
+    vi.resetModules();
+    vi.doMock("./catalog.ts", () => ({ buscarCatalogo: vi.fn(async () => productos) }));
 
-    const { consultarProducto } = await import("./owner-actions.ts");
-    const resultado = await consultarProducto("producto");
+    const { buscarInventario } = await import("./owner-actions.ts");
+    const resultado = await buscarInventario({ texto: "producto" });
 
-    expect(resultado).toContain("Encontré 50 o más producto(s)");
+    expect(resultado.texto).toContain("Encontré 15 producto(s)");
+    expect(resultado.fotos).toHaveLength(10);
+    vi.doUnmock("./catalog.ts");
+    vi.resetModules();
   });
 
-  it("devuelve un mensaje claro cuando no hay coincidencias", async () => {
-    const limit = vi.fn(async () => ({ data: [], error: null }));
-    const or = vi.fn(() => ({ limit }));
-    const supabase = { from: vi.fn(() => ({ select: vi.fn(() => ({ or })) })) };
-    const { getSupabase } = await import("../_shared/db.ts");
-    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+  it("sin coincidencias, responde un mensaje claro y sin fotos", async () => {
+    vi.resetModules();
+    vi.doMock("./catalog.ts", () => ({ buscarCatalogo: vi.fn(async () => []) }));
 
-    const { consultarProducto } = await import("./owner-actions.ts");
-    const resultado = await consultarProducto("inexistente");
+    const { buscarInventario } = await import("./owner-actions.ts");
+    const resultado = await buscarInventario({ texto: "inexistente" });
 
-    expect(resultado).toBe('No encontre ningun producto que coincida con "inexistente".');
+    expect(resultado.texto).toContain("No encontré ningún producto");
+    expect(resultado.fotos).toHaveLength(0);
+    vi.doUnmock("./catalog.ts");
+    vi.resetModules();
+  });
+});
+
+describe("generarInformePdf", () => {
+  it("genera el PDF con todas las coincidencias (sin el tope de 10) y lo manda como documento", async () => {
+    const productos = Array.from({ length: 15 }, (_, i) => ({
+      productId: `p${i}`, variantId: null, nombre: `Producto ${i}`, talla: null, color: null,
+      precio: 1000, stock: 1, imageId: null, fotoUrl: null,
+    }));
+    vi.resetModules();
+    vi.doMock("./catalog.ts", () => ({
+      buscarCatalogo: vi.fn(async () => productos),
+      generarPdfConFotos: vi.fn(async () => new Uint8Array([1])),
+      subirYFirmar: vi.fn(async () => "https://x/informe-firmado.pdf"),
+    }));
+
+    const { generarInformePdf } = await import("./owner-actions.ts");
+    const resultado = await generarInformePdf({ texto: "producto" });
+
+    expect(resultado.documentos).toEqual([{ link: "https://x/informe-firmado.pdf", filename: "informe-merylay.pdf" }]);
+    vi.doUnmock("./catalog.ts");
+    vi.resetModules();
+  });
+
+  it("sin coincidencias, no genera ningun PDF", async () => {
+    vi.resetModules();
+    vi.doMock("./catalog.ts", () => ({
+      buscarCatalogo: vi.fn(async () => []),
+      generarPdfConFotos: vi.fn(),
+      subirYFirmar: vi.fn(),
+    }));
+
+    const { generarInformePdf } = await import("./owner-actions.ts");
+    const resultado = await generarInformePdf({ texto: "inexistente" });
+
+    expect(resultado.texto).toContain("No encontré ningún producto");
+    expect(resultado.documentos).toHaveLength(0);
+    vi.doUnmock("./catalog.ts");
+    vi.resetModules();
   });
 });
 

@@ -1,4 +1,5 @@
 import { getSupabase } from "../_shared/db.ts";
+import { buscarCatalogo, generarPdfConFotos, subirYFirmar, type FiltrosCatalogo, type FilaPdf } from "./catalog.ts";
 
 const formatoMoneda = (valor: number) => `$${valor.toLocaleString("es-CO")}`;
 
@@ -99,31 +100,55 @@ export async function consultarPedido(numeroOId: string): Promise<string> {
   return `Pedido ${pedido.order_number} (${pedido.channel}): ${pedido.status}, ${formatoMoneda(pedido.total)}.`;
 }
 
-// Limite generoso (no es una paginacion real): esta funcion tambien
-// responde preguntas de "cuantos/cuantas tenemos de X", para lo que hace
-// falta ver TODOS los productos que coinciden, no solo una muestra de 5
-// como antes — un dueño preguntando "cuantas camisetas tenemos" necesita
-// el conteo y el total de unidades, no una lista parcial sin avisar que
-// hay mas.
-const LIMITE_CONSULTA_PRODUCTO = 50;
+export interface RespuestaLectura {
+  texto: string;
+  fotos: { url: string; caption: string }[];
+  documentos: { link: string; filename: string }[];
+}
 
-export async function consultarProducto(consulta: string): Promise<string> {
-  const supabase = getSupabase();
-  const { data } = await supabase
-    .from("products")
-    .select("name, price, stock, sku")
-    .or(`name.ilike.${escaparValorFiltro(`%${consulta}%`)},sku.eq.${escaparValorFiltro(consulta)}`)
-    .limit(LIMITE_CONSULTA_PRODUCTO);
+const TOPE_FOTOS_EN_VIVO = 10;
 
-  const filas = (data ?? []) as { name: string; price: number; stock: number; sku: string }[];
-  if (filas.length === 0) return `No encontre ningun producto que coincida con "${consulta}".`;
+function caption(p: { nombre: string; talla: string | null; color: string | null; precio: number; stock: number }): string {
+  const detalle = [p.talla ? `talla ${p.talla}` : null, p.color ? `color ${p.color}` : null].filter(Boolean).join(", ");
+  return `${p.nombre}${detalle ? ` (${detalle})` : ""} — ${formatoMoneda(p.precio)}, stock ${p.stock}`;
+}
 
-  const totalUnidades = filas.reduce((suma, p) => suma + p.stock, 0);
-  const posibleTruncado = filas.length === LIMITE_CONSULTA_PRODUCTO ? " o más" : "";
-  const encabezado = `Encontré ${filas.length}${posibleTruncado} producto(s) que coinciden con "${consulta}", `
-    + `con ${totalUnidades} unidad(es) en stock en total:`;
-  const detalle = filas.map((p) => `${p.name} (${p.sku}): ${formatoMoneda(p.price)}, stock ${p.stock}`).join("\n");
-  return `${encabezado}\n${detalle}`;
+export async function buscarInventario(filtros: FiltrosCatalogo): Promise<RespuestaLectura> {
+  const productos = await buscarCatalogo(filtros);
+  if (productos.length === 0) {
+    return { texto: `No encontré ningún producto que coincida con esa búsqueda.`, fotos: [], documentos: [] };
+  }
+
+  const totalUnidades = productos.reduce((suma, p) => suma + p.stock, 0);
+  const truncado = productos.length > TOPE_FOTOS_EN_VIVO ? ` (mostrando ${TOPE_FOTOS_EN_VIVO}; pide el informe en PDF para ver el resto)` : "";
+  const texto = `Encontré ${productos.length} producto(s) con ${totalUnidades} unidad(es) en stock en total${truncado}.`;
+
+  const fotos = productos
+    .slice(0, TOPE_FOTOS_EN_VIVO)
+    .filter((p) => p.fotoUrl)
+    .map((p) => ({ url: p.fotoUrl as string, caption: caption(p) }));
+
+  return { texto, fotos, documentos: [] };
+}
+
+export async function generarInformePdf(filtros: FiltrosCatalogo): Promise<RespuestaLectura> {
+  const productos = await buscarCatalogo(filtros);
+  if (productos.length === 0) {
+    return { texto: `No encontré ningún producto que coincida con esa búsqueda.`, fotos: [], documentos: [] };
+  }
+
+  const filas: FilaPdf[] = productos.map((p) => ({
+    fotoUrl: p.fotoUrl,
+    nombre: p.nombre,
+    detalle: [p.talla ? `talla ${p.talla}` : null, p.color ? `color ${p.color}` : null].filter(Boolean).join(", ") || "—",
+    precio: p.precio,
+    nota: `stock: ${p.stock}`,
+  }));
+
+  const bytes = await generarPdfConFotos("Informe de inventario — MeryLay Boutique", filas);
+  const link = await subirYFirmar(bytes, "informe.pdf");
+
+  return { texto: "Aquí tienes el informe 📋", fotos: [], documentos: [{ link, filename: "informe-merylay.pdf" }] };
 }
 
 export async function actualizarPrecioProducto(idOSku: string, nuevoPrecio: number): Promise<string> {
