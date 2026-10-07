@@ -15,6 +15,11 @@ const mocks = vi.hoisted(() => ({
   buscarInventario: vi.fn(),
   generarInformePdf: vi.fn(),
   transcribirAudio: vi.fn(),
+  informeVentas: vi.fn(),
+  productosMasVendidos: vi.fn(),
+  informeClientes: vi.fn(),
+  historialCliente: vi.fn(),
+  informeGastos: vi.fn(),
 }));
 
 const clienteMocks = vi.hoisted(() => ({
@@ -60,6 +65,13 @@ vi.mock("./catalog.ts", () => ({
 }));
 vi.mock("./orders.ts", () => ({ crearPedidoWompiDesdeCarrito: clienteMocks.crearPedidoWompiDesdeCarrito }));
 vi.mock("./voice.ts", () => ({ transcribirAudio: mocks.transcribirAudio }));
+vi.mock("./reports.ts", () => ({
+  informeVentas: mocks.informeVentas,
+  productosMasVendidos: mocks.productosMasVendidos,
+  informeClientes: mocks.informeClientes,
+  historialCliente: mocks.historialCliente,
+  informeGastos: mocks.informeGastos,
+}));
 
 const dbMocks = vi.hoisted(() => ({ insertarMensaje: vi.fn() }));
 vi.mock("../_shared/db.ts", () => ({
@@ -463,6 +475,62 @@ describe("acciones de lectura del dueño con fotos/documentos", () => {
     await procesarMensajeEntrante({});
 
     expect(clienteMocks.enviarDocumentoPorLink).toHaveBeenCalledWith("573215879805", "https://x/informe.pdf", "informe-merylay.pdf");
+  });
+
+  it("informe_ventas llama a reports.informeVentas con dias y conPdf", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.3a", from: "573215879805", texto: "ventas de esta semana" });
+    mocks.decidirAccion.mockResolvedValue({ action: "informe_ventas", params: { dias: 7, conPdf: true }, response_message: "" });
+    mocks.informeVentas.mockResolvedValue({ texto: "Ventas: $100.000", fotos: [], documentos: [{ link: "https://x/v.pdf", filename: "informe-ventas-merylay.pdf" }] });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.informeVentas).toHaveBeenCalledWith(7, true);
+    expect(clienteMocks.enviarDocumentoPorLink).toHaveBeenCalledWith("573215879805", "https://x/v.pdf", "informe-ventas-merylay.pdf");
+  });
+
+  it("productos_mas_vendidos llama a reports.productosMasVendidos con dias, limite y conPdf (con default de limite)", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.3b", from: "573215879805", texto: "que se vendio mas este mes" });
+    mocks.decidirAccion.mockResolvedValue({ action: "productos_mas_vendidos", params: { dias: 30 }, response_message: "" });
+    mocks.productosMasVendidos.mockResolvedValue({ texto: "1. Pijama Rosa", fotos: [], documentos: [] });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.productosMasVendidos).toHaveBeenCalledWith(30, 10, false);
+  });
+
+  it("informe_clientes llama a reports.informeClientes", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.3c", from: "573215879805", texto: "quienes son mis mejores clientes" });
+    mocks.decidirAccion.mockResolvedValue({ action: "informe_clientes", params: { dias: 30, limite: 5, conPdf: false }, response_message: "" });
+    mocks.informeClientes.mockResolvedValue({ texto: "1. Juan Pérez", fotos: [], documentos: [] });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.informeClientes).toHaveBeenCalledWith(30, 5, false);
+  });
+
+  it("historial_cliente llama a reports.historialCliente con el nombre/telefono", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.3d", from: "573215879805", texto: "que le ha comprado Juan" });
+    mocks.decidirAccion.mockResolvedValue({ action: "historial_cliente", params: { nombreOTelefono: "Juan" }, response_message: "" });
+    mocks.historialCliente.mockResolvedValue({ texto: "Historial de Juan: $100.000", fotos: [], documentos: [] });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.historialCliente).toHaveBeenCalledWith("Juan");
+  });
+
+  it("informe_gastos llama a reports.informeGastos con dias y conPdf", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.3e", from: "573215879805", texto: "cuanto hemos gastado este mes" });
+    mocks.decidirAccion.mockResolvedValue({ action: "informe_gastos", params: { dias: 30 }, response_message: "" });
+    mocks.informeGastos.mockResolvedValue({ texto: "Gastos: $580.000", fotos: [], documentos: [] });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.informeGastos).toHaveBeenCalledWith(30, false);
   });
 });
 
