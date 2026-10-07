@@ -10,18 +10,37 @@ import { ACCIONES_ESCRITURA } from "./owner-actions.ts";
 const AFIRMACIONES = new Set(["si", "sí", "confirmo", "dale", "ok", "listo"]);
 
 // La confirmacion puede llegar como una sola palabra ("si") o como una
-// frase ("si, confirmo"): basta con que la PRIMERA palabra sea una
-// afirmacion reconocida. Cualquier otra cosa (p.ej. "tal vez, dejame
-// pensarlo") se trata como ambigua/negativa y cancela la confirmacion
-// pendiente en lugar de ejecutar la accion.
+// frase corta ("si, confirmo"). NO basta con mirar solo la primera
+// palabra: en español "si"/"sí" puede ser tanto la afirmacion ("yes")
+// como el condicional ("if"), asi que una respuesta matizada como
+// "si no es necesario, cancela" o "sí pero antes dime cuánto stock
+// queda" empieza con "si" sin ser en absoluto una confirmacion clara.
+// Por eso exigimos que TODAS las palabras del mensaje (sin contar
+// separadores/puntuacion) sean afirmaciones reconocidas: "si, confirmo"
+// pasa (ambas palabras estan en el set), pero cualquier palabra ajena
+// al set — "no", "necesario", "cancela", "pero", "dime", etc. — hace
+// que el mensaje se trate como ambiguo/negativo y cancele la
+// confirmacion pendiente en lugar de ejecutar la accion.
 function esConfirmacionAfirmativa(texto: string): boolean {
-  const textoNormalizado = texto.trim().toLowerCase();
-  const primeraPalabra = textoNormalizado.split(/[\s,.;!¡]+/)[0];
-  return AFIRMACIONES.has(textoNormalizado) || AFIRMACIONES.has(primeraPalabra);
+  const palabras = texto.trim().toLowerCase().split(/[\s,.;!¡]+/).filter(Boolean);
+  if (palabras.length === 0) return false;
+  return palabras.every((palabra) => AFIRMACIONES.has(palabra));
 }
 
 function esDueno(telefono: string): "Elkin" | "Mary" | null {
-  const numeros = (Deno.env.get("WHATSAPP_OWNER_NUMBERS") ?? "").split(",").map((n) => n.trim());
+  // Ambos lados de la comparacion deben normalizarse igual: `telefono`
+  // ya llega normalizado a solo digitos (normalizarTelefono se aplica
+  // en procesarMensajeEntrante), asi que cada numero configurado en
+  // WHATSAPP_OWNER_NUMBERS tambien debe pasar por normalizarTelefono
+  // antes de comparar. Sin esto, un "+" inicial copiado al configurar
+  // la variable de entorno haria que un dueño real cayera al flujo de
+  // cliente sin ningun error visible. filter(Boolean) evita que una
+  // coma sobrante o la variable vacia produzcan una cadena vacia que
+  // coincida por accidente con un `from` malformado.
+  const numeros = (Deno.env.get("WHATSAPP_OWNER_NUMBERS") ?? "")
+    .split(",")
+    .map((n) => normalizarTelefono(n.trim()))
+    .filter(Boolean);
   const [elkin, mary] = numeros;
   if (telefono === elkin) return "Elkin";
   if (telefono === mary) return "Mary";

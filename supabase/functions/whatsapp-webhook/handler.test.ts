@@ -73,6 +73,32 @@ describe("procesarMensajeEntrante", () => {
     expect(mocks.actualizarPrecioProducto).not.toHaveBeenCalled();
   });
 
+  it("no ejecuta una accion de escritura si la respuesta es condicional ('si no es necesario, cancela')", async () => {
+    mocks.obtenerOCrearSesion.mockResolvedValue({
+      id: "sesion-1",
+      sessionData: { cart: [], pendingConfirmation: { action: "actualizar_precio_producto", params: { idOSku: "P1", nuevoPrecio: 50000 } } },
+    });
+    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.3b", from: "573215879805", texto: "si no es necesario, cancela" });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.actualizarPrecioProducto).not.toHaveBeenCalled();
+  });
+
+  it("no ejecuta una accion de escritura si la respuesta matiza la confirmacion ('sí pero antes dime cuánto stock queda')", async () => {
+    mocks.obtenerOCrearSesion.mockResolvedValue({
+      id: "sesion-1",
+      sessionData: { cart: [], pendingConfirmation: { action: "actualizar_precio_producto", params: { idOSku: "P1", nuevoPrecio: 50000 } } },
+    });
+    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.3c", from: "573215879805", texto: "sí pero antes dime cuánto stock queda" });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.actualizarPrecioProducto).not.toHaveBeenCalled();
+  });
+
   it("ejecuta la accion pendiente si el dueño confirma con 'si'", async () => {
     mocks.obtenerOCrearSesion.mockResolvedValue({
       id: "sesion-1",
