@@ -1,5 +1,5 @@
 import { getSupabase } from "../_shared/db.ts";
-import { enviarTexto, enviarDocumentoPorLink } from "../_shared/meta.ts";
+import { enviarTexto, enviarImagenPorLink, enviarDocumentoPorLink, enviarBotonProducto } from "../_shared/meta.ts";
 import { parsearMensajeEntrante } from "./adapters.ts";
 import { buscarOCrearCliente, normalizarTelefono, generarAccesoWeb } from "./customers.ts";
 import { obtenerOCrearSesion, guardarSesion, cargarHistorial } from "./sessions.ts";
@@ -8,7 +8,8 @@ import * as ownerActions from "./owner-actions.ts";
 import { ACCIONES_ESCRITURA } from "./owner-actions.ts";
 import * as catalog from "./catalog.ts";
 import { crearPedidoWompiDesdeCarrito } from "./orders.ts";
-import type { ItemCarrito, SessionData } from "../_shared/types.ts";
+import { transcribirAudio } from "./voice.ts";
+import type { SessionData } from "../_shared/types.ts";
 import { z } from "zod";
 
 const AFIRMACIONES = new Set(["si", "sí", "confirmo", "dale", "ok", "listo"]);
@@ -80,20 +81,30 @@ async function ejecutarAccionEscritura(accion: string, params: Record<string, un
   }
 }
 
-async function ejecutarAccionLectura(accion: string, params: Record<string, unknown>): Promise<string> {
+async function ejecutarAccionLectura(accion: string, params: Record<string, unknown>): Promise<ownerActions.RespuestaLectura> {
   switch (accion) {
     case "consultar_ventas":
-      return ownerActions.consultarVentas((params.dias as number) ?? 1);
+      return { texto: await ownerActions.consultarVentas((params.dias as number) ?? 1), fotos: [], documentos: [] };
     case "consultar_stock_bajo":
-      return ownerActions.consultarStockBajo((params.umbral as number) ?? 5);
+      return { texto: await ownerActions.consultarStockBajo((params.umbral as number) ?? 5), fotos: [], documentos: [] };
     case "buscar_cliente":
-      return ownerActions.buscarCliente(params.consulta as string);
+      return { texto: await ownerActions.buscarCliente(params.consulta as string), fotos: [], documentos: [] };
     case "consultar_pedido":
-      return ownerActions.consultarPedido(params.numeroOId as string);
-    case "consultar_producto":
-      return ownerActions.consultarProducto(params.consulta as string);
+      return { texto: await ownerActions.consultarPedido(params.numeroOId as string), fotos: [], documentos: [] };
+    case "buscar_inventario":
+      return ownerActions.buscarInventario({
+        texto: params.texto as string | undefined,
+        talla: params.talla as string | undefined,
+        color: params.color as string | undefined,
+      });
+    case "generar_informe_pdf":
+      return ownerActions.generarInformePdf({
+        texto: params.texto as string | undefined,
+        talla: params.talla as string | undefined,
+        color: params.color as string | undefined,
+      });
     default:
-      return "No reconozco esa consulta todavia.";
+      return { texto: "No reconozco esa consulta todavia.", fotos: [], documentos: [] };
   }
 }
 
@@ -106,11 +117,10 @@ const agregarAlCarritoSchema = z.object({
   qty: z.number().int().positive().default(1),
 });
 
-function formatearResultadoBusqueda(p: catalog.ProductoEncontrado): string {
+function formatearCuerpoProducto(p: catalog.ProductoEncontrado): string {
   const detalles = [p.talla ? `talla ${p.talla}` : null, p.color ? `color ${p.color}` : null].filter(Boolean);
   const sufijo = detalles.length > 0 ? ` (${detalles.join(", ")})` : "";
-  const ids = `[productId:${p.productId}${p.variantId ? ` variantId:${p.variantId}` : ""}]`;
-  return `${p.nombre}${sufijo} — $${p.precio.toLocaleString("es-CO")} (stock: ${p.stock}) ${ids}`;
+  return `${p.nombre}${sufijo}\n$${p.precio.toLocaleString("es-CO")} — stock: ${p.stock}`;
 }
 
 const direccionEnvioSchema = z.object({
@@ -120,82 +130,92 @@ const direccionEnvioSchema = z.object({
   city: z.string().min(1),
 });
 
+async function agregarAlCarrito(
+  sessionData: SessionData,
+  productId: string,
+  variantId: string | null,
+  qty: number,
+): Promise<string> {
+  // Nombre, precio, stock e imagen salen SIEMPRE de la base de datos,
+  // nunca de params: el modelo solo aporta los ids (ya validados como
+  // uuid) y la cantidad.
+  const producto = await catalog.obtenerProductoParaCarrito(productId, variantId);
+  if (!producto) {
+    return "No encontré ese producto (o esa talla/color) en el catálogo. ¿Me dices de nuevo cuál quieres?";
+  }
+
+  const existente = sessionData.cart.find(
+    (i) => i.productId === producto.productId && i.variantId === producto.variantId,
+  );
+  const qtyTotal = (existente?.qty ?? 0) + qty;
+  if (qtyTotal > producto.stock) {
+    return producto.stock > 0
+      ? `Solo nos quedan ${producto.stock} unidad(es) de ${producto.nombre}.`
+      : `${producto.nombre} está agotado en este momento.`;
+  }
+
+  if (existente) {
+    existente.qty = qtyTotal;
+    existente.unitPrice = producto.precio;
+    existente.nameSnapshot = producto.nombre;
+  } else {
+    sessionData.cart.push({
+      productId: producto.productId,
+      variantId: producto.variantId,
+      imageId: producto.imageId,
+      qty,
+      unitPrice: producto.precio,
+      nameSnapshot: producto.nombre,
+    });
+  }
+  const total = sessionData.cart.reduce((suma, i) => suma + i.unitPrice * i.qty, 0);
+  return `Agregado: ${producto.nombre} x${qtyTotal}. Tu carrito tiene ${sessionData.cart.length} producto(s), total $${total.toLocaleString("es-CO")}.`;
+}
+
 async function ejecutarAccionCliente(
   accion: string,
   params: Record<string, unknown>,
   profileId: string,
   sessionData: SessionData,
   mensajeDeRespaldo: string,
-): Promise<{ texto: string; documentos: { link: string; filename: string }[] }> {
+): Promise<{
+  texto: string;
+  documentos: { link: string; filename: string }[];
+  botones: { fotoUrl: string; cuerpo: string; botonId: string; botonTitulo: string }[];
+}> {
   switch (accion) {
     case "buscar_producto": {
       const consulta = typeof params.consulta === "string" ? params.consulta.trim() : "";
-      if (!consulta) {
-        return { texto: "¿Qué producto estás buscando?", documentos: [] };
+      const talla = typeof params.talla === "string" ? params.talla : undefined;
+      const color = typeof params.color === "string" ? params.color : undefined;
+      if (!consulta && !talla && !color) {
+        return { texto: "¿Qué producto estás buscando?", documentos: [], botones: [] };
       }
-      const productos = await catalog.buscarProductos(consulta);
+      const productos = await catalog.buscarCatalogo({ texto: consulta || undefined, talla, color });
       if (productos.length === 0) {
-        return { texto: `No encontré productos para "${consulta}".`, documentos: [] };
+        return { texto: `No encontré productos para esa búsqueda.`, documentos: [], botones: [] };
       }
-      // Los ids van como texto literal en la respuesta: este mensaje
-      // saliente queda en whatsapp_messages y vuelve al modelo como
-      // historial en el turno siguiente, que es de donde copia
-      // productId/variantId para agregar_al_carrito.
-      const texto = productos.map((p, i) => `${i + 1}. ${formatearResultadoBusqueda(p)}`).join("\n");
-      return { texto, documentos: [] };
+      const TOPE = 10;
+      const botones = productos.slice(0, TOPE).filter((p) => p.fotoUrl).map((p) => ({
+        fotoUrl: p.fotoUrl as string,
+        cuerpo: formatearCuerpoProducto(p),
+        botonId: `add:${p.productId}:${p.variantId ?? "-"}`,
+        botonTitulo: "Agregar al carrito",
+      }));
+      const truncado = productos.length > TOPE
+        ? ` Encontré ${productos.length} en total — si quieres verlos todos, pídeme el catálogo en PDF.`
+        : "";
+      return { texto: `Te mando las opciones que encontré.${truncado}`, documentos: [], botones };
     }
 
     case "agregar_al_carrito": {
       const validacion = agregarAlCarritoSchema.safeParse(params);
       if (!validacion.success) {
-        return { texto: "Perdona, no entendí qué producto quieres agregar, ¿puedes repetirlo?", documentos: [] };
+        return { texto: "Perdona, no entendí qué producto quieres agregar, ¿puedes repetirlo?", documentos: [], botones: [] };
       }
       const { productId, variantId, qty } = validacion.data;
-
-      // Nombre, precio, stock e imagen salen SIEMPRE de la base de datos,
-      // nunca de params: el modelo solo aporta los ids (ya validados como
-      // uuid) y la cantidad.
-      const producto = await catalog.obtenerProductoParaCarrito(productId, variantId ?? null);
-      if (!producto) {
-        return {
-          texto: "No encontré ese producto (o esa talla/color) en el catálogo. ¿Me dices de nuevo cuál quieres?",
-          documentos: [],
-        };
-      }
-
-      const existente = sessionData.cart.find(
-        (i) => i.productId === producto.productId && i.variantId === producto.variantId,
-      );
-      const qtyTotal = (existente?.qty ?? 0) + qty;
-      if (qtyTotal > producto.stock) {
-        return {
-          texto: producto.stock > 0
-            ? `Solo nos quedan ${producto.stock} unidad(es) de ${producto.nombre}.`
-            : `${producto.nombre} está agotado en este momento.`,
-          documentos: [],
-        };
-      }
-
-      if (existente) {
-        existente.qty = qtyTotal;
-        existente.unitPrice = producto.precio;
-        existente.nameSnapshot = producto.nombre;
-      } else {
-        const item: ItemCarrito = {
-          productId: producto.productId,
-          variantId: producto.variantId,
-          imageId: producto.imageId,
-          qty,
-          unitPrice: producto.precio,
-          nameSnapshot: producto.nombre,
-        };
-        sessionData.cart.push(item);
-      }
-      const total = sessionData.cart.reduce((suma, i) => suma + i.unitPrice * i.qty, 0);
-      return {
-        texto: `Agregado: ${producto.nombre} x${qtyTotal}. Tu carrito tiene ${sessionData.cart.length} producto(s), total $${total.toLocaleString("es-CO")}.`,
-        documentos: [],
-      };
+      const texto = await agregarAlCarrito(sessionData, productId, variantId ?? null, qty);
+      return { texto, documentos: [], botones: [] };
     }
 
     case "quitar_del_carrito": {
@@ -203,34 +223,40 @@ async function ejecutarAccionCliente(
       sessionData.cart = sessionData.cart.filter(
         (item) => !(item.productId === params.productId && (variantId === null || item.variantId === variantId)),
       );
-      return { texto: "Listo, lo quité del carrito.", documentos: [] };
+      return { texto: "Listo, lo quité del carrito.", documentos: [], botones: [] };
     }
 
     case "generar_catalogo_pdf": {
-      const link = await catalog.generarCatalogoPdf();
+      const link = await catalog.generarCatalogoPdf({
+        texto: params.texto as string | undefined,
+        talla: params.talla as string | undefined,
+        color: params.color as string | undefined,
+      });
       return {
-        texto: "Aquí tienes nuestro catálogo completo 💕",
+        texto: "Aquí tienes nuestro catálogo 💕",
         documentos: [{ link, filename: "catalogo-merylay.pdf" }],
+        botones: [],
       };
     }
 
     case "generar_cotizacion_pdf": {
       if (sessionData.cart.length === 0) {
-        return { texto: "Tu carrito está vacío, agrega algún producto antes de pedir la cotización.", documentos: [] };
+        return { texto: "Tu carrito está vacío, agrega algún producto antes de pedir la cotización.", documentos: [], botones: [] };
       }
       const link = await catalog.generarCotizacionPdf(sessionData.cart);
-      return { texto: "Aquí tienes tu cotización 💕", documentos: [{ link, filename: "cotizacion-merylay.pdf" }] };
+      return { texto: "Aquí tienes tu cotización 💕", documentos: [{ link, filename: "cotizacion-merylay.pdf" }], botones: [] };
     }
 
     case "confirmar_pedido": {
       if (sessionData.cart.length === 0) {
-        return { texto: "Tu carrito está vacío, agrega algún producto antes de confirmar un pedido.", documentos: [] };
+        return { texto: "Tu carrito está vacío, agrega algún producto antes de confirmar un pedido.", documentos: [], botones: [] };
       }
       const direccion = direccionEnvioSchema.safeParse(params);
       if (!direccion.success) {
         return {
           texto: "Para confirmar necesito tu nombre completo, teléfono, dirección y ciudad de envío.",
           documentos: [],
+          botones: [],
         };
       }
       const { linkPago, orderNumber } = await crearPedidoWompiDesdeCarrito(profileId, sessionData.cart, direccion.data);
@@ -238,6 +264,7 @@ async function ejecutarAccionCliente(
       return {
         texto: `Tu pedido ${orderNumber} quedó listo. Paga aquí para confirmarlo: ${linkPago}`,
         documentos: [],
+        botones: [],
       };
     }
 
@@ -246,12 +273,26 @@ async function ejecutarAccionCliente(
       return {
         texto: `Ya puedes entrar a merylayboutique.com con el usuario ${usuario} y la contraseña ${contrasena}. Te recomendamos cambiarla después de tu primer ingreso.`,
         documentos: [],
+        botones: [],
       };
     }
 
     default:
-      return { texto: mensajeDeRespaldo, documentos: [] };
+      return { texto: mensajeDeRespaldo, documentos: [], botones: [] };
   }
+}
+
+const MENSAJE_AUDIO_NO_ENTENDIDO = "No pude entender tu nota de voz, ¿puedes escribirla o intentarlo de nuevo?";
+const REGEX_BOTON_CARRITO = /^add:([0-9a-f-]{36}):(-|[0-9a-f-]{36})$/i;
+
+async function manejarBoton(botonId: string, sessionData: SessionData): Promise<string> {
+  const match = REGEX_BOTON_CARRITO.exec(botonId);
+  if (!match) {
+    return "No entendí esa acción, ¿puedes escribirme qué necesitas?";
+  }
+  const [, productId, variantIdCrudo] = match;
+  const variantId = variantIdCrudo === "-" ? null : variantIdCrudo;
+  return agregarAlCarrito(sessionData, productId, variantId, 1);
 }
 
 export async function procesarMensajeEntrante(payload: unknown): Promise<void> {
@@ -259,7 +300,56 @@ export async function procesarMensajeEntrante(payload: unknown): Promise<void> {
   if (!entrante) return;
 
   const telefono = normalizarTelefono(entrante.from);
-  const esNuevo = await registrarMensaje(telefono, "inbound", entrante.texto, entrante.messageId);
+
+  if (entrante.kind === "boton") {
+    const esNuevo = await registrarMensaje(telefono, "inbound", `[boton] ${entrante.botonId}`, entrante.messageId);
+    if (!esNuevo) return;
+
+    let respuesta: string;
+    try {
+      const { profileId } = await buscarOCrearCliente(telefono);
+      const { id: sessionId, sessionData } = await obtenerOCrearSesion(telefono, profileId);
+      respuesta = await manejarBoton(entrante.botonId, sessionData);
+      await guardarSesion(sessionId, sessionData);
+    } catch (error) {
+      console.error(`[handler] Error procesando el boton ${entrante.messageId} de ${telefono}:`, error);
+      respuesta = MENSAJE_ERROR_GENERICO;
+    }
+
+    try {
+      await enviarTexto(telefono, respuesta);
+      await registrarMensaje(telefono, "outbound", respuesta);
+    } catch (error) {
+      console.error(`[handler] No se pudo enviar/registrar la respuesta a ${telefono}:`, error);
+    }
+    return;
+  }
+
+  let texto: string;
+  if (entrante.kind === "audio") {
+    try {
+      texto = await transcribirAudio(entrante.mediaId);
+    } catch (error) {
+      console.error(`[handler] Error transcribiendo el audio ${entrante.messageId} de ${telefono}:`, error);
+      texto = "";
+    }
+    if (!texto.trim()) {
+      const esNuevo = await registrarMensaje(telefono, "inbound", "[nota de voz sin transcribir]", entrante.messageId);
+      if (esNuevo) {
+        try {
+          await enviarTexto(telefono, MENSAJE_AUDIO_NO_ENTENDIDO);
+          await registrarMensaje(telefono, "outbound", MENSAJE_AUDIO_NO_ENTENDIDO);
+        } catch (error) {
+          console.error(`[handler] No se pudo enviar/registrar la respuesta a ${telefono}:`, error);
+        }
+      }
+      return;
+    }
+  } else {
+    texto = entrante.texto;
+  }
+
+  const esNuevo = await registrarMensaje(telefono, "inbound", texto, entrante.messageId);
   if (!esNuevo) return; // ya procesado antes (reintento de Meta)
 
   // A partir de aqui el mensaje ya quedo marcado como procesado (Meta no
@@ -268,7 +358,7 @@ export async function procesarMensajeEntrante(payload: unknown): Promise<void> {
   // error real y se responde con una disculpa generica.
   let respuesta: string;
   try {
-    respuesta = await generarRespuesta(telefono, entrante);
+    respuesta = await generarRespuesta(telefono, { messageId: entrante.messageId, texto });
   } catch (error) {
     console.error(`[handler] Error procesando el mensaje ${entrante.messageId} de ${telefono}:`, error);
     respuesta = MENSAJE_ERROR_GENERICO;
@@ -332,11 +422,21 @@ async function generarRespuesta(
       await guardarSesion(sessionId, sessionData);
       return `¿Confirmas esta acción? ${decision.action} con ${JSON.stringify(decision.params)}. Responde "sí" para confirmar.`;
     }
-    return ejecutarAccionLectura(decision.action, decision.params);
+    const resultadoLectura = await ejecutarAccionLectura(decision.action, decision.params);
+    for (const foto of resultadoLectura.fotos) {
+      await enviarImagenPorLink(telefono, foto.url, foto.caption);
+    }
+    for (const documento of resultadoLectura.documentos) {
+      await enviarDocumentoPorLink(telefono, documento.link, documento.filename);
+    }
+    return resultadoLectura.texto;
   }
 
   const resultado = await ejecutarAccionCliente(decision.action, decision.params, profileId, sessionData, decision.response_message);
   await guardarSesion(sessionId, sessionData);
+  for (const boton of resultado.botones) {
+    await enviarBotonProducto(telefono, boton);
+  }
   for (const documento of resultado.documentos) {
     await enviarDocumentoPorLink(telefono, documento.link, documento.filename);
   }

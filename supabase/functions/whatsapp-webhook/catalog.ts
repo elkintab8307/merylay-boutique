@@ -43,41 +43,38 @@ interface VarianteProducto {
   stock: number;
 }
 
-// Elige la foto a mostrar/registrar para una variante (o para el producto
-// base si variantId es null): primero las fotos propias de esa variante,
-// luego las generales (variant_id null); dentro de cada grupo, la
-// principal primero. Las fotos marcadas como `vendida` (estampado ya
-// vendido) se descartan.
-function elegirImagen(imagenes: ImagenProducto[] | null | undefined, variantId: string | null): ImagenProducto | null {
-  const disponibles = (imagenes ?? []).filter((img) => !img.vendida);
-  const deLaVariante = variantId ? disponibles.filter((img) => img.variant_id === variantId) : [];
-  const generales = disponibles.filter((img) => img.variant_id === null);
-  for (const grupo of [deLaVariante, generales]) {
-    const elegida = grupo.find((img) => img.is_primary) ?? grupo[0];
-    if (elegida) return elegida;
+export interface FiltrosCatalogo {
+  texto?: string;
+  talla?: string;
+  color?: string;
+}
+
+export const TOPE_BUSCAR_CATALOGO = 50;
+
+export async function buscarCatalogo(filtros: FiltrosCatalogo): Promise<ProductoEncontrado[]> {
+  if (!filtros.texto && !filtros.talla && !filtros.color) {
+    throw new Error("buscarCatalogo requiere al menos un filtro (texto, talla o color).");
   }
-  return null;
-}
 
-// Escapa los comodines de LIKE (% y _) y el propio caracter de escape (\)
-// para que una busqueda con esos caracteres los trate como literales.
-function escaparPatronLike(texto: string): string {
-  return texto.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
-}
-
-export async function buscarProductos(consulta: string): Promise<ProductoEncontrado[]> {
   const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from("products")
-    .select(
-      "id, name, price, stock, " +
-        "product_variants(id, talla, color, price_override, stock), " +
-        "product_images(id, url, is_primary, variant_id, vendida)",
-    )
-    .eq("is_active", true)
-    .ilike("name", `%${escaparPatronLike(consulta)}%`)
-    .limit(10);
+  // product_variants!inner: cuando se filtra por talla/color, Postgres solo
+  // devuelve las variantes que cumplen el filtro (no todas las del
+  // producto) -- exactamente lo que se quiere expandir despues. Sin
+  // talla/color no se usa !inner: un producto sin ninguna variante que
+  // "coincida" (porque no se esta filtrando por variante) no debe excluirse.
+  const variantesEmbed = (filtros.talla || filtros.color)
+    ? "product_variants!inner(id, talla, color, price_override, stock)"
+    : "product_variants(id, talla, color, price_override, stock)";
 
+  let query = supabase
+    .from("products")
+    .select(`id, name, price, stock, categories(name), ${variantesEmbed}, product_images(id, url, is_primary, variant_id, vendida)`)
+    .eq("is_active", true);
+
+  if (filtros.talla) query = query.ilike("product_variants.talla", `%${escaparPatronLike(filtros.talla)}%`);
+  if (filtros.color) query = query.ilike("product_variants.color", `%${escaparPatronLike(filtros.color)}%`);
+
+  const { data, error } = await query;
   if (error || !data) return [];
 
   const productos = data as unknown as Array<{
@@ -85,11 +82,24 @@ export async function buscarProductos(consulta: string): Promise<ProductoEncontr
     name: string;
     price: number;
     stock: number;
+    categories: { name: string } | null;
     product_variants: VarianteProducto[] | null;
     product_images: ImagenProducto[] | null;
   }>;
 
-  return productos.flatMap((producto): ProductoEncontrado[] => {
+  // El texto se filtra en memoria (no en la consulta) porque PostgREST no
+  // compone de forma simple un .or() entre una columna propia (name) y una
+  // columna de una tabla relacionada (categories.name) dentro de la misma
+  // llamada -- a esta escala de catalogo (decenas de productos activos) el
+  // costo es insignificante.
+  const textoNormalizado = filtros.texto?.toLowerCase();
+  const filtrados = textoNormalizado
+    ? productos.filter((p) =>
+        p.name.toLowerCase().includes(textoNormalizado) ||
+        (p.categories?.name ?? "").toLowerCase().includes(textoNormalizado))
+    : productos;
+
+  const expandido = filtrados.flatMap((producto): ProductoEncontrado[] => {
     const variantes = producto.product_variants ?? [];
     if (variantes.length === 0) {
       const imagen = elegirImagen(producto.product_images, null);
@@ -120,6 +130,30 @@ export async function buscarProductos(consulta: string): Promise<ProductoEncontr
       };
     });
   });
+
+  return expandido.slice(0, TOPE_BUSCAR_CATALOGO);
+}
+
+// Elige la foto a mostrar/registrar para una variante (o para el producto
+// base si variantId es null): primero las fotos propias de esa variante,
+// luego las generales (variant_id null); dentro de cada grupo, la
+// principal primero. Las fotos marcadas como `vendida` (estampado ya
+// vendido) se descartan.
+function elegirImagen(imagenes: ImagenProducto[] | null | undefined, variantId: string | null): ImagenProducto | null {
+  const disponibles = (imagenes ?? []).filter((img) => !img.vendida);
+  const deLaVariante = variantId ? disponibles.filter((img) => img.variant_id === variantId) : [];
+  const generales = disponibles.filter((img) => img.variant_id === null);
+  for (const grupo of [deLaVariante, generales]) {
+    const elegida = grupo.find((img) => img.is_primary) ?? grupo[0];
+    if (elegida) return elegida;
+  }
+  return null;
+}
+
+// Escapa los comodines de LIKE (% y _) y el propio caracter de escape (\)
+// para que una busqueda con esos caracteres los trate como literales.
+function escaparPatronLike(texto: string): string {
+  return texto.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
 }
 
 // Fuente de verdad para agregar al carrito: nunca se confia en el
@@ -188,22 +222,60 @@ export async function obtenerProductoParaCarrito(
   };
 }
 
-async function pdfDesdeLineas(titulo: string, lineas: string[], total: number): Promise<Uint8Array> {
+export interface FilaPdf {
+  fotoUrl: string | null;
+  nombre: string;
+  detalle: string;
+  precio: number;
+  nota?: string;
+}
+
+const ALTO_FILA_PDF = 70;
+
+export async function generarPdfConFotos(titulo: string, filas: FilaPdf[], total?: number): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
-  const pagina = pdf.addPage([400, 120 + lineas.length * 20]);
+  const alturaExtra = total !== undefined ? ALTO_FILA_PDF : 0;
+  const pagina = pdf.addPage([450, 140 + filas.length * ALTO_FILA_PDF + alturaExtra]);
   const fuente = await pdf.embedFont(StandardFonts.Helvetica);
   let y = pagina.getHeight() - 40;
   pagina.drawText(titulo, { x: 20, y, size: 16, font: fuente });
-  y -= 30;
-  for (const linea of lineas) {
-    pagina.drawText(linea, { x: 20, y, size: 11, font: fuente });
-    y -= 20;
+  y -= 35;
+
+  for (const fila of filas) {
+    let anchoTexto = 20;
+    if (fila.fotoUrl) {
+      try {
+        const bytes = await fetch(fila.fotoUrl).then((r) => {
+          if (!r.ok) throw new Error(`descarga respondio ${r.status}`);
+          return r.arrayBuffer();
+        });
+        const imagen = fila.fotoUrl.toLowerCase().endsWith(".png")
+          ? await pdf.embedPng(bytes)
+          : await pdf.embedJpg(bytes);
+        const alto = 50;
+        const ancho = (imagen.width / imagen.height) * alto;
+        pagina.drawImage(imagen, { x: 20, y: y - alto + 10, width: ancho, height: alto });
+        anchoTexto = 20 + ancho + 15;
+      } catch (error) {
+        console.error(`[catalog] No se pudo incrustar la foto de "${fila.nombre}" en el PDF:`, error);
+      }
+    }
+    pagina.drawText(fila.nombre, { x: anchoTexto, y, size: 12, font: fuente });
+    pagina.drawText(
+      `${fila.detalle} — $${fila.precio.toLocaleString("es-CO")}${fila.nota ? ` — ${fila.nota}` : ""}`,
+      { x: anchoTexto, y: y - 18, size: 10, font: fuente },
+    );
+    y -= ALTO_FILA_PDF;
   }
-  pagina.drawText(`Total: $${total.toLocaleString("es-CO")}`, { x: 20, y: y - 10, size: 13, font: fuente });
+
+  if (total !== undefined) {
+    pagina.drawText(`Total: $${total.toLocaleString("es-CO")}`, { x: 20, y, size: 12, font: fuente });
+  }
+
   return pdf.save();
 }
 
-async function subirYFirmar(bytes: Uint8Array, nombreArchivo: string): Promise<string> {
+export async function subirYFirmar(bytes: Uint8Array, nombreArchivo: string): Promise<string> {
   const supabase = getSupabase();
   const ruta = `${crypto.randomUUID()}-${nombreArchivo}`;
 
@@ -222,30 +294,68 @@ async function subirYFirmar(bytes: Uint8Array, nombreArchivo: string): Promise<s
   return data.signedUrl;
 }
 
-export async function generarCatalogoPdf(): Promise<string> {
-  const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from("products")
-    .select("name, price, stock")
-    .eq("is_active", true)
-    .order("name");
+export async function generarCatalogoPdf(filtros?: FiltrosCatalogo): Promise<string> {
+  // No basta con comprobar que `filtros` sea un objeto: un llamador (como
+  // el caso "generar_catalogo_pdf" de handler.ts) puede mandar siempre
+  // {texto, talla, color} aunque el cliente no haya pedido ningun filtro,
+  // y ese objeto llega con sus tres campos en undefined. Hay que mirar si
+  // ALGUN campo tiene contenido real antes de decidir si se usa
+  // buscarCatalogo (que lanza si no recibe ningun filtro) o el catalogo
+  // completo.
+  const tieneFiltros = Boolean(filtros?.texto || filtros?.talla || filtros?.color);
+  const productos = tieneFiltros
+    ? await buscarCatalogo(filtros!)
+    : await (async () => {
+        const supabase = getSupabase();
+        const { data, error } = await supabase
+          .from("products")
+          .select("name, price, stock")
+          .eq("is_active", true)
+          .order("name");
+        if (error) {
+          throw new Error(`No se pudo consultar los productos para el catalogo: ${error.message}`);
+        }
+        return ((data ?? []) as Array<{ name: string; price: number; stock: number }>).map((p) => ({
+          productId: "", variantId: null, nombre: p.name, talla: null, color: null,
+          precio: p.price, stock: p.stock, imageId: null, fotoUrl: null,
+        }));
+      })();
 
-  if (error) {
-    throw new Error(`No se pudo consultar los productos para el catalogo: ${error.message}`);
-  }
+  const filas: FilaPdf[] = productos.map((p) => ({
+    fotoUrl: p.fotoUrl,
+    nombre: p.nombre,
+    detalle: [p.talla ? `talla ${p.talla}` : null, p.color ? `color ${p.color}` : null].filter(Boolean).join(", ") || "—",
+    precio: p.precio,
+    nota: `stock: ${p.stock}`,
+  }));
 
-  const lineas = ((data ?? []) as Array<{ name: string; price: number; stock: number }>).map(
-    (p) => `${p.name} — $${p.price.toLocaleString("es-CO")} (stock: ${p.stock})`,
-  );
-  const bytes = await pdfDesdeLineas("Catalogo MeryLay Boutique", lineas, 0);
+  const bytes = await generarPdfConFotos("Catalogo MeryLay Boutique", filas);
   return subirYFirmar(bytes, "catalogo.pdf");
 }
 
+// Resuelve la foto principal de un producto/variante con una consulta
+// fresca a product_images: ItemCarrito (lo que trae el carrito en sesion)
+// no guarda fotoUrl, solo imageId, asi que no hay forma barata de mostrar
+// la foto en la cotizacion sin volver a consultar la base de datos.
+export async function obtenerFotoPrincipal(productId: string, variantId: string | null): Promise<string | null> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("product_images")
+    .select("id, url, is_primary, variant_id, vendida")
+    .eq("product_id", productId);
+  if (error || !data) return null;
+  const imagen = elegirImagen(data as ImagenProducto[], variantId);
+  return imagen?.url ?? null;
+}
+
 export async function generarCotizacionPdf(items: ItemCarrito[]): Promise<string> {
-  const lineas = items.map(
-    (item) => `${item.nameSnapshot} x${item.qty} — $${(item.unitPrice * item.qty).toLocaleString("es-CO")}`,
-  );
   const total = items.reduce((suma, item) => suma + item.unitPrice * item.qty, 0);
-  const bytes = await pdfDesdeLineas("Cotizacion MeryLay Boutique", lineas, total);
+  const filas: FilaPdf[] = await Promise.all(items.map(async (item) => ({
+    fotoUrl: await obtenerFotoPrincipal(item.productId, item.variantId),
+    nombre: item.nameSnapshot,
+    detalle: `x${item.qty}`,
+    precio: item.unitPrice * item.qty,
+  })));
+  const bytes = await generarPdfConFotos("Cotizacion MeryLay Boutique", filas, total);
   return subirYFirmar(bytes, "cotizacion.pdf");
 }

@@ -35,3 +35,40 @@ export async function enviarImagenPorLink(to: string, link: string, caption?: st
 export async function enviarDocumentoPorLink(to: string, link: string, filename: string): Promise<void> {
   await enviarMensaje({ to, type: "document", document: { link, filename } });
 }
+
+export async function obtenerUrlMedia(mediaId: string): Promise<string> {
+  const { token } = credenciales();
+  const respuesta = await fetch(`https://graph.facebook.com/v21.0/${mediaId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!respuesta.ok) {
+    throw new Error(`Graph API respondio ${respuesta.status} al pedir la url del medio ${mediaId}.`);
+  }
+  const cuerpo = await respuesta.json();
+  return cuerpo.url as string;
+}
+
+export async function descargarMedia(url: string): Promise<Uint8Array> {
+  const { token } = credenciales();
+  const respuesta = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!respuesta.ok) {
+    throw new Error(`No se pudo descargar el medio: la Graph API respondio ${respuesta.status}.`);
+  }
+  return new Uint8Array(await respuesta.arrayBuffer());
+}
+
+export async function enviarBotonProducto(
+  to: string,
+  opts: { fotoUrl: string; cuerpo: string; botonId: string; botonTitulo: string },
+): Promise<void> {
+  await enviarMensaje({
+    to,
+    type: "interactive",
+    interactive: {
+      type: "button",
+      header: { type: "image", image: { link: opts.fotoUrl } },
+      body: { text: opts.cuerpo },
+      action: { buttons: [{ type: "reply", reply: { id: opts.botonId, title: opts.botonTitulo } }] },
+    },
+  });
+}

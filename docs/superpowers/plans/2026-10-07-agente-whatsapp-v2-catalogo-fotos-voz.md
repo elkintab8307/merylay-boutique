@@ -76,7 +76,7 @@ Wompi, notificación de venta nueva).
 
 ---
 
-### Tarea 1: Helpers de medios y botón interactivo en `_shared/meta.ts`
+### Task 1: Helpers de medios y botón interactivo en `_shared/meta.ts`
 
 **Files:**
 - Modify: `supabase/functions/_shared/meta.ts`
@@ -260,7 +260,7 @@ git commit -m "feat: helpers de descarga de medios y boton interactivo en meta.t
 
 ---
 
-### Tarea 2: `buscarCatalogo` generalizado en `catalog.ts`
+### Task 2: `buscarCatalogo` generalizado en `catalog.ts`
 
 **Files:**
 - Modify: `supabase/functions/whatsapp-webhook/catalog.ts`
@@ -480,7 +480,7 @@ git commit -m "feat: agrega buscarCatalogo generalizado (texto/talla/color) junt
 
 ---
 
-### Tarea 3: `generarPdfConFotos` y PDFs con fotos reales
+### Task 3: `generarPdfConFotos` y PDFs con fotos reales
 
 **Files:**
 - Modify: `supabase/functions/whatsapp-webhook/catalog.ts`
@@ -602,8 +602,9 @@ describe("generarCatalogoPdf", () => {
 });
 
 describe("generarCotizacionPdf", () => {
-  it("sube un PDF con fotos de los items del carrito y devuelve una URL firmada", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(new Uint8Array([0xff, 0xd8, 0xff]), { status: 200 })));
+  it("sube un PDF de los items del carrito (sin fotos, ItemCarrito no trae fotoUrl) y devuelve una URL firmada", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
     const upload = vi.fn(async () => ({ error: null }));
     const createSignedUrl = vi.fn(async () => ({ data: { signedUrl: "https://x/firmado.pdf" }, error: null }));
     const supabase = { storage: { from: vi.fn(() => ({ upload, createSignedUrl })) } };
@@ -617,6 +618,7 @@ describe("generarCotizacionPdf", () => {
 
     expect(url).toBe("https://x/firmado.pdf");
     expect(upload).toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled(); // sin fotoUrl, generarPdfConFotos no intenta descargar nada
     vi.unstubAllGlobals();
   });
 });
@@ -749,7 +751,7 @@ git commit -m "feat: PDF con fotos reales para catalogo/cotizacion, con filtros 
 
 ---
 
-### Tarea 4: `buscarInventario`/`generarInformePdf` del dueño en `owner-actions.ts`
+### Task 4: `buscarInventario`/`generarInformePdf` del dueño en `owner-actions.ts`
 
 **Files:**
 - Modify: `supabase/functions/whatsapp-webhook/owner-actions.ts`
@@ -776,6 +778,7 @@ Reemplazar el `describe("consultarProducto", ...)` completo de
 ```ts
 describe("buscarInventario", () => {
   it("resume cuantos productos coinciden y el total de unidades en stock, con hasta 10 fotos", async () => {
+    vi.resetModules();
     vi.doMock("./catalog.ts", () => ({
       buscarCatalogo: vi.fn(async () => [
         { productId: "p1", variantId: null, nombre: "Camiseta A", talla: null, color: null, precio: 40000, stock: 1, imageId: null, fotoUrl: "https://x/a.jpg" },
@@ -791,6 +794,7 @@ describe("buscarInventario", () => {
     expect(resultado.fotos).toHaveLength(2);
     expect(resultado.fotos[0]).toEqual({ url: "https://x/a.jpg", caption: expect.stringContaining("Camiseta A") });
     vi.doUnmock("./catalog.ts");
+    vi.resetModules();
   });
 
   it("avisa truncamiento y limita a 10 fotos cuando hay mas de 10 coincidencias", async () => {
@@ -798,6 +802,7 @@ describe("buscarInventario", () => {
       productId: `p${i}`, variantId: null, nombre: `Producto ${i}`, talla: null, color: null,
       precio: 1000, stock: 1, imageId: null, fotoUrl: `https://x/${i}.jpg`,
     }));
+    vi.resetModules();
     vi.doMock("./catalog.ts", () => ({ buscarCatalogo: vi.fn(async () => productos) }));
 
     const { buscarInventario } = await import("./owner-actions.ts");
@@ -806,9 +811,11 @@ describe("buscarInventario", () => {
     expect(resultado.texto).toContain("Encontré 15 producto(s)");
     expect(resultado.fotos).toHaveLength(10);
     vi.doUnmock("./catalog.ts");
+    vi.resetModules();
   });
 
   it("sin coincidencias, responde un mensaje claro y sin fotos", async () => {
+    vi.resetModules();
     vi.doMock("./catalog.ts", () => ({ buscarCatalogo: vi.fn(async () => []) }));
 
     const { buscarInventario } = await import("./owner-actions.ts");
@@ -817,6 +824,7 @@ describe("buscarInventario", () => {
     expect(resultado.texto).toContain("No encontré ningún producto");
     expect(resultado.fotos).toHaveLength(0);
     vi.doUnmock("./catalog.ts");
+    vi.resetModules();
   });
 });
 
@@ -826,6 +834,7 @@ describe("generarInformePdf", () => {
       productId: `p${i}`, variantId: null, nombre: `Producto ${i}`, talla: null, color: null,
       precio: 1000, stock: 1, imageId: null, fotoUrl: null,
     }));
+    vi.resetModules();
     vi.doMock("./catalog.ts", () => ({
       buscarCatalogo: vi.fn(async () => productos),
       generarPdfConFotos: vi.fn(async () => new Uint8Array([1])),
@@ -837,9 +846,11 @@ describe("generarInformePdf", () => {
 
     expect(resultado.documentos).toEqual([{ link: "https://x/informe-firmado.pdf", filename: "informe-merylay.pdf" }]);
     vi.doUnmock("./catalog.ts");
+    vi.resetModules();
   });
 
   it("sin coincidencias, no genera ningun PDF", async () => {
+    vi.resetModules();
     vi.doMock("./catalog.ts", () => ({
       buscarCatalogo: vi.fn(async () => []),
       generarPdfConFotos: vi.fn(),
@@ -852,6 +863,7 @@ describe("generarInformePdf", () => {
     expect(resultado.texto).toContain("No encontré ningún producto");
     expect(resultado.documentos).toHaveLength(0);
     vi.doUnmock("./catalog.ts");
+    vi.resetModules();
   });
 });
 ```
@@ -859,7 +871,11 @@ describe("generarInformePdf", () => {
 > `vi.doMock`/`vi.doUnmock` (no `vi.mock` de nivel de módulo) porque este
 > archivo ya mockea `../_shared/db.ts` a nivel de módulo para el resto de
 > funciones; mockear `./catalog.ts` solo dentro de estos tests evita
-> interferir con los demás `describe` del mismo archivo.
+> interferir con los demás `describe` del mismo archivo. `vi.resetModules()`
+> antes de cada `doMock` y después de cada `doUnmock` es obligatorio aquí:
+> sin eso, el módulo `owner-actions.ts` puede quedar cacheado desde un
+> `import` anterior (de otro `describe` de este mismo archivo) y el mock
+> de `catalog.ts` no tendría efecto, o se filtraría a pruebas posteriores.
 
 - [ ] **Paso 2: Correr los tests y verificar que fallan**
 
@@ -948,7 +964,7 @@ git commit -m "feat: buscarInventario y generarInformePdf reemplazan consultarPr
 
 ---
 
-### Tarea 5: Prompts de `agent.ts` (acciones nuevas + tono de cliente)
+### Task 5: Prompts de `agent.ts` (acciones nuevas + tono de cliente)
 
 **Files:**
 - Modify: `supabase/functions/whatsapp-webhook/agent.ts`
@@ -1052,7 +1068,7 @@ git commit -m "feat: prompts documentan buscar_inventario/generar_informe_pdf y 
 
 ---
 
-### Tarea 6: `agregarAlCarrito` compartido + `RespuestaLectura` en `handler.ts` (dueño)
+### Task 6: `agregarAlCarrito` compartido + `RespuestaLectura` en `handler.ts` (dueño)
 
 **Files:**
 - Modify: `supabase/functions/whatsapp-webhook/handler.ts`
@@ -1263,7 +1279,7 @@ git commit -m "feat: agregarAlCarrito compartido y respuestas de lectura del due
 
 ---
 
-### Tarea 7: `buscar_producto` con tarjetas de foto+botón y `generar_catalogo_pdf` con filtros (cliente)
+### Task 7: `buscar_producto` con tarjetas de foto+botón y `generar_catalogo_pdf` con filtros (cliente)
 
 **Files:**
 - Modify: `supabase/functions/whatsapp-webhook/handler.ts`
@@ -1441,7 +1457,7 @@ git commit -m "feat: buscar_producto manda tarjetas con foto y boton; generar_ca
 
 ---
 
-### Tarea 8: `MensajeEntrante` como unión discriminada en `adapters.ts`
+### Task 8: `MensajeEntrante` como unión discriminada en `adapters.ts`
 
 **Files:**
 - Modify: `supabase/functions/whatsapp-webhook/adapters.ts`
@@ -1572,7 +1588,7 @@ git commit -m "feat: parsearMensajeEntrante reconoce audio y botones interactivo
 
 ---
 
-### Tarea 9: `transcribirAudio` en `voice.ts` (nuevo)
+### Task 9: `transcribirAudio` en `voice.ts` (nuevo)
 
 **Files:**
 - Create: `supabase/functions/whatsapp-webhook/voice.ts`
@@ -1687,7 +1703,7 @@ git commit -m "feat: transcribirAudio (OpenAI whisper-1) para notas de voz de Wh
 
 ---
 
-### Tarea 10: Despacho por `kind` en `handler.ts` — botón determinístico y audio
+### Task 10: Despacho por `kind` en `handler.ts` — botón determinístico y audio
 
 **Files:**
 - Modify: `supabase/functions/whatsapp-webhook/handler.ts`
@@ -1907,7 +1923,7 @@ git commit -m "feat: handler bifurca por tipo de mensaje (texto/audio/boton), bo
 
 ---
 
-### Tarea 11: Limpieza final y verificación de la suite completa
+### Task 11: Limpieza final y verificación de la suite completa
 
 **Files:**
 - Modify: cualquier archivo con referencias residuales a
