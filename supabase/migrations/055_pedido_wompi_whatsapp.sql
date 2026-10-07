@@ -3,7 +3,7 @@
 -- de usuario ni usa esa tabla), recibe los items explicitos. Mismo
 -- criterio de "no descontar stock hasta confirmar el pago" que el
 -- checkout web con Wompi.
-create function public.crear_pedido_wompi_whatsapp(
+create or replace function public.crear_pedido_wompi_whatsapp(
   p_user_id uuid,
   p_items jsonb,
   p_shipping_address jsonb
