@@ -99,17 +99,31 @@ export async function consultarPedido(numeroOId: string): Promise<string> {
   return `Pedido ${pedido.order_number} (${pedido.channel}): ${pedido.status}, ${formatoMoneda(pedido.total)}.`;
 }
 
+// Limite generoso (no es una paginacion real): esta funcion tambien
+// responde preguntas de "cuantos/cuantas tenemos de X", para lo que hace
+// falta ver TODOS los productos que coinciden, no solo una muestra de 5
+// como antes — un dueño preguntando "cuantas camisetas tenemos" necesita
+// el conteo y el total de unidades, no una lista parcial sin avisar que
+// hay mas.
+const LIMITE_CONSULTA_PRODUCTO = 50;
+
 export async function consultarProducto(consulta: string): Promise<string> {
   const supabase = getSupabase();
   const { data } = await supabase
     .from("products")
     .select("name, price, stock, sku")
     .or(`name.ilike.${escaparValorFiltro(`%${consulta}%`)},sku.eq.${escaparValorFiltro(consulta)}`)
-    .limit(5);
+    .limit(LIMITE_CONSULTA_PRODUCTO);
 
   const filas = (data ?? []) as { name: string; price: number; stock: number; sku: string }[];
   if (filas.length === 0) return `No encontre ningun producto que coincida con "${consulta}".`;
-  return filas.map((p) => `${p.name} (${p.sku}): ${formatoMoneda(p.price)}, stock ${p.stock}`).join("\n");
+
+  const totalUnidades = filas.reduce((suma, p) => suma + p.stock, 0);
+  const posibleTruncado = filas.length === LIMITE_CONSULTA_PRODUCTO ? " o más" : "";
+  const encabezado = `Encontré ${filas.length}${posibleTruncado} producto(s) que coinciden con "${consulta}", `
+    + `con ${totalUnidades} unidad(es) en stock en total:`;
+  const detalle = filas.map((p) => `${p.name} (${p.sku}): ${formatoMoneda(p.price)}, stock ${p.stock}`).join("\n");
+  return `${encabezado}\n${detalle}`;
 }
 
 export async function actualizarPrecioProducto(idOSku: string, nuevoPrecio: number): Promise<string> {

@@ -20,7 +20,7 @@ Lectura (se ejecutan de inmediato):
 - consultar_stock_bajo: params {"umbral": entero >= 0} — productos activos con stock menor al umbral (por defecto 5).
 - buscar_cliente: params {"consulta": string} — nombre o telefono del cliente.
 - consultar_pedido: params {"numeroOId": string} — numero de pedido (ej. "ML-20261006-abc123") o su id uuid.
-- consultar_producto: params {"consulta": string} — nombre o SKU del producto.
+- consultar_producto: params {"consulta": string} — nombre (o parte del nombre) o SKU del producto. Usala tambien para preguntas de "cuantos/cuantas tenemos de X" o "cuanto stock hay de X": la respuesta trae el conteo de productos que coinciden y el total de unidades en stock, ademas del detalle de cada uno.
 Escritura (se le pide confirmacion al dueño antes de ejecutarlas):
 - actualizar_precio_producto: params {"idOSku": string, "nuevoPrecio": number} — idOSku es el SKU o el id uuid del producto; nuevoPrecio en pesos colombianos, sin puntos ni signos.
 - actualizar_stock: params {"idOSku": string, "nuevoStock": entero >= 0}.

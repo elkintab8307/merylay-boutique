@@ -209,6 +209,58 @@ describe("consultarVentas", () => {
   });
 });
 
+describe("consultarProducto", () => {
+  it("resume cuantos productos coinciden y el total de unidades en stock, ademas del detalle", async () => {
+    const limit = vi.fn(async () => ({
+      data: [
+        { name: "Camiseta algodon licrado manga doblada", sku: "CAM-000009", price: 40000, stock: 1 },
+        { name: "Camiseta algodon licrado", sku: "GEN-000003", price: 40000, stock: 0 },
+        { name: "Camiseta tela fria semiajustada", sku: "CAM-000016", price: 35000, stock: 3 },
+      ],
+      error: null,
+    }));
+    const or = vi.fn(() => ({ limit }));
+    const supabase = { from: vi.fn(() => ({ select: vi.fn(() => ({ or })) })) };
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { consultarProducto } = await import("./owner-actions.ts");
+    const resultado = await consultarProducto("camiseta");
+
+    expect(resultado).toContain("Encontré 3 producto(s)");
+    expect(resultado).toContain("4 unidad(es) en stock en total");
+    expect(resultado).toContain("Camiseta algodon licrado manga doblada (CAM-000009)");
+    expect(resultado).toContain("Camiseta tela fria semiajustada (CAM-000016)");
+  });
+
+  it("avisa que puede haber mas resultados cuando se alcanza el limite de la consulta", async () => {
+    const filas = Array.from({ length: 50 }, (_, i) => ({ name: `Producto ${i}`, sku: `SKU-${i}`, price: 1000, stock: 1 }));
+    const limit = vi.fn(async () => ({ data: filas, error: null }));
+    const or = vi.fn(() => ({ limit }));
+    const supabase = { from: vi.fn(() => ({ select: vi.fn(() => ({ or })) })) };
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { consultarProducto } = await import("./owner-actions.ts");
+    const resultado = await consultarProducto("producto");
+
+    expect(resultado).toContain("Encontré 50 o más producto(s)");
+  });
+
+  it("devuelve un mensaje claro cuando no hay coincidencias", async () => {
+    const limit = vi.fn(async () => ({ data: [], error: null }));
+    const or = vi.fn(() => ({ limit }));
+    const supabase = { from: vi.fn(() => ({ select: vi.fn(() => ({ or })) })) };
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { consultarProducto } = await import("./owner-actions.ts");
+    const resultado = await consultarProducto("inexistente");
+
+    expect(resultado).toBe('No encontre ningun producto que coincida con "inexistente".');
+  });
+});
+
 describe("ACCIONES_ESCRITURA", () => {
   it("incluye las cinco acciones de escritura de negocio", async () => {
     const { ACCIONES_ESCRITURA } = await import("./owner-actions.ts");
