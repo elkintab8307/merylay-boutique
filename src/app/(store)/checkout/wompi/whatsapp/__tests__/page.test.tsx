@@ -33,4 +33,21 @@ describe("Pagina de pago Wompi desde WhatsApp", () => {
 
     expect(screen.getByText(/no está disponible/i)).toBeInTheDocument();
   });
+
+  it("muestra un mensaje de error si amount no es numerico", async () => {
+    process.env.WOMPI_PUBLIC_KEY = "pub_test_123";
+
+    const Componente = await Page({
+      params: Promise.resolve({ orderId: "pedido-1" }),
+      searchParams: Promise.resolve({
+        ref: "ML-20261006-abc123",
+        amount: "abc",
+        currency: "COP",
+        sig: "firma-de-prueba",
+      }),
+    });
+    render(Componente);
+
+    expect(screen.getByText(/no está disponible/i)).toBeInTheDocument();
+  });
 });

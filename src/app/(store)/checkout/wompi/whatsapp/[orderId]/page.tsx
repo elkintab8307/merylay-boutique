@@ -10,8 +10,9 @@ export default async function Page({
   const { orderId } = await params;
   const { ref, amount, currency, sig } = await searchParams;
   const publicKey = process.env.WOMPI_PUBLIC_KEY;
+  const amountInCents = Number(amount);
 
-  if (!ref || !amount || !currency || !sig || !publicKey) {
+  if (!ref || !amount || !currency || !sig || !publicKey || !Number.isFinite(amountInCents)) {
     return (
       <div className="mx-auto max-w-md p-8 text-center text-brand-ciruela">
         El pago en línea no está disponible en este momento. Por favor contáctanos para coordinar el pago.
@@ -26,7 +27,7 @@ export default async function Page({
       <WompiCheckoutButton
         orderId={orderId}
         reference={ref}
-        amountInCents={Number(amount)}
+        amountInCents={amountInCents}
         currency={currency}
         publicKey={publicKey}
         signature={sig}
