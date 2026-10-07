@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   decidirAccion: vi.fn(),
   enviarTexto: vi.fn(),
   enviarImagenPorLink: vi.fn(),
+  enviarBotonProducto: vi.fn(),
   consultarStockBajo: vi.fn(),
   actualizarPrecioProducto: vi.fn(),
   buscarInventario: vi.fn(),
@@ -16,7 +17,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 const clienteMocks = vi.hoisted(() => ({
-  buscarProductos: vi.fn(),
+  buscarCatalogo: vi.fn(),
   obtenerProductoParaCarrito: vi.fn(),
   generarCatalogoPdf: vi.fn(),
   generarCotizacionPdf: vi.fn(),
@@ -40,6 +41,7 @@ vi.mock("./agent.ts", () => ({ decidirAccion: mocks.decidirAccion }));
 vi.mock("../_shared/meta.ts", () => ({
   enviarTexto: mocks.enviarTexto,
   enviarImagenPorLink: mocks.enviarImagenPorLink,
+  enviarBotonProducto: mocks.enviarBotonProducto,
   enviarDocumentoPorLink: clienteMocks.enviarDocumentoPorLink,
 }));
 vi.mock("./owner-actions.ts", () => ({
@@ -50,7 +52,7 @@ vi.mock("./owner-actions.ts", () => ({
   ACCIONES_ESCRITURA: new Set(["actualizar_precio_producto"]),
 }));
 vi.mock("./catalog.ts", () => ({
-  buscarProductos: clienteMocks.buscarProductos,
+  buscarCatalogo: clienteMocks.buscarCatalogo,
   obtenerProductoParaCarrito: clienteMocks.obtenerProductoParaCarrito,
   generarCatalogoPdf: clienteMocks.generarCatalogoPdf,
   generarCotizacionPdf: clienteMocks.generarCotizacionPdf,
@@ -310,22 +312,6 @@ describe("ejecutarAccionCliente via procesarMensajeEntrante", () => {
     expect(mocks.guardarSesion).not.toHaveBeenCalledWith("sesion-1", expect.objectContaining({ cart: [expect.anything()] }));
   });
 
-  it("lista los resultados de buscar_producto con sus ids visibles para que el modelo los reuse", async () => {
-    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.10e", from: "573009998888", texto: "tienen batas?" });
-    mocks.decidirAccion.mockResolvedValue({ action: "buscar_producto", params: { consulta: "bata" }, response_message: "" });
-    clienteMocks.buscarProductos.mockResolvedValue([
-      { productId: PRODUCTO_ID, variantId: VARIANTE_ID, nombre: "Bata Dorada", talla: "M", color: "Rosa", precio: 120000, stock: 4, imageId: null, fotoUrl: null },
-      { productId: "p-otro", variantId: null, nombre: "Pijama", talla: null, color: null, precio: 89900, stock: 2, imageId: null, fotoUrl: null },
-    ]);
-
-    const { procesarMensajeEntrante } = await import("./handler.ts");
-    await procesarMensajeEntrante({});
-
-    const texto = mocks.enviarTexto.mock.calls[0][1] as string;
-    expect(texto).toContain(`1. Bata Dorada (talla M, color Rosa) — $120.000 (stock: 4) [productId:${PRODUCTO_ID} variantId:${VARIANTE_ID}]`);
-    expect(texto).toContain("2. Pijama — $89.900 (stock: 2) [productId:p-otro]");
-  });
-
   it("pasa a decidirAccion el historial reciente de la conversacion, excluyendo el mensaje actual", async () => {
     const historial = [
       { direction: "inbound", message_body: "tienen batas?" },
@@ -436,5 +422,50 @@ describe("acciones de lectura del dueño con fotos/documentos", () => {
     await procesarMensajeEntrante({});
 
     expect(clienteMocks.enviarDocumentoPorLink).toHaveBeenCalledWith("573215879805", "https://x/informe.pdf", "informe-merylay.pdf");
+  });
+});
+
+describe("buscar_producto con tarjetas de foto y boton", () => {
+  it("manda hasta 10 tarjetas con foto, cuerpo y boton 'Agregar al carrito'", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.3", from: "573001234567", texto: "pijamas" });
+    mocks.decidirAccion.mockResolvedValue({ action: "buscar_producto", params: { consulta: "pijama" }, response_message: "" });
+    clienteMocks.buscarCatalogo.mockResolvedValue([
+      { productId: PRODUCTO_ID, variantId: VARIANTE_ID, nombre: "Pijama Rosa", talla: "M", color: "Rosa", precio: 89900, stock: 5, imageId: null, fotoUrl: "https://x/pijama.jpg" },
+    ]);
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.enviarBotonProducto).toHaveBeenCalledWith("573001234567", {
+      fotoUrl: "https://x/pijama.jpg",
+      cuerpo: expect.stringContaining("Pijama Rosa"),
+      botonId: `add:${PRODUCTO_ID}:${VARIANTE_ID}`,
+      botonTitulo: "Agregar al carrito",
+    });
+  });
+
+  it("sin coincidencias, responde un mensaje claro sin mandar ningun boton", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.4", from: "573001234567", texto: "algo raro" });
+    mocks.decidirAccion.mockResolvedValue({ action: "buscar_producto", params: { consulta: "algo raro" }, response_message: "" });
+    clienteMocks.buscarCatalogo.mockResolvedValue([]);
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.enviarBotonProducto).not.toHaveBeenCalled();
+    expect(mocks.enviarTexto).toHaveBeenCalledWith("573001234567", expect.stringContaining("No encontré"));
+  });
+});
+
+describe("generar_catalogo_pdf con filtros", () => {
+  it("pasa consulta/talla/color a generarCatalogoPdf", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.5", from: "573001234567", texto: "catalogo de camisetas en talla M" });
+    mocks.decidirAccion.mockResolvedValue({ action: "generar_catalogo_pdf", params: { texto: "camiseta", talla: "M" }, response_message: "" });
+    clienteMocks.generarCatalogoPdf.mockResolvedValue("https://x/catalogo.pdf");
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(clienteMocks.generarCatalogoPdf).toHaveBeenCalledWith({ texto: "camiseta", talla: "M", color: undefined });
   });
 });

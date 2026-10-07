@@ -156,63 +156,6 @@ function escaparPatronLike(texto: string): string {
   return texto.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
 }
 
-export async function buscarProductos(consulta: string): Promise<ProductoEncontrado[]> {
-  const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from("products")
-    .select(
-      "id, name, price, stock, " +
-        "product_variants(id, talla, color, price_override, stock), " +
-        "product_images(id, url, is_primary, variant_id, vendida)",
-    )
-    .eq("is_active", true)
-    .ilike("name", `%${escaparPatronLike(consulta)}%`)
-    .limit(10);
-
-  if (error || !data) return [];
-
-  const productos = data as unknown as Array<{
-    id: string;
-    name: string;
-    price: number;
-    stock: number;
-    product_variants: VarianteProducto[] | null;
-    product_images: ImagenProducto[] | null;
-  }>;
-
-  return productos.flatMap((producto): ProductoEncontrado[] => {
-    const variantes = producto.product_variants ?? [];
-    if (variantes.length === 0) {
-      const imagen = elegirImagen(producto.product_images, null);
-      return [{
-        productId: producto.id,
-        variantId: null,
-        nombre: producto.name,
-        talla: null,
-        color: null,
-        precio: producto.price,
-        stock: producto.stock,
-        imageId: imagen?.id ?? null,
-        fotoUrl: imagen?.url ?? null,
-      }];
-    }
-    return variantes.map((variante) => {
-      const imagen = elegirImagen(producto.product_images, variante.id);
-      return {
-        productId: producto.id,
-        variantId: variante.id,
-        nombre: producto.name,
-        talla: variante.talla ?? null,
-        color: variante.color ?? null,
-        precio: variante.price_override ?? producto.price,
-        stock: variante.stock,
-        imageId: imagen?.id ?? null,
-        fotoUrl: imagen?.url ?? null,
-      };
-    });
-  });
-}
-
 // Fuente de verdad para agregar al carrito: nunca se confia en el
 // nombre/precio que mande el modelo. Devuelve null si el producto no
 // existe o no esta activo, si la variante no pertenece a ese producto, o
