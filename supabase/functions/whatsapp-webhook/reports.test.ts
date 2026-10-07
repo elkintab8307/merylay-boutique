@@ -107,3 +107,91 @@ describe("informeVentas", () => {
     expect(subirYFirmar).not.toHaveBeenCalled();
   });
 });
+
+describe("productosMasVendidos", () => {
+  it("combina en una sola fila las ventas del mismo producto venidas de order_items y pos_sale_items", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      order_items: [{ data: [{ product_id: "p1", qty: 2, line_total: 80000 }], error: null }],
+      pos_sale_items: [{ data: [{ product_id: "p1", qty: 1, line_total: 40000 }], error: null }],
+      products: [{ data: [{ id: "p1", name: "Pijama Rosa" }], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { productosMasVendidos } = await import("./reports.ts");
+    const resultado = await productosMasVendidos(30, 10, false);
+
+    expect(resultado.texto).toContain("Pijama Rosa — 3 unidad(es), $120.000");
+    // una sola linea para "Pijama Rosa", no dos
+    expect(resultado.texto.match(/Pijama Rosa/g)).toHaveLength(1);
+  });
+
+  it("ordena por unidades vendidas, de mayor a menor, y respeta el limite en texto", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      order_items: [{
+        data: [
+          { product_id: "p1", qty: 1, line_total: 40000 },
+          { product_id: "p2", qty: 5, line_total: 200000 },
+        ],
+        error: null,
+      }],
+      pos_sale_items: [{ data: [], error: null }],
+      products: [{ data: [{ id: "p1", name: "Camiseta A" }, { id: "p2", name: "Camiseta B" }], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { productosMasVendidos } = await import("./reports.ts");
+    const resultado = await productosMasVendidos(30, 1, false);
+
+    expect(resultado.texto).toContain("1. Camiseta B");
+    expect(resultado.texto).not.toContain("Camiseta A");
+  });
+
+  it("descarta filas con product_id nulo (producto borrado) sin fallar", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      order_items: [{ data: [{ product_id: null, qty: 2, line_total: 80000 }], error: null }],
+      pos_sale_items: [{ data: [], error: null }],
+      products: [{ data: [], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { productosMasVendidos } = await import("./reports.ts");
+    const resultado = await productosMasVendidos(30, 10, false);
+
+    expect(resultado.texto).toContain("No hubo productos vendidos");
+  });
+
+  it("sin ventas en el periodo, responde un mensaje claro", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      order_items: [{ data: [], error: null }],
+      pos_sale_items: [{ data: [], error: null }],
+      products: [{ data: [], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { productosMasVendidos } = await import("./reports.ts");
+    const resultado = await productosMasVendidos(1, 10, false);
+
+    expect(resultado.texto).toContain("No hubo productos vendidos");
+  });
+
+  it("con conPdf=true, genera el PDF sin el tope de 'limite' (hasta 50)", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      order_items: [{ data: [{ product_id: "p1", qty: 2, line_total: 80000 }], error: null }],
+      pos_sale_items: [{ data: [], error: null }],
+      products: [{ data: [{ id: "p1", name: "Pijama Rosa" }], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+    const { subirYFirmar } = await import("./catalog.ts");
+
+    const { productosMasVendidos } = await import("./reports.ts");
+    const resultado = await productosMasVendidos(30, 1, true);
+
+    expect(subirYFirmar).toHaveBeenCalled();
+    expect(resultado.documentos).toHaveLength(1);
+  });
+});

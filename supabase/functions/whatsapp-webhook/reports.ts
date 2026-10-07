@@ -92,3 +92,62 @@ export async function informeVentas(dias: number, conPdf: boolean): Promise<Resp
 
   return { texto, fotos: [], documentos: [{ link, filename: "informe-ventas-merylay.pdf" }] };
 }
+
+const TOPE_FILAS_PDF_RANKING = 50;
+
+export async function productosMasVendidos(dias: number, limite: number, conPdf: boolean): Promise<RespuestaLectura> {
+  const supabase = getSupabase();
+  const desde = new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString();
+
+  const [itemsPedidos, itemsPos] = await Promise.all([
+    supabase
+      .from("order_items")
+      .select("product_id, qty, line_total, orders!inner(status, created_at)")
+      .gte("orders.created_at", desde)
+      .in("orders.status", ESTADOS_PEDIDO_VENDIDO),
+    supabase
+      .from("pos_sale_items")
+      .select("product_id, qty, line_total, pos_sales!inner(created_at)")
+      .gte("pos_sales.created_at", desde),
+  ]);
+  if (itemsPedidos.error) throw new Error(`No se pudieron consultar los items de pedidos: ${itemsPedidos.error.message}`);
+  if (itemsPos.error) throw new Error(`No se pudieron consultar los items de ventas POS: ${itemsPos.error.message}`);
+
+  const filasPedidos = (itemsPedidos.data ?? []) as { product_id: string | null; qty: number; line_total: number }[];
+  const filasPos = (itemsPos.data ?? []) as { product_id: string | null; qty: number; line_total: number }[];
+
+  const acumulado = new Map<string, { qty: number; ingresos: number }>();
+  for (const fila of [...filasPedidos, ...filasPos]) {
+    if (!fila.product_id) continue; // producto eliminado despues de la venta
+    const actual = acumulado.get(fila.product_id) ?? { qty: 0, ingresos: 0 };
+    actual.qty += fila.qty;
+    actual.ingresos += Number(fila.line_total);
+    acumulado.set(fila.product_id, actual);
+  }
+
+  if (acumulado.size === 0) {
+    return { texto: `No hubo productos vendidos en los últimos ${dias} día(s).`, fotos: [], documentos: [] };
+  }
+
+  const idsProductos = [...acumulado.keys()];
+  const { data: productos, error: errorProductos } = await supabase.from("products").select("id, name").in("id", idsProductos);
+  if (errorProductos) throw new Error(`No se pudieron consultar los nombres de productos: ${errorProductos.message}`);
+  const nombrePorId = new Map(((productos ?? []) as { id: string; name: string }[]).map((p) => [p.id, p.name]));
+
+  const ranking = idsProductos
+    .map((id) => ({ nombre: nombrePorId.get(id) ?? "(producto eliminado)", ...acumulado.get(id)! }))
+    .sort((a, b) => b.qty - a.qty);
+
+  const textoTabla = ranking.slice(0, limite).map((p, i) => `${i + 1}. ${p.nombre} — ${p.qty} unidad(es), ${formatoMoneda(p.ingresos)}`).join("\n");
+  const texto = `Productos más vendidos en los últimos ${dias} día(s):\n${textoTabla}`;
+
+  if (!conPdf) {
+    return { texto, fotos: [], documentos: [] };
+  }
+
+  const filasTabla = ranking.slice(0, TOPE_FILAS_PDF_RANKING).map((p) => [p.nombre, String(p.qty), formatoMoneda(p.ingresos)]);
+  const bytes = await generarPdfTabla(`Productos más vendidos — últimos ${dias} día(s)`, ["Producto", "Unidades", "Ingresos"], filasTabla);
+  const link = await subirYFirmar(bytes, "productos-mas-vendidos.pdf");
+
+  return { texto, fotos: [], documentos: [{ link, filename: "productos-mas-vendidos-merylay.pdf" }] };
+}
