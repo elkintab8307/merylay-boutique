@@ -96,7 +96,7 @@ async function ejecutarAccionLectura(accion: string, params: Record<string, unkn
         texto: params.texto as string | undefined,
         talla: params.talla as string | undefined,
         color: params.color as string | undefined,
-      });
+      }, Boolean(params.conFotos));
     case "generar_informe_pdf":
       return ownerActions.generarInformePdf({
         texto: params.texto as string | undefined,

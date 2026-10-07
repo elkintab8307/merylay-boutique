@@ -20,7 +20,7 @@ Lectura (se ejecutan de inmediato):
 - consultar_stock_bajo: params {"umbral": entero >= 0} — productos activos con stock menor al umbral (por defecto 5).
 - buscar_cliente: params {"consulta": string} — nombre o telefono del cliente.
 - consultar_pedido: params {"numeroOId": string} — numero de pedido (ej. "ML-20261006-abc123") o su id uuid.
-- buscar_inventario: params {"texto": string | null, "talla": string | null, "color": string | null} — al menos uno de los tres es obligatorio. Usala para "cuantos/cuantas tenemos de X", "que stock hay de X/en talla Y", o para pedir ver productos de una categoria con fotos. Responde con el conteo, el stock total y hasta 10 fotos.
+- buscar_inventario: params {"texto": string | null, "talla": string | null, "color": string | null, "conFotos": boolean} — al menos uno de texto/talla/color es obligatorio. Usala para "cuantos/cuantas tenemos de X", "que stock hay de X/en talla Y", o para pedir ver productos de una categoria. "conFotos" es true SOLO si el dueño pidio ver/mostrar imagenes explicitamente (ej. "muestrame las camisetas", "mandame fotos de las pijamas"); para una pregunta de cantidad/stock (ej. "cuantas camisetas hay", "que stock queda de X") usa conFotos false y responde solo con el conteo y el stock total, sin fotos.
 - generar_informe_pdf: params {"texto": string | null, "talla": string | null, "color": string | null} — mismos filtros que buscar_inventario, pero manda TODAS las coincidencias en un PDF con fotos (no solo 10). Usala cuando el dueño pida "el informe"/"todas las fotos"/"mandamelo en pdf".
 Escritura (se le pide confirmacion al dueño antes de ejecutarlas):
 - actualizar_precio_producto: params {"idOSku": string, "nuevoPrecio": number} — idOSku es el SKU o el id uuid del producto; nuevoPrecio en pesos colombianos, sin puntos ni signos.
@@ -38,6 +38,7 @@ function promptSistema(rol: RolRemitente, nombreDueno?: "Elkin" | "Mary"): strin
   if (rol === "owner") {
     return `Eres el asistente interno de MeryLay Boutique, hablando con ${nombreDueno}, dueño del negocio. ` +
       `Tiene acceso total de lectura y escritura sobre el negocio. ` +
+      `Responde de forma cordial y natural, como lo haria una persona del equipo: cuando ${nombreDueno} te pida algo que puedas hacer, ejecutalo de verdad (nunca digas que lo harias sin hacerlo) y confirma el resultado con datos reales, no con una respuesta generica. ` +
       `${FORMATO_RESPUESTA}\n` +
       `Acciones disponibles y sus params:${ACCIONES_DUENO}`;
   }

@@ -113,7 +113,11 @@ function caption(p: { nombre: string; talla: string | null; color: string | null
   return `${p.nombre}${detalle ? ` (${detalle})` : ""} — ${formatoMoneda(p.precio)}, stock ${p.stock}`;
 }
 
-export async function buscarInventario(filtros: FiltrosCatalogo): Promise<RespuestaLectura> {
+// conFotos distingue una pregunta de cantidad/stock ("cuantas hay", "que
+// stock hay de X") -- que solo necesita el conteo en texto -- de un pedido
+// explicito de ver imagenes ("muestrame", "mandame fotos de"). El modelo
+// decide cual es segun la frase del dueño (ver el prompt en agent.ts).
+export async function buscarInventario(filtros: FiltrosCatalogo, conFotos: boolean): Promise<RespuestaLectura> {
   const productos = await buscarCatalogo(filtros);
   if (productos.length === 0) {
     return { texto: `No encontré ningún producto que coincida con esa búsqueda.`, fotos: [], documentos: [] };
@@ -128,13 +132,14 @@ export async function buscarInventario(filtros: FiltrosCatalogo): Promise<Respue
   // alcanzamos exactamente, puede haber mas coincidencias reales de las que
   // se ven -- se avisa con "o mas" en el conteo de productos.
   const posibleTruncado = productos.length === TOPE_BUSCAR_CATALOGO ? " o más" : "";
-  const truncadoFotos = productos.length > TOPE_FOTOS_EN_VIVO ? ` (mostrando ${TOPE_FOTOS_EN_VIVO} fotos; pide el informe en PDF para ver el resto)` : "";
+  const truncadoFotos = conFotos && productos.length > TOPE_FOTOS_EN_VIVO
+    ? ` (mostrando ${TOPE_FOTOS_EN_VIVO} fotos; pide el informe en PDF para ver el resto)`
+    : "";
   const texto = `Encontré ${productosUnicos}${posibleTruncado} producto(s) con ${totalUnidades} unidad(es) en stock en total${truncadoFotos}.`;
 
-  const fotos = productos
-    .slice(0, TOPE_FOTOS_EN_VIVO)
-    .filter((p) => p.fotoUrl)
-    .map((p) => ({ url: p.fotoUrl as string, caption: caption(p) }));
+  const fotos = conFotos
+    ? productos.slice(0, TOPE_FOTOS_EN_VIVO).filter((p) => p.fotoUrl).map((p) => ({ url: p.fotoUrl as string, caption: caption(p) }))
+    : [];
 
   return { texto, fotos, documentos: [] };
 }

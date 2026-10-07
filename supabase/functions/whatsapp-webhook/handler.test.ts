@@ -395,9 +395,9 @@ describe("ejecutarAccionCliente via procesarMensajeEntrante", () => {
 });
 
 describe("acciones de lectura del dueño con fotos/documentos", () => {
-  it("buscar_inventario manda las fotos antes del texto final", async () => {
-    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.1", from: "573215879805", texto: "cuantas camisetas hay" });
-    mocks.decidirAccion.mockResolvedValue({ action: "buscar_inventario", params: { texto: "camiseta" }, response_message: "" });
+  it("buscar_inventario manda las fotos antes del texto final, pasando conFotos al llamar a ownerActions", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.1", from: "573215879805", texto: "muestrame las camisetas" });
+    mocks.decidirAccion.mockResolvedValue({ action: "buscar_inventario", params: { texto: "camiseta", conFotos: true }, response_message: "" });
     mocks.buscarInventario.mockResolvedValue({
       texto: "Encontré 2 producto(s) con 4 unidad(es) en stock en total.",
       fotos: [{ url: "https://x/a.jpg", caption: "Camiseta A" }],
@@ -407,8 +407,25 @@ describe("acciones de lectura del dueño con fotos/documentos", () => {
     const { procesarMensajeEntrante } = await import("./handler.ts");
     await procesarMensajeEntrante({});
 
+    expect(mocks.buscarInventario).toHaveBeenCalledWith({ texto: "camiseta", talla: undefined, color: undefined }, true);
     expect(mocks.enviarImagenPorLink).toHaveBeenCalledWith("573215879805", "https://x/a.jpg", "Camiseta A");
     expect(mocks.enviarTexto).toHaveBeenCalledWith("573215879805", "Encontré 2 producto(s) con 4 unidad(es) en stock en total.");
+  });
+
+  it("buscar_inventario sin conFotos en los params lo pasa como false (pregunta de solo conteo)", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.1b", from: "573215879805", texto: "cuantas camisetas hay" });
+    mocks.decidirAccion.mockResolvedValue({ action: "buscar_inventario", params: { texto: "camiseta" }, response_message: "" });
+    mocks.buscarInventario.mockResolvedValue({
+      texto: "Encontré 2 producto(s) con 4 unidad(es) en stock en total.",
+      fotos: [],
+      documentos: [],
+    });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.buscarInventario).toHaveBeenCalledWith({ texto: "camiseta", talla: undefined, color: undefined }, false);
+    expect(mocks.enviarImagenPorLink).not.toHaveBeenCalled();
   });
 
   it("generar_informe_pdf manda el documento", async () => {

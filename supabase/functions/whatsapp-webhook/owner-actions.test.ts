@@ -226,12 +226,31 @@ describe("buscarInventario", () => {
     }));
 
     const { buscarInventario } = await import("./owner-actions.ts");
-    const resultado = await buscarInventario({ texto: "camiseta" });
+    const resultado = await buscarInventario({ texto: "camiseta" }, true);
 
     expect(resultado.texto).toContain("Encontré 2 producto(s)");
     expect(resultado.texto).toContain("4 unidad(es) en stock en total");
     expect(resultado.fotos).toHaveLength(2);
     expect(resultado.fotos[0]).toEqual({ url: "https://x/a.jpg", caption: expect.stringContaining("Camiseta A") });
+  });
+
+  it("con conFotos=false no manda ninguna foto aunque haya coincidencias, solo el conteo en texto", async () => {
+    vi.resetModules();
+    vi.doMock("./catalog.ts", () => ({
+      buscarCatalogo: vi.fn(async () => [
+        { productId: "p1", variantId: null, nombre: "Camiseta A", talla: null, color: null, precio: 40000, stock: 1, imageId: null, fotoUrl: "https://x/a.jpg" },
+        { productId: "p2", variantId: null, nombre: "Camiseta B", talla: null, color: null, precio: 40000, stock: 3, imageId: null, fotoUrl: "https://x/b.jpg" },
+      ]),
+      TOPE_BUSCAR_CATALOGO: 50,
+    }));
+
+    const { buscarInventario } = await import("./owner-actions.ts");
+    const resultado = await buscarInventario({ texto: "camiseta" }, false);
+
+    expect(resultado.texto).toContain("Encontré 2 producto(s)");
+    expect(resultado.texto).toContain("4 unidad(es) en stock en total");
+    expect(resultado.texto).not.toContain("mostrando");
+    expect(resultado.fotos).toHaveLength(0);
   });
 
   it("avisa truncamiento y limita a 10 fotos cuando hay mas de 10 coincidencias", async () => {
@@ -243,7 +262,7 @@ describe("buscarInventario", () => {
     vi.doMock("./catalog.ts", () => ({ buscarCatalogo: vi.fn(async () => productos), TOPE_BUSCAR_CATALOGO: 50 }));
 
     const { buscarInventario } = await import("./owner-actions.ts");
-    const resultado = await buscarInventario({ texto: "producto" });
+    const resultado = await buscarInventario({ texto: "producto" }, true);
 
     expect(resultado.texto).toContain("Encontré 15 producto(s)");
     expect(resultado.fotos).toHaveLength(10);
@@ -254,7 +273,7 @@ describe("buscarInventario", () => {
     vi.doMock("./catalog.ts", () => ({ buscarCatalogo: vi.fn(async () => []), TOPE_BUSCAR_CATALOGO: 50 }));
 
     const { buscarInventario } = await import("./owner-actions.ts");
-    const resultado = await buscarInventario({ texto: "inexistente" });
+    const resultado = await buscarInventario({ texto: "inexistente" }, true);
 
     expect(resultado.texto).toContain("No encontré ningún producto");
     expect(resultado.fotos).toHaveLength(0);
@@ -272,7 +291,7 @@ describe("buscarInventario", () => {
     }));
 
     const { buscarInventario } = await import("./owner-actions.ts");
-    const resultado = await buscarInventario({ texto: "pijama" });
+    const resultado = await buscarInventario({ texto: "pijama" }, true);
 
     expect(resultado.texto).toContain("Encontré 1 producto(s)");
     expect(resultado.texto).toContain("6 unidad(es) en stock en total");
@@ -287,7 +306,7 @@ describe("buscarInventario", () => {
     vi.doMock("./catalog.ts", () => ({ buscarCatalogo: vi.fn(async () => productos), TOPE_BUSCAR_CATALOGO: 50 }));
 
     const { buscarInventario } = await import("./owner-actions.ts");
-    const resultado = await buscarInventario({ texto: "producto" });
+    const resultado = await buscarInventario({ texto: "producto" }, true);
 
     expect(resultado.texto).toContain("Encontré 50 o más producto(s)");
   });
@@ -301,7 +320,7 @@ describe("buscarInventario", () => {
     vi.doMock("./catalog.ts", () => ({ buscarCatalogo: vi.fn(async () => productos), TOPE_BUSCAR_CATALOGO: 50 }));
 
     const { buscarInventario } = await import("./owner-actions.ts");
-    const resultado = await buscarInventario({ texto: "producto" });
+    const resultado = await buscarInventario({ texto: "producto" }, true);
 
     expect(resultado.texto).toContain("Encontré 20 producto(s)");
     expect(resultado.texto).not.toContain("o más");
