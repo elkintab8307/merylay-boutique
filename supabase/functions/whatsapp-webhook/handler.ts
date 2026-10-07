@@ -8,6 +8,7 @@ import * as ownerActions from "./owner-actions.ts";
 import { ACCIONES_ESCRITURA } from "./owner-actions.ts";
 import * as catalog from "./catalog.ts";
 import { crearPedidoWompiDesdeCarrito } from "./orders.ts";
+import { transcribirAudio } from "./voice.ts";
 import type { SessionData } from "../_shared/types.ts";
 import { z } from "zod";
 
@@ -281,12 +282,74 @@ async function ejecutarAccionCliente(
   }
 }
 
+const MENSAJE_AUDIO_NO_ENTENDIDO = "No pude entender tu nota de voz, ¿puedes escribirla o intentarlo de nuevo?";
+const REGEX_BOTON_CARRITO = /^add:([0-9a-f-]{36}):(-|[0-9a-f-]{36})$/i;
+
+async function manejarBoton(botonId: string, sessionData: SessionData): Promise<string> {
+  const match = REGEX_BOTON_CARRITO.exec(botonId);
+  if (!match) {
+    return "No entendí esa acción, ¿puedes escribirme qué necesitas?";
+  }
+  const [, productId, variantIdCrudo] = match;
+  const variantId = variantIdCrudo === "-" ? null : variantIdCrudo;
+  return agregarAlCarrito(sessionData, productId, variantId, 1);
+}
+
 export async function procesarMensajeEntrante(payload: unknown): Promise<void> {
   const entrante = parsearMensajeEntrante(payload);
   if (!entrante) return;
 
   const telefono = normalizarTelefono(entrante.from);
-  const esNuevo = await registrarMensaje(telefono, "inbound", entrante.texto, entrante.messageId);
+
+  if (entrante.kind === "boton") {
+    const esNuevo = await registrarMensaje(telefono, "inbound", `[boton] ${entrante.botonId}`, entrante.messageId);
+    if (!esNuevo) return;
+
+    let respuesta: string;
+    try {
+      const { profileId } = await buscarOCrearCliente(telefono);
+      const { id: sessionId, sessionData } = await obtenerOCrearSesion(telefono, profileId);
+      respuesta = await manejarBoton(entrante.botonId, sessionData);
+      await guardarSesion(sessionId, sessionData);
+    } catch (error) {
+      console.error(`[handler] Error procesando el boton ${entrante.messageId} de ${telefono}:`, error);
+      respuesta = MENSAJE_ERROR_GENERICO;
+    }
+
+    try {
+      await enviarTexto(telefono, respuesta);
+      await registrarMensaje(telefono, "outbound", respuesta);
+    } catch (error) {
+      console.error(`[handler] No se pudo enviar/registrar la respuesta a ${telefono}:`, error);
+    }
+    return;
+  }
+
+  let texto: string;
+  if (entrante.kind === "audio") {
+    try {
+      texto = await transcribirAudio(entrante.mediaId);
+    } catch (error) {
+      console.error(`[handler] Error transcribiendo el audio ${entrante.messageId} de ${telefono}:`, error);
+      texto = "";
+    }
+    if (!texto.trim()) {
+      const esNuevo = await registrarMensaje(telefono, "inbound", "[nota de voz sin transcribir]", entrante.messageId);
+      if (esNuevo) {
+        try {
+          await enviarTexto(telefono, MENSAJE_AUDIO_NO_ENTENDIDO);
+          await registrarMensaje(telefono, "outbound", MENSAJE_AUDIO_NO_ENTENDIDO);
+        } catch (error) {
+          console.error(`[handler] No se pudo enviar/registrar la respuesta a ${telefono}:`, error);
+        }
+      }
+      return;
+    }
+  } else {
+    texto = entrante.texto;
+  }
+
+  const esNuevo = await registrarMensaje(telefono, "inbound", texto, entrante.messageId);
   if (!esNuevo) return; // ya procesado antes (reintento de Meta)
 
   // A partir de aqui el mensaje ya quedo marcado como procesado (Meta no
@@ -295,7 +358,7 @@ export async function procesarMensajeEntrante(payload: unknown): Promise<void> {
   // error real y se responde con una disculpa generica.
   let respuesta: string;
   try {
-    respuesta = await generarRespuesta(telefono, entrante);
+    respuesta = await generarRespuesta(telefono, { messageId: entrante.messageId, texto });
   } catch (error) {
     console.error(`[handler] Error procesando el mensaje ${entrante.messageId} de ${telefono}:`, error);
     respuesta = MENSAJE_ERROR_GENERICO;

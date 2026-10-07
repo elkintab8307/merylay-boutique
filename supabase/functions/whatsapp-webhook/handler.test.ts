@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   actualizarPrecioProducto: vi.fn(),
   buscarInventario: vi.fn(),
   generarInformePdf: vi.fn(),
+  transcribirAudio: vi.fn(),
 }));
 
 const clienteMocks = vi.hoisted(() => ({
@@ -58,6 +59,7 @@ vi.mock("./catalog.ts", () => ({
   generarCotizacionPdf: clienteMocks.generarCotizacionPdf,
 }));
 vi.mock("./orders.ts", () => ({ crearPedidoWompiDesdeCarrito: clienteMocks.crearPedidoWompiDesdeCarrito }));
+vi.mock("./voice.ts", () => ({ transcribirAudio: mocks.transcribirAudio }));
 
 const dbMocks = vi.hoisted(() => ({ insertarMensaje: vi.fn() }));
 vi.mock("../_shared/db.ts", () => ({
@@ -85,7 +87,7 @@ afterEach(() => {
 
 describe("procesarMensajeEntrante", () => {
   it("no procesa dos veces el mismo message_id (idempotencia)", async () => {
-    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.1", from: "573001234567", texto: "hola" });
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.1", from: "573001234567", texto: "hola" });
     dbMocks.insertarMensaje.mockResolvedValue({ error: { code: "23505" } }); // violacion de unique
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
@@ -95,7 +97,7 @@ describe("procesarMensajeEntrante", () => {
   });
 
   it("reconoce a +573215879805 como Elkin aunque llegue con '+' y espacios", async () => {
-    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.2", from: "+57 321 587 9805", texto: "ventas de hoy" });
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.2", from: "+57 321 587 9805", texto: "ventas de hoy" });
     mocks.decidirAccion.mockResolvedValue({ action: "chat", params: {}, response_message: "Hola Elkin" });
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
@@ -109,7 +111,7 @@ describe("procesarMensajeEntrante", () => {
       id: "sesion-1",
       sessionData: { cart: [], pendingConfirmation: { action: "actualizar_precio_producto", params: { idOSku: "P1", nuevoPrecio: 50000 } } },
     });
-    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.3", from: "573215879805", texto: "tal vez, dejame pensarlo" });
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.3", from: "573215879805", texto: "tal vez, dejame pensarlo" });
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
     await procesarMensajeEntrante({});
@@ -122,7 +124,7 @@ describe("procesarMensajeEntrante", () => {
       id: "sesion-1",
       sessionData: { cart: [], pendingConfirmation: { action: "actualizar_precio_producto", params: { idOSku: "P1", nuevoPrecio: 50000 } } },
     });
-    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.3b", from: "573215879805", texto: "si no es necesario, cancela" });
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.3b", from: "573215879805", texto: "si no es necesario, cancela" });
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
     await procesarMensajeEntrante({});
@@ -135,7 +137,7 @@ describe("procesarMensajeEntrante", () => {
       id: "sesion-1",
       sessionData: { cart: [], pendingConfirmation: { action: "actualizar_precio_producto", params: { idOSku: "P1", nuevoPrecio: 50000 } } },
     });
-    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.3c", from: "573215879805", texto: "sí pero antes dime cuánto stock queda" });
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.3c", from: "573215879805", texto: "sí pero antes dime cuánto stock queda" });
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
     await procesarMensajeEntrante({});
@@ -148,7 +150,7 @@ describe("procesarMensajeEntrante", () => {
       id: "sesion-1",
       sessionData: { cart: [], pendingConfirmation: { action: "actualizar_precio_producto", params: { idOSku: "P1", nuevoPrecio: 50000 } } },
     });
-    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.4", from: "573215879805", texto: "si, confirmo" });
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.4", from: "573215879805", texto: "si, confirmo" });
     mocks.actualizarPrecioProducto.mockResolvedValue("Precio actualizado a $50.000.");
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
@@ -159,7 +161,7 @@ describe("procesarMensajeEntrante", () => {
   });
 
   it("pide confirmacion en vez de ejecutar cuando el modelo propone una accion de escritura por primera vez", async () => {
-    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.5", from: "573215879805", texto: "sube el precio de P1 a 50000" });
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.5", from: "573215879805", texto: "sube el precio de P1 a 50000" });
     mocks.decidirAccion.mockResolvedValue({
       action: "actualizar_precio_producto",
       params: { idOSku: "P1", nuevoPrecio: 50000 },
@@ -187,7 +189,7 @@ describe("manejo de errores en procesarMensajeEntrante", () => {
         pendingConfirmation: null,
       },
     });
-    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.20", from: "573009998888", texto: "confirmo" });
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.20", from: "573009998888", texto: "confirmo" });
     mocks.decidirAccion.mockResolvedValue({
       action: "confirmar_pedido",
       params: { fullName: "X", phone: "573009998888", address: "Y", city: "Z" },
@@ -208,7 +210,7 @@ describe("manejo de errores en procesarMensajeEntrante", () => {
       id: "sesion-1",
       sessionData: { cart: [], pendingConfirmation: { action: "actualizar_precio_producto", params: { idOSku: "P1", nuevoPrecio: 50000 } } },
     });
-    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.21", from: "573215879805", texto: "si" });
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.21", from: "573215879805", texto: "si" });
     mocks.actualizarPrecioProducto.mockRejectedValueOnce(new Error("fallo de base de datos"));
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
@@ -220,7 +222,7 @@ describe("manejo de errores en procesarMensajeEntrante", () => {
 
   it("no deja escapar el error si falla el envio de la respuesta por WhatsApp", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.22", from: "573009998888", texto: "hola" });
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.22", from: "573009998888", texto: "hola" });
     mocks.decidirAccion.mockResolvedValue({ action: "chat", params: {}, response_message: "Hola!" });
     mocks.enviarTexto.mockRejectedValueOnce(new Error("Graph API caida"));
 
@@ -230,7 +232,7 @@ describe("manejo de errores en procesarMensajeEntrante", () => {
   });
 
   it("si el agente devuelve action 'error' para el dueño, usa su response_message y no el respaldo generico", async () => {
-    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.23", from: "573215879805", texto: "ventas de hoy" });
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.23", from: "573215879805", texto: "ventas de hoy" });
     mocks.decidirAccion.mockResolvedValue({ action: "error", params: {}, response_message: "Disculpa, OpenAI no respondio." });
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
@@ -242,7 +244,7 @@ describe("manejo de errores en procesarMensajeEntrante", () => {
 
 describe("ejecutarAccionCliente via procesarMensajeEntrante", () => {
   it("agrega un producto al carrito con nombre y precio de la base de datos, ignorando unitPrice/nombre del modelo", async () => {
-    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.10", from: "573009998888", texto: "agrega la pijama rosa" });
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.10", from: "573009998888", texto: "agrega la pijama rosa" });
     mocks.decidirAccion.mockResolvedValue({
       action: "agregar_al_carrito",
       params: { productId: PRODUCTO_ID, variantId: VARIANTE_ID, qty: 2, unitPrice: 1, nombre: "Nombre inventado" },
@@ -263,7 +265,7 @@ describe("ejecutarAccionCliente via procesarMensajeEntrante", () => {
   });
 
   it("rechaza con un mensaje amable un agregar_al_carrito con params invalidos (sin consultar la base de datos)", async () => {
-    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.10b", from: "573009998888", texto: "agrega la rosa" });
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.10b", from: "573009998888", texto: "agrega la rosa" });
     mocks.decidirAccion.mockResolvedValue({
       action: "agregar_al_carrito",
       params: { productId: "pijama-rosa", qty: 1 },
@@ -279,7 +281,7 @@ describe("ejecutarAccionCliente via procesarMensajeEntrante", () => {
   });
 
   it("rechaza con un mensaje amable una variante que no pertenece al producto (no la agrega)", async () => {
-    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.10c", from: "573009998888", texto: "agrega esa" });
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.10c", from: "573009998888", texto: "agrega esa" });
     mocks.decidirAccion.mockResolvedValue({
       action: "agregar_al_carrito",
       params: { productId: PRODUCTO_ID, variantId: VARIANTE_ID, qty: 1 },
@@ -295,7 +297,7 @@ describe("ejecutarAccionCliente via procesarMensajeEntrante", () => {
   });
 
   it("no agrega mas unidades de las que hay en stock", async () => {
-    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.10d", from: "573009998888", texto: "quiero 10" });
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.10d", from: "573009998888", texto: "quiero 10" });
     mocks.decidirAccion.mockResolvedValue({
       action: "agregar_al_carrito",
       params: { productId: PRODUCTO_ID, variantId: null, qty: 10 },
@@ -318,7 +320,7 @@ describe("ejecutarAccionCliente via procesarMensajeEntrante", () => {
       { direction: "outbound", message_body: `1. Bata [productId:${PRODUCTO_ID}]` },
     ];
     mocks.cargarHistorial.mockResolvedValue(historial);
-    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.10f", from: "573009998888", texto: "agrega la 1" });
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.10f", from: "573009998888", texto: "agrega la 1" });
     mocks.decidirAccion.mockResolvedValue({ action: "chat", params: {}, response_message: "ok" });
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
@@ -329,7 +331,7 @@ describe("ejecutarAccionCliente via procesarMensajeEntrante", () => {
   });
 
   it("manda el catalogo como documento ademas del texto", async () => {
-    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.11", from: "573009998888", texto: "mandame el catalogo" });
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.11", from: "573009998888", texto: "mandame el catalogo" });
     mocks.decidirAccion.mockResolvedValue({ action: "generar_catalogo_pdf", params: {}, response_message: "" });
     clienteMocks.generarCatalogoPdf.mockResolvedValue("https://x/catalogo-firmado.pdf");
 
@@ -347,7 +349,7 @@ describe("ejecutarAccionCliente via procesarMensajeEntrante", () => {
         pendingConfirmation: null,
       },
     });
-    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.12", from: "573009998888", texto: "confirmo, mi direccion es Calle 1, Bogota" });
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.12", from: "573009998888", texto: "confirmo, mi direccion es Calle 1, Bogota" });
     mocks.decidirAccion.mockResolvedValue({
       action: "confirmar_pedido",
       params: { fullName: "Cliente Prueba", phone: "573009998888", address: "Calle 1", city: "Bogota" },
@@ -367,7 +369,7 @@ describe("ejecutarAccionCliente via procesarMensajeEntrante", () => {
   });
 
   it("no confirma el pedido si el carrito esta vacio", async () => {
-    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.13", from: "573009998888", texto: "confirmo" });
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.13", from: "573009998888", texto: "confirmo" });
     mocks.decidirAccion.mockResolvedValue({ action: "confirmar_pedido", params: { fullName: "X", phone: "573009998888", address: "Y", city: "Z" }, response_message: "" });
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
@@ -378,7 +380,7 @@ describe("ejecutarAccionCliente via procesarMensajeEntrante", () => {
   });
 
   it("usa el response_message del modelo como respaldo si la accion no es reconocida", async () => {
-    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.14", from: "573009998888", texto: "algo raro" });
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.14", from: "573009998888", texto: "algo raro" });
     mocks.decidirAccion.mockResolvedValue({
       action: "accion_inexistente",
       params: {},
@@ -523,5 +525,73 @@ describe("generar_catalogo_pdf con filtros", () => {
     await procesarMensajeEntrante({});
 
     expect(clienteMocks.generarCatalogoPdf).toHaveBeenCalledWith({ texto: "camiseta", talla: "M", color: undefined });
+  });
+});
+
+describe("mensajes de audio", () => {
+  it("transcribe el audio y procesa el texto resultante como un mensaje normal", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "audio", messageId: "wamid.AUDIO1", from: "573001234567", mediaId: "media-999" });
+    mocks.transcribirAudio.mockResolvedValue("cuántas camisetas hay");
+    mocks.decidirAccion.mockResolvedValue({ action: "chat", params: {}, response_message: "Hola" });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.decidirAccion).toHaveBeenCalledWith(expect.objectContaining({ mensajeEntrante: "cuántas camisetas hay" }));
+  });
+
+  it("si la transcripcion falla o sale vacia, responde el mensaje de fallback sin llamar a decidirAccion", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "audio", messageId: "wamid.AUDIO2", from: "573001234567", mediaId: "media-998" });
+    mocks.transcribirAudio.mockRejectedValue(new Error("OpenAI respondio 500"));
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.decidirAccion).not.toHaveBeenCalled();
+    expect(mocks.enviarTexto).toHaveBeenCalledWith("573001234567", expect.stringContaining("nota de voz"));
+  });
+});
+
+describe("boton 'Agregar al carrito'", () => {
+  it("agrega el producto/variante al carrito sin llamar a decidirAccion", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "boton", messageId: "wamid.BOTON1", from: "573001234567", botonId: `add:${PRODUCTO_ID}:${VARIANTE_ID}` });
+    clienteMocks.obtenerProductoParaCarrito.mockResolvedValue({ productId: PRODUCTO_ID, variantId: VARIANTE_ID, nombre: "Pijama Rosa", precio: 89900, stock: 5, imageId: null });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.decidirAccion).not.toHaveBeenCalled();
+    expect(mocks.enviarTexto).toHaveBeenCalledWith("573001234567", expect.stringContaining("Agregado: Pijama Rosa"));
+  });
+
+  it("dos toques distintos del mismo boton suman cantidad (no fallan ni duplican la fila)", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "boton", messageId: "wamid.BOTON2", from: "573001234567", botonId: `add:${PRODUCTO_ID}:${VARIANTE_ID}` });
+    clienteMocks.obtenerProductoParaCarrito.mockResolvedValue({ productId: PRODUCTO_ID, variantId: VARIANTE_ID, nombre: "Pijama Rosa", precio: 89900, stock: 5, imageId: null });
+    const sessionData = { cart: [{ productId: PRODUCTO_ID, variantId: VARIANTE_ID, imageId: null, qty: 1, unitPrice: 89900, nameSnapshot: "Pijama Rosa" }], pendingConfirmation: null };
+    mocks.obtenerOCrearSesion.mockResolvedValue({ id: "sesion-1", sessionData });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.enviarTexto).toHaveBeenCalledWith("573001234567", expect.stringContaining("x2"));
+  });
+
+  it("producto agotado responde 'agotado' sin agregarlo al carrito", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "boton", messageId: "wamid.BOTON3", from: "573001234567", botonId: `add:${PRODUCTO_ID}:-` });
+    clienteMocks.obtenerProductoParaCarrito.mockResolvedValue({ productId: PRODUCTO_ID, variantId: null, nombre: "Pijama Rosa", precio: 89900, stock: 0, imageId: null });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.enviarTexto).toHaveBeenCalledWith("573001234567", expect.stringContaining("agotado"));
+  });
+
+  it("boton con id malformado responde un mensaje generico sin lanzar", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "boton", messageId: "wamid.BOTON4", from: "573001234567", botonId: "algo-inesperado" });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await expect(procesarMensajeEntrante({})).resolves.not.toThrow();
+    expect(mocks.enviarTexto).toHaveBeenCalledWith("573001234567", expect.any(String));
+    expect(clienteMocks.obtenerProductoParaCarrito).not.toHaveBeenCalled();
   });
 });
