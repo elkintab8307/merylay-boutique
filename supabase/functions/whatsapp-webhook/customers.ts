@@ -33,9 +33,11 @@ export async function buscarOCrearCliente(
 
 function generarContrasenaAleatoria(): string {
   const caracteres = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  const bytes = new Uint8Array(10);
+  crypto.getRandomValues(bytes);
   let contrasena = "";
-  for (let i = 0; i < 10; i++) {
-    contrasena += caracteres[Math.floor(Math.random() * caracteres.length)];
+  for (let i = 0; i < bytes.length; i++) {
+    contrasena += caracteres[bytes[i] % caracteres.length];
   }
   return contrasena;
 }
