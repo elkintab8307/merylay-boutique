@@ -235,7 +235,6 @@ export async function historialCliente(nombreOTelefono: string): Promise<Respues
   const { data: perfiles, error: errorPerfiles } = await supabase
     .from("profiles")
     .select("id, full_name, username")
-    .eq("role", "customer")
     .or(`full_name.ilike.${patron},username.ilike.${patron},whatsapp.ilike.${patron},phone.ilike.${patron}`)
     .limit(5);
   if (errorPerfiles) throw new Error(`No se pudo buscar el cliente: ${errorPerfiles.message}`);

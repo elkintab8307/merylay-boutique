@@ -361,6 +361,44 @@ describe("historialCliente", () => {
     expect(resultado.texto).toContain("POS-1");
   });
 
+  it("fusiona y ordena por fecha descendente las compras de orders Y pos_sales del mismo cliente (fuentes intercaladas)", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      profiles: [{ data: [{ id: "profile-1", full_name: "Juan Pérez", username: "juan" }], error: null }],
+      pos_customers: [
+        { data: [], error: null }, // busqueda por texto: sin coincidencias en pos_customers
+        { data: [{ id: "pos-1" }], error: null }, // busqueda por profile_id vinculado: la encuentra
+      ],
+      orders: [{
+        data: [
+          { order_number: "ML-1", total: 100000, created_at: "2026-10-01T10:00:00Z", channel: "web" },
+          { order_number: "ML-2", total: 300000, created_at: "2026-10-05T10:00:00Z", channel: "web" },
+        ],
+        error: null,
+      }],
+      pos_sales: [{
+        data: [{ sale_number: "POS-1", total: 50000, created_at: "2026-10-03T10:00:00Z" }],
+        error: null,
+      }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { historialCliente } = await import("./reports.ts");
+    const resultado = await historialCliente("Juan");
+
+    expect(resultado.texto).toContain("Historial de Juan Pérez");
+    expect(resultado.texto).toContain("$450.000 en 3 compra(s)");
+    // orden descendente por fecha, intercalando orders y pos_sales: ML-2 (05-oct) > POS-1 (03-oct) > ML-1 (01-oct)
+    const posicionMl2 = resultado.texto.indexOf("ML-2");
+    const posicionPos1 = resultado.texto.indexOf("POS-1");
+    const posicionMl1 = resultado.texto.indexOf("ML-1");
+    expect(posicionMl2).toBeGreaterThan(-1);
+    expect(posicionPos1).toBeGreaterThan(-1);
+    expect(posicionMl1).toBeGreaterThan(-1);
+    expect(posicionMl2).toBeLessThan(posicionPos1);
+    expect(posicionPos1).toBeLessThan(posicionMl1);
+  });
+
   it("cliente encontrado sin compras registradas, responde un mensaje claro", async () => {
     const supabase = mockSupabaseDesdeTablas({
       profiles: [{ data: [{ id: "profile-1", full_name: "Juan Pérez", username: "juan" }], error: null }],
