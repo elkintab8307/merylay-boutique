@@ -74,11 +74,12 @@ pequeño: decenas de pedidos/ventas, no miles).
 - Test: `supabase/functions/whatsapp-webhook/reports.test.ts`
 - Modify: `supabase/functions/whatsapp-webhook/owner-actions.ts` — agregar
   `export` a `formatoMoneda`, `escaparValorFiltro` y
-  `ESTADOS_PEDIDO_VENDIDO` (ya existen, sin cambiar su cuerpo); **eliminar**
-  `consultarVentas` (su lógica se reutiliza dentro de `informeVentas`).
-- Modify: `supabase/functions/whatsapp-webhook/owner-actions.test.ts` —
-  eliminar el `describe("consultarVentas", ...)` existente (la función ya
-  no existe).
+  `ESTADOS_PEDIDO_VENDIDO` (ya existen, sin cambiar su cuerpo).
+  **`consultarVentas` NO se elimina en este task** — `handler.ts` sigue
+  llamándola hasta que la Tarea 6 reescribe ese caso para usar
+  `informeVentas` en su lugar; borrarla ahora dejaría `handler.ts` sin
+  compilar entre esta tarea y la Tarea 6 (mismo error de secuencia que
+  ya se corrigió en el plan del catálogo/voz — ver su Tarea 2).
 
 **Interfaces:**
 - Produce: `generarPdfTabla(titulo: string, encabezados: string[], filas: string[][]): Promise<Uint8Array>` (no exportada, solo la usa este archivo);
@@ -94,11 +95,8 @@ Primero, en `owner-actions.ts`: cambiar
 `const formatoMoneda = ...` → `export const formatoMoneda = ...`;
 `function escaparValorFiltro` → `export function escaparValorFiltro`;
 `const ESTADOS_PEDIDO_VENDIDO = [...]` → `export const ESTADOS_PEDIDO_VENDIDO = [...]`.
-Eliminar la función `consultarVentas` completa.
-
-En `owner-actions.test.ts`, eliminar el `describe("consultarVentas", ...)`
-completo (sus dos tests de suma de pedidos+POS). No tocar ningún otro
-`describe` del archivo.
+`consultarVentas` y su `describe` en `owner-actions.test.ts` quedan
+intactos — no tocarlos en este task.
 
 Crear `supabase/functions/whatsapp-webhook/reports.test.ts`:
 
@@ -216,9 +214,9 @@ describe("informeVentas", () => {
 
 - [ ] **Paso 2: Correr los tests y verificar que fallan**
 
-Run: `pnpm test supabase/functions/whatsapp-webhook/reports.test.ts supabase/functions/whatsapp-webhook/owner-actions.test.ts`
-Expected: FAIL — `reports.ts` no existe; `consultarVentas` ya no existe
-pero sus tests viejos (si no se borraron) fallarían por eso.
+Run: `pnpm test supabase/functions/whatsapp-webhook/reports.test.ts`
+Expected: FAIL — `reports.ts` no existe. (`owner-actions.test.ts` sigue
+en verde en este punto — no se tocó, `consultarVentas` sigue existiendo.)
 
 - [ ] **Paso 3: Implementar**
 
@@ -324,13 +322,14 @@ export async function informeVentas(dias: number, conPdf: boolean): Promise<Resp
 - [ ] **Paso 4: Correr los tests y verificar que pasan**
 
 Run: `pnpm test supabase/functions/whatsapp-webhook/reports.test.ts supabase/functions/whatsapp-webhook/owner-actions.test.ts`
-Expected: PASS
+Expected: PASS (`owner-actions.test.ts` sigue exactamente igual que antes — solo
+verifica que los `export` nuevos no rompieron nada).
 
 - [ ] **Paso 5: Commit**
 
 ```bash
-git add supabase/functions/whatsapp-webhook/reports.ts supabase/functions/whatsapp-webhook/reports.test.ts supabase/functions/whatsapp-webhook/owner-actions.ts supabase/functions/whatsapp-webhook/owner-actions.test.ts
-git commit -m "feat: informeVentas (desglose por canal/metodo de pago, con PDF opcional) reemplaza consultarVentas"
+git add supabase/functions/whatsapp-webhook/reports.ts supabase/functions/whatsapp-webhook/reports.test.ts supabase/functions/whatsapp-webhook/owner-actions.ts
+git commit -m "feat: agrega informeVentas (desglose por canal/metodo de pago, con PDF opcional)"
 ```
 
 ---
@@ -1098,6 +1097,10 @@ git commit -m "feat: informeGastos desglosado por categoria, con PDF opcional"
 - Modify: `supabase/functions/whatsapp-webhook/handler.test.ts`
 - Modify: `supabase/functions/whatsapp-webhook/agent.ts`
 - Modify: `supabase/functions/whatsapp-webhook/agent.test.ts`
+- Modify: `supabase/functions/whatsapp-webhook/owner-actions.ts` —
+  eliminar `consultarVentas` (ya sin llamadores tras este task).
+- Modify: `supabase/functions/whatsapp-webhook/owner-actions.test.ts` —
+  eliminar su `describe("consultarVentas", ...)`.
 
 **Interfaces:**
 - Consume: `informeVentas`, `productosMasVendidos`, `informeClientes`,
@@ -1121,9 +1124,13 @@ vi.mock("./reports.ts", () => ({
 }));
 ```
 
-Quitar `consultarVentas: mocks.consultarStockBajo` (sic — revisar si el
-mock de `./owner-actions.ts` todavía referencia `consultarVentas`; si sí,
-quitarlo, ya que la función se eliminó en la Tarea 1).
+`consultarVentas` ya no tiene ningún llamador después de este cambio
+(era solo `handler.ts`, que a partir de este task usa `informeVentas`) —
+eliminarla de `owner-actions.ts`, junto con su `describe("consultarVentas", ...)`
+completo en `owner-actions.test.ts` (dos tests: suma de pedidos+POS, y
+error si falla la consulta POS). No hay ningún test en `handler.test.ts`
+que ejercite el caso `"consultar_ventas"` hoy — no hay nada que borrar
+ahí.
 
 Agregar estos tests dentro de `describe("acciones de lectura del dueño con fotos/documentos", ...)`:
 
@@ -1259,7 +1266,7 @@ Expected: PASS
 - [ ] **Paso 5: Commit**
 
 ```bash
-git add supabase/functions/whatsapp-webhook/handler.ts supabase/functions/whatsapp-webhook/handler.test.ts supabase/functions/whatsapp-webhook/agent.ts supabase/functions/whatsapp-webhook/agent.test.ts
+git add supabase/functions/whatsapp-webhook/handler.ts supabase/functions/whatsapp-webhook/handler.test.ts supabase/functions/whatsapp-webhook/agent.ts supabase/functions/whatsapp-webhook/agent.test.ts supabase/functions/whatsapp-webhook/owner-actions.ts supabase/functions/whatsapp-webhook/owner-actions.test.ts
 git commit -m "feat: conecta los informes de negocio al dispatcher del dueño y al prompt"
 ```
 
