@@ -23,9 +23,14 @@ pide, **también en PDF** (detalle completo, descargable).
 
 ## Fuera de alcance
 
-- Gastos y compras a proveedores (Fases 13/14 de `CLAUDE.md`, con sus
-  propias tablas que todavía no existen) — ningún informe de este
-  documento calcula ganancia neta real, solo ventas brutas.
+- Compras a proveedores (Fase 14 de `CLAUDE.md`, con sus propias tablas
+  que todavía no existen) — ningún informe de este documento calcula
+  ganancia neta real (ventas − costo de productos − gastos), solo
+  ventas brutas y gastos por separado. **Gastos sí entra en este
+  documento** (ver abajo): las tablas `expenses`/`expense_categories` ya
+  existen en la base de datos (confirmado contra el esquema real, con
+  filas reales ya registradas), aunque esa fase nunca se construyó en
+  el panel web.
 - Comparativas entre periodos ("¿vendí más que el mes pasado?") — se
   puede pedir cada periodo por separado, pero no hay un cálculo
   automático de variación.
@@ -112,6 +117,19 @@ Params: `{"dias": entero >= 1, "limite": entero >= 1 (default 10), "conPdf": boo
 - **PDF** (si `conPdf`): misma tabla sin el tope de `limite` (hasta 50
   clientes).
 
+### `informe_gastos`
+
+Params: `{"dias": entero >= 1, "conPdf": boolean}`.
+
+- **Texto**: total gastado en el periodo + desglose por categoría
+  (`expense_categories.name`; los gastos sin categoría se agrupan como
+  "Sin categoría"). Fuente: `expenses` filtrado por `expense_date` dentro
+  del periodo (es una columna `date`, no `timestamptz` — se compara con
+  la fecha, no con la hora exacta).
+- **PDF** (si `conPdf`): tabla con cada gasto individual (fecha,
+  categoría, descripción, monto), ordenada por fecha descendente, con el
+  mismo tope de 200 filas que `informe_ventas`.
+
 ### `historial_cliente` (nueva, complementa a `buscar_cliente`)
 
 Params: `{"nombreOTelefono": string}`.
@@ -153,3 +171,6 @@ Mismo enfoque TDD con Vitest. Casos mínimos nuevos:
 - `historial_cliente`: cliente encontrado por nombre parcial devuelve su
   historial completo y el total acumulado; cliente no encontrado,
   mensaje claro; varias coincidencias ambiguas, pide precisar.
+- `informe_gastos`: desglosa correctamente por categoría (incluyendo
+  gastos sin categoría); con `conPdf`, genera el PDF con el detalle;
+  sin gastos en el periodo, mensaje claro.
