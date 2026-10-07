@@ -214,6 +214,23 @@ describe("informeClientes", () => {
     expect(resultado.texto.match(/Juan/g)).toHaveLength(1);
   });
 
+  it("cliente vinculado a un perfil sin pedidos web/WhatsApp (su fila nace en el loop de POS): usa el nombre del perfil, no el de pos_customers", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      orders: [{ data: [], error: null }],
+      pos_sales: [{ data: [{ customer_id: "pos-cliente-1", total: 50000 }], error: null }],
+      pos_customers: [{ data: [{ id: "pos-cliente-1", profile_id: "profile-1", nombre: "Juan (POS)" }], error: null }],
+      profiles: [{ data: [{ id: "profile-1", full_name: "Juan Pérez", username: "juan" }], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { informeClientes } = await import("./reports.ts");
+    const resultado = await informeClientes(30, 10, false);
+
+    expect(resultado.texto).toContain("Juan Pérez");
+    expect(resultado.texto).not.toContain("Juan (POS)");
+  });
+
   it("excluye ventas de POS sin customer_id (venta de mostrador sin cliente)", async () => {
     const supabase = mockSupabaseDesdeTablas({
       orders: [{ data: [], error: null }],
