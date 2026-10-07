@@ -8,8 +8,11 @@ const mocks = vi.hoisted(() => ({
   cargarHistorial: vi.fn(),
   decidirAccion: vi.fn(),
   enviarTexto: vi.fn(),
+  enviarImagenPorLink: vi.fn(),
   consultarStockBajo: vi.fn(),
   actualizarPrecioProducto: vi.fn(),
+  buscarInventario: vi.fn(),
+  generarInformePdf: vi.fn(),
 }));
 
 const clienteMocks = vi.hoisted(() => ({
@@ -36,12 +39,14 @@ vi.mock("./sessions.ts", () => ({
 vi.mock("./agent.ts", () => ({ decidirAccion: mocks.decidirAccion }));
 vi.mock("../_shared/meta.ts", () => ({
   enviarTexto: mocks.enviarTexto,
-  enviarImagenPorLink: vi.fn(),
+  enviarImagenPorLink: mocks.enviarImagenPorLink,
   enviarDocumentoPorLink: clienteMocks.enviarDocumentoPorLink,
 }));
 vi.mock("./owner-actions.ts", () => ({
   consultarStockBajo: mocks.consultarStockBajo,
   actualizarPrecioProducto: mocks.actualizarPrecioProducto,
+  buscarInventario: mocks.buscarInventario,
+  generarInformePdf: mocks.generarInformePdf,
   ACCIONES_ESCRITURA: new Set(["actualizar_precio_producto"]),
 }));
 vi.mock("./catalog.ts", () => ({
@@ -398,5 +403,38 @@ describe("ejecutarAccionCliente via procesarMensajeEntrante", () => {
     await procesarMensajeEntrante({});
 
     expect(mocks.enviarTexto).toHaveBeenCalledWith("573009998888", "No entendí tu mensaje, ¿puedes repetirlo?");
+  });
+});
+
+describe("acciones de lectura del dueño con fotos/documentos", () => {
+  it("buscar_inventario manda las fotos antes del texto final", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.1", from: "573215879805", texto: "cuantas camisetas hay" });
+    mocks.decidirAccion.mockResolvedValue({ action: "buscar_inventario", params: { texto: "camiseta" }, response_message: "" });
+    mocks.buscarInventario.mockResolvedValue({
+      texto: "Encontré 2 producto(s) con 4 unidad(es) en stock en total.",
+      fotos: [{ url: "https://x/a.jpg", caption: "Camiseta A" }],
+      documentos: [],
+    });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.enviarImagenPorLink).toHaveBeenCalledWith("573215879805", "https://x/a.jpg", "Camiseta A");
+    expect(mocks.enviarTexto).toHaveBeenCalledWith("573215879805", "Encontré 2 producto(s) con 4 unidad(es) en stock en total.");
+  });
+
+  it("generar_informe_pdf manda el documento", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.2", from: "573215879805", texto: "mandame el informe" });
+    mocks.decidirAccion.mockResolvedValue({ action: "generar_informe_pdf", params: { texto: "camiseta" }, response_message: "" });
+    mocks.generarInformePdf.mockResolvedValue({
+      texto: "Aquí tienes el informe 📋",
+      fotos: [],
+      documentos: [{ link: "https://x/informe.pdf", filename: "informe-merylay.pdf" }],
+    });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(clienteMocks.enviarDocumentoPorLink).toHaveBeenCalledWith("573215879805", "https://x/informe.pdf", "informe-merylay.pdf");
   });
 });

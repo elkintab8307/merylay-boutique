@@ -1,5 +1,5 @@
 import { getSupabase } from "../_shared/db.ts";
-import { enviarTexto, enviarDocumentoPorLink } from "../_shared/meta.ts";
+import { enviarTexto, enviarImagenPorLink, enviarDocumentoPorLink } from "../_shared/meta.ts";
 import { parsearMensajeEntrante } from "./adapters.ts";
 import { buscarOCrearCliente, normalizarTelefono, generarAccesoWeb } from "./customers.ts";
 import { obtenerOCrearSesion, guardarSesion, cargarHistorial } from "./sessions.ts";
@@ -8,7 +8,7 @@ import * as ownerActions from "./owner-actions.ts";
 import { ACCIONES_ESCRITURA } from "./owner-actions.ts";
 import * as catalog from "./catalog.ts";
 import { crearPedidoWompiDesdeCarrito } from "./orders.ts";
-import type { ItemCarrito, SessionData } from "../_shared/types.ts";
+import type { SessionData } from "../_shared/types.ts";
 import { z } from "zod";
 
 const AFIRMACIONES = new Set(["si", "sí", "confirmo", "dale", "ok", "listo"]);
@@ -80,20 +80,30 @@ async function ejecutarAccionEscritura(accion: string, params: Record<string, un
   }
 }
 
-async function ejecutarAccionLectura(accion: string, params: Record<string, unknown>): Promise<string> {
+async function ejecutarAccionLectura(accion: string, params: Record<string, unknown>): Promise<ownerActions.RespuestaLectura> {
   switch (accion) {
     case "consultar_ventas":
-      return ownerActions.consultarVentas((params.dias as number) ?? 1);
+      return { texto: await ownerActions.consultarVentas((params.dias as number) ?? 1), fotos: [], documentos: [] };
     case "consultar_stock_bajo":
-      return ownerActions.consultarStockBajo((params.umbral as number) ?? 5);
+      return { texto: await ownerActions.consultarStockBajo((params.umbral as number) ?? 5), fotos: [], documentos: [] };
     case "buscar_cliente":
-      return ownerActions.buscarCliente(params.consulta as string);
+      return { texto: await ownerActions.buscarCliente(params.consulta as string), fotos: [], documentos: [] };
     case "consultar_pedido":
-      return ownerActions.consultarPedido(params.numeroOId as string);
-    case "consultar_producto":
-      return ownerActions.consultarProducto(params.consulta as string);
+      return { texto: await ownerActions.consultarPedido(params.numeroOId as string), fotos: [], documentos: [] };
+    case "buscar_inventario":
+      return ownerActions.buscarInventario({
+        texto: params.texto as string | undefined,
+        talla: params.talla as string | undefined,
+        color: params.color as string | undefined,
+      });
+    case "generar_informe_pdf":
+      return ownerActions.generarInformePdf({
+        texto: params.texto as string | undefined,
+        talla: params.talla as string | undefined,
+        color: params.color as string | undefined,
+      });
     default:
-      return "No reconozco esa consulta todavia.";
+      return { texto: "No reconozco esa consulta todavia.", fotos: [], documentos: [] };
   }
 }
 
@@ -119,6 +129,48 @@ const direccionEnvioSchema = z.object({
   address: z.string().min(1),
   city: z.string().min(1),
 });
+
+async function agregarAlCarrito(
+  sessionData: SessionData,
+  productId: string,
+  variantId: string | null,
+  qty: number,
+): Promise<string> {
+  // Nombre, precio, stock e imagen salen SIEMPRE de la base de datos,
+  // nunca de params: el modelo solo aporta los ids (ya validados como
+  // uuid) y la cantidad.
+  const producto = await catalog.obtenerProductoParaCarrito(productId, variantId);
+  if (!producto) {
+    return "No encontré ese producto (o esa talla/color) en el catálogo. ¿Me dices de nuevo cuál quieres?";
+  }
+
+  const existente = sessionData.cart.find(
+    (i) => i.productId === producto.productId && i.variantId === producto.variantId,
+  );
+  const qtyTotal = (existente?.qty ?? 0) + qty;
+  if (qtyTotal > producto.stock) {
+    return producto.stock > 0
+      ? `Solo nos quedan ${producto.stock} unidad(es) de ${producto.nombre}.`
+      : `${producto.nombre} está agotado en este momento.`;
+  }
+
+  if (existente) {
+    existente.qty = qtyTotal;
+    existente.unitPrice = producto.precio;
+    existente.nameSnapshot = producto.nombre;
+  } else {
+    sessionData.cart.push({
+      productId: producto.productId,
+      variantId: producto.variantId,
+      imageId: producto.imageId,
+      qty,
+      unitPrice: producto.precio,
+      nameSnapshot: producto.nombre,
+    });
+  }
+  const total = sessionData.cart.reduce((suma, i) => suma + i.unitPrice * i.qty, 0);
+  return `Agregado: ${producto.nombre} x${qtyTotal}. Tu carrito tiene ${sessionData.cart.length} producto(s), total $${total.toLocaleString("es-CO")}.`;
+}
 
 async function ejecutarAccionCliente(
   accion: string,
@@ -151,51 +203,8 @@ async function ejecutarAccionCliente(
         return { texto: "Perdona, no entendí qué producto quieres agregar, ¿puedes repetirlo?", documentos: [] };
       }
       const { productId, variantId, qty } = validacion.data;
-
-      // Nombre, precio, stock e imagen salen SIEMPRE de la base de datos,
-      // nunca de params: el modelo solo aporta los ids (ya validados como
-      // uuid) y la cantidad.
-      const producto = await catalog.obtenerProductoParaCarrito(productId, variantId ?? null);
-      if (!producto) {
-        return {
-          texto: "No encontré ese producto (o esa talla/color) en el catálogo. ¿Me dices de nuevo cuál quieres?",
-          documentos: [],
-        };
-      }
-
-      const existente = sessionData.cart.find(
-        (i) => i.productId === producto.productId && i.variantId === producto.variantId,
-      );
-      const qtyTotal = (existente?.qty ?? 0) + qty;
-      if (qtyTotal > producto.stock) {
-        return {
-          texto: producto.stock > 0
-            ? `Solo nos quedan ${producto.stock} unidad(es) de ${producto.nombre}.`
-            : `${producto.nombre} está agotado en este momento.`,
-          documentos: [],
-        };
-      }
-
-      if (existente) {
-        existente.qty = qtyTotal;
-        existente.unitPrice = producto.precio;
-        existente.nameSnapshot = producto.nombre;
-      } else {
-        const item: ItemCarrito = {
-          productId: producto.productId,
-          variantId: producto.variantId,
-          imageId: producto.imageId,
-          qty,
-          unitPrice: producto.precio,
-          nameSnapshot: producto.nombre,
-        };
-        sessionData.cart.push(item);
-      }
-      const total = sessionData.cart.reduce((suma, i) => suma + i.unitPrice * i.qty, 0);
-      return {
-        texto: `Agregado: ${producto.nombre} x${qtyTotal}. Tu carrito tiene ${sessionData.cart.length} producto(s), total $${total.toLocaleString("es-CO")}.`,
-        documentos: [],
-      };
+      const texto = await agregarAlCarrito(sessionData, productId, variantId ?? null, qty);
+      return { texto, documentos: [] };
     }
 
     case "quitar_del_carrito": {
@@ -332,7 +341,14 @@ async function generarRespuesta(
       await guardarSesion(sessionId, sessionData);
       return `¿Confirmas esta acción? ${decision.action} con ${JSON.stringify(decision.params)}. Responde "sí" para confirmar.`;
     }
-    return ejecutarAccionLectura(decision.action, decision.params);
+    const resultadoLectura = await ejecutarAccionLectura(decision.action, decision.params);
+    for (const foto of resultadoLectura.fotos) {
+      await enviarImagenPorLink(telefono, foto.url, foto.caption);
+    }
+    for (const documento of resultadoLectura.documentos) {
+      await enviarDocumentoPorLink(telefono, documento.link, documento.filename);
+    }
+    return resultadoLectura.texto;
   }
 
   const resultado = await ejecutarAccionCliente(decision.action, decision.params, profileId, sessionData, decision.response_message);
