@@ -76,7 +76,7 @@ Wompi, notificación de venta nueva).
 
 ---
 
-### Tarea 1: Helpers de medios y botón interactivo en `_shared/meta.ts`
+### Task 1: Helpers de medios y botón interactivo en `_shared/meta.ts`
 
 **Files:**
 - Modify: `supabase/functions/_shared/meta.ts`
@@ -260,7 +260,7 @@ git commit -m "feat: helpers de descarga de medios y boton interactivo en meta.t
 
 ---
 
-### Tarea 2: `buscarCatalogo` generalizado en `catalog.ts`
+### Task 2: `buscarCatalogo` generalizado en `catalog.ts`
 
 **Files:**
 - Modify: `supabase/functions/whatsapp-webhook/catalog.ts`
@@ -480,7 +480,7 @@ git commit -m "feat: agrega buscarCatalogo generalizado (texto/talla/color) junt
 
 ---
 
-### Tarea 3: `generarPdfConFotos` y PDFs con fotos reales
+### Task 3: `generarPdfConFotos` y PDFs con fotos reales
 
 **Files:**
 - Modify: `supabase/functions/whatsapp-webhook/catalog.ts`
@@ -751,7 +751,7 @@ git commit -m "feat: PDF con fotos reales para catalogo/cotizacion, con filtros 
 
 ---
 
-### Tarea 4: `buscarInventario`/`generarInformePdf` del dueño en `owner-actions.ts`
+### Task 4: `buscarInventario`/`generarInformePdf` del dueño en `owner-actions.ts`
 
 **Files:**
 - Modify: `supabase/functions/whatsapp-webhook/owner-actions.ts`
@@ -964,7 +964,7 @@ git commit -m "feat: buscarInventario y generarInformePdf reemplazan consultarPr
 
 ---
 
-### Tarea 5: Prompts de `agent.ts` (acciones nuevas + tono de cliente)
+### Task 5: Prompts de `agent.ts` (acciones nuevas + tono de cliente)
 
 **Files:**
 - Modify: `supabase/functions/whatsapp-webhook/agent.ts`
@@ -1068,7 +1068,7 @@ git commit -m "feat: prompts documentan buscar_inventario/generar_informe_pdf y 
 
 ---
 
-### Tarea 6: `agregarAlCarrito` compartido + `RespuestaLectura` en `handler.ts` (dueño)
+### Task 6: `agregarAlCarrito` compartido + `RespuestaLectura` en `handler.ts` (dueño)
 
 **Files:**
 - Modify: `supabase/functions/whatsapp-webhook/handler.ts`
@@ -1279,7 +1279,7 @@ git commit -m "feat: agregarAlCarrito compartido y respuestas de lectura del due
 
 ---
 
-### Tarea 7: `buscar_producto` con tarjetas de foto+botón y `generar_catalogo_pdf` con filtros (cliente)
+### Task 7: `buscar_producto` con tarjetas de foto+botón y `generar_catalogo_pdf` con filtros (cliente)
 
 **Files:**
 - Modify: `supabase/functions/whatsapp-webhook/handler.ts`
@@ -1457,7 +1457,7 @@ git commit -m "feat: buscar_producto manda tarjetas con foto y boton; generar_ca
 
 ---
 
-### Tarea 8: `MensajeEntrante` como unión discriminada en `adapters.ts`
+### Task 8: `MensajeEntrante` como unión discriminada en `adapters.ts`
 
 **Files:**
 - Modify: `supabase/functions/whatsapp-webhook/adapters.ts`
@@ -1588,7 +1588,7 @@ git commit -m "feat: parsearMensajeEntrante reconoce audio y botones interactivo
 
 ---
 
-### Tarea 9: `transcribirAudio` en `voice.ts` (nuevo)
+### Task 9: `transcribirAudio` en `voice.ts` (nuevo)
 
 **Files:**
 - Create: `supabase/functions/whatsapp-webhook/voice.ts`
@@ -1703,7 +1703,7 @@ git commit -m "feat: transcribirAudio (OpenAI whisper-1) para notas de voz de Wh
 
 ---
 
-### Tarea 10: Despacho por `kind` en `handler.ts` — botón determinístico y audio
+### Task 10: Despacho por `kind` en `handler.ts` — botón determinístico y audio
 
 **Files:**
 - Modify: `supabase/functions/whatsapp-webhook/handler.ts`
@@ -1923,7 +1923,7 @@ git commit -m "feat: handler bifurca por tipo de mensaje (texto/audio/boton), bo
 
 ---
 
-### Tarea 11: Limpieza final y verificación de la suite completa
+### Task 11: Limpieza final y verificación de la suite completa
 
 **Files:**
 - Modify: cualquier archivo con referencias residuales a
