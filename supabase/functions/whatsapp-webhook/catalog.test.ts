@@ -78,6 +78,79 @@ describe("buscarProductos", () => {
   });
 });
 
+function mockCatalogo(productos: unknown[]) {
+  const resultado = { data: productos, error: null };
+  const query: Record<string, unknown> = {};
+  const encadenable = vi.fn(() => query);
+  query.eq = encadenable;
+  query.ilike = encadenable;
+  (query as { then: unknown }).then = (resolve: (v: typeof resultado) => void) => resolve(resultado);
+  const select = vi.fn(() => query);
+  const supabase = { from: vi.fn(() => ({ select })) };
+  return { supabase, select, query };
+}
+
+describe("buscarCatalogo", () => {
+  it("sin ningun filtro lanza un error claro", async () => {
+    const { buscarCatalogo } = await import("./catalog.ts");
+    await expect(buscarCatalogo({})).rejects.toThrow(/al menos un filtro/);
+  });
+
+  it("con texto, filtra por nombre del producto O nombre de categoria (en memoria, case-insensitive)", async () => {
+    const productos = [
+      { id: "p1", name: "Pijama Rosa", price: 89900, stock: 5, categories: { name: "Pijamas" }, product_variants: [], product_images: [] },
+      { id: "p2", name: "Camiseta Blanca", price: 40000, stock: 3, categories: { name: "Camiseta algodón licrado" }, product_variants: [], product_images: [] },
+      { id: "p3", name: "Bata Dorada", price: 120000, stock: 2, categories: { name: "Batas" }, product_variants: [], product_images: [] },
+    ];
+    const { supabase } = mockCatalogo(productos);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { buscarCatalogo } = await import("./catalog.ts");
+    const resultado = await buscarCatalogo({ texto: "camiseta" });
+
+    expect(resultado).toHaveLength(1);
+    expect(resultado[0].nombre).toBe("Camiseta Blanca");
+  });
+
+  it("con talla, usa product_variants!inner y filtra por talla", async () => {
+    const productos = [
+      {
+        id: "p1", name: "Pijama Rosa", price: 89900, stock: 5, categories: { name: "Pijamas" },
+        product_variants: [{ id: "v1", talla: "M", color: "Rosa", price_override: null, stock: 4 }],
+        product_images: [],
+      },
+    ];
+    const { supabase, select } = mockCatalogo(productos);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { buscarCatalogo } = await import("./catalog.ts");
+    const resultado = await buscarCatalogo({ talla: "M" });
+
+    expect(select).toHaveBeenCalledWith(expect.stringContaining("product_variants!inner"));
+    expect(resultado).toEqual([{
+      productId: "p1", variantId: "v1", nombre: "Pijama Rosa", talla: "M", color: "Rosa",
+      precio: 89900, stock: 4, imageId: null, fotoUrl: null,
+    }]);
+  });
+
+  it("devuelve como maximo 50 filas", async () => {
+    const productos = Array.from({ length: 60 }, (_, i) => ({
+      id: `p${i}`, name: `Camiseta ${i}`, price: 40000, stock: 1,
+      categories: { name: "Camisetas" }, product_variants: [], product_images: [],
+    }));
+    const { supabase } = mockCatalogo(productos);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { buscarCatalogo } = await import("./catalog.ts");
+    const resultado = await buscarCatalogo({ texto: "camiseta" });
+
+    expect(resultado).toHaveLength(50);
+  });
+});
+
 describe("obtenerProductoParaCarrito", () => {
   function mockProductoYVariante(producto: unknown, variante: unknown) {
     const eqVariante2 = vi.fn(() => ({ maybeSingle: vi.fn(async () => ({ data: variante, error: null })) }));

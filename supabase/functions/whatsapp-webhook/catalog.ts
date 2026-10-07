@@ -43,6 +43,97 @@ interface VarianteProducto {
   stock: number;
 }
 
+export interface FiltrosCatalogo {
+  texto?: string;
+  talla?: string;
+  color?: string;
+}
+
+const TOPE_BUSCAR_CATALOGO = 50;
+
+export async function buscarCatalogo(filtros: FiltrosCatalogo): Promise<ProductoEncontrado[]> {
+  if (!filtros.texto && !filtros.talla && !filtros.color) {
+    throw new Error("buscarCatalogo requiere al menos un filtro (texto, talla o color).");
+  }
+
+  const supabase = getSupabase();
+  // product_variants!inner: cuando se filtra por talla/color, Postgres solo
+  // devuelve las variantes que cumplen el filtro (no todas las del
+  // producto) -- exactamente lo que se quiere expandir despues. Sin
+  // talla/color no se usa !inner: un producto sin ninguna variante que
+  // "coincida" (porque no se esta filtrando por variante) no debe excluirse.
+  const variantesEmbed = (filtros.talla || filtros.color)
+    ? "product_variants!inner(id, talla, color, price_override, stock)"
+    : "product_variants(id, talla, color, price_override, stock)";
+
+  let query = supabase
+    .from("products")
+    .select(`id, name, price, stock, categories(name), ${variantesEmbed}, product_images(id, url, is_primary, variant_id, vendida)`)
+    .eq("is_active", true);
+
+  if (filtros.talla) query = query.ilike("product_variants.talla", `%${escaparPatronLike(filtros.talla)}%`);
+  if (filtros.color) query = query.ilike("product_variants.color", `%${escaparPatronLike(filtros.color)}%`);
+
+  const { data, error } = await query;
+  if (error || !data) return [];
+
+  const productos = data as unknown as Array<{
+    id: string;
+    name: string;
+    price: number;
+    stock: number;
+    categories: { name: string } | null;
+    product_variants: VarianteProducto[] | null;
+    product_images: ImagenProducto[] | null;
+  }>;
+
+  // El texto se filtra en memoria (no en la consulta) porque PostgREST no
+  // compone de forma simple un .or() entre una columna propia (name) y una
+  // columna de una tabla relacionada (categories.name) dentro de la misma
+  // llamada -- a esta escala de catalogo (decenas de productos activos) el
+  // costo es insignificante.
+  const textoNormalizado = filtros.texto?.toLowerCase();
+  const filtrados = textoNormalizado
+    ? productos.filter((p) =>
+        p.name.toLowerCase().includes(textoNormalizado) ||
+        (p.categories?.name ?? "").toLowerCase().includes(textoNormalizado))
+    : productos;
+
+  const expandido = filtrados.flatMap((producto): ProductoEncontrado[] => {
+    const variantes = producto.product_variants ?? [];
+    if (variantes.length === 0) {
+      const imagen = elegirImagen(producto.product_images, null);
+      return [{
+        productId: producto.id,
+        variantId: null,
+        nombre: producto.name,
+        talla: null,
+        color: null,
+        precio: producto.price,
+        stock: producto.stock,
+        imageId: imagen?.id ?? null,
+        fotoUrl: imagen?.url ?? null,
+      }];
+    }
+    return variantes.map((variante) => {
+      const imagen = elegirImagen(producto.product_images, variante.id);
+      return {
+        productId: producto.id,
+        variantId: variante.id,
+        nombre: producto.name,
+        talla: variante.talla ?? null,
+        color: variante.color ?? null,
+        precio: variante.price_override ?? producto.price,
+        stock: variante.stock,
+        imageId: imagen?.id ?? null,
+        fotoUrl: imagen?.url ?? null,
+      };
+    });
+  });
+
+  return expandido.slice(0, TOPE_BUSCAR_CATALOGO);
+}
+
 // Elige la foto a mostrar/registrar para una variante (o para el producto
 // base si variantId es null): primero las fotos propias de esa variante,
 // luego las generales (variant_id null); dentro de cada grupo, la
