@@ -322,7 +322,7 @@ export async function informeGastos(dias: number, conPdf: boolean): Promise<Resp
     .gte("expense_date", desde);
   if (error) throw new Error(`No se pudieron consultar los gastos: ${error.message}`);
 
-  const filas = (data ?? []) as { description: string; amount: number; expense_date: string; expense_categories: { name: string } | null }[];
+  const filas = (data ?? []) as unknown as { description: string; amount: number; expense_date: string; expense_categories: { name: string } | null }[];
   if (filas.length === 0) {
     return { texto: `No hubo gastos registrados en los últimos ${dias} día(s).`, fotos: [], documentos: [] };
   }
