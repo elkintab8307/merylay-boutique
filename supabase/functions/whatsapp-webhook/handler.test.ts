@@ -11,18 +11,39 @@ const mocks = vi.hoisted(() => ({
   actualizarPrecioProducto: vi.fn(),
 }));
 
+const clienteMocks = vi.hoisted(() => ({
+  buscarProductos: vi.fn(),
+  generarCatalogoPdf: vi.fn(),
+  generarCotizacionPdf: vi.fn(),
+  crearPedidoWompiDesdeCarrito: vi.fn(),
+  generarAccesoWeb: vi.fn(),
+  enviarDocumentoPorLink: vi.fn(),
+}));
+
 vi.mock("./adapters.ts", () => ({ parsearMensajeEntrante: mocks.parsearMensajeEntrante }));
-vi.mock("./customers.ts", () => ({ buscarOCrearCliente: mocks.buscarOCrearCliente, normalizarTelefono: (t: string) => t.replace(/\D/g, "") }));
+vi.mock("./customers.ts", () => ({
+  buscarOCrearCliente: mocks.buscarOCrearCliente,
+  normalizarTelefono: (t: string) => t.replace(/\D/g, ""),
+  generarAccesoWeb: clienteMocks.generarAccesoWeb,
+}));
 vi.mock("./sessions.ts", () => ({ obtenerOCrearSesion: mocks.obtenerOCrearSesion, guardarSesion: mocks.guardarSesion }));
 vi.mock("./agent.ts", () => ({ decidirAccion: mocks.decidirAccion }));
-vi.mock("../_shared/meta.ts", () => ({ enviarTexto: mocks.enviarTexto, enviarImagenPorLink: vi.fn(), enviarDocumentoPorLink: vi.fn() }));
+vi.mock("../_shared/meta.ts", () => ({
+  enviarTexto: mocks.enviarTexto,
+  enviarImagenPorLink: vi.fn(),
+  enviarDocumentoPorLink: clienteMocks.enviarDocumentoPorLink,
+}));
 vi.mock("./owner-actions.ts", () => ({
   consultarStockBajo: mocks.consultarStockBajo,
   actualizarPrecioProducto: mocks.actualizarPrecioProducto,
   ACCIONES_ESCRITURA: new Set(["actualizar_precio_producto"]),
 }));
-vi.mock("./catalog.ts", () => ({ buscarProductos: vi.fn(), generarCatalogoPdf: vi.fn(), generarCotizacionPdf: vi.fn() }));
-vi.mock("./orders.ts", () => ({ crearPedidoWompiDesdeCarrito: vi.fn() }));
+vi.mock("./catalog.ts", () => ({
+  buscarProductos: clienteMocks.buscarProductos,
+  generarCatalogoPdf: clienteMocks.generarCatalogoPdf,
+  generarCotizacionPdf: clienteMocks.generarCotizacionPdf,
+}));
+vi.mock("./orders.ts", () => ({ crearPedidoWompiDesdeCarrito: clienteMocks.crearPedidoWompiDesdeCarrito }));
 
 const dbMocks = vi.hoisted(() => ({ insertarMensaje: vi.fn() }));
 vi.mock("../_shared/db.ts", () => ({
@@ -130,5 +151,73 @@ describe("procesarMensajeEntrante", () => {
     expect(mocks.guardarSesion).toHaveBeenCalledWith("sesion-1", expect.objectContaining({
       pendingConfirmation: { action: "actualizar_precio_producto", params: { idOSku: "P1", nuevoPrecio: 50000 } },
     }));
+  });
+});
+
+describe("ejecutarAccionCliente via procesarMensajeEntrante", () => {
+  it("agrega un producto al carrito y responde con el total actualizado", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.10", from: "573009998888", texto: "agrega la pijama rosa" });
+    mocks.decidirAccion.mockResolvedValue({
+      action: "agregar_al_carrito",
+      params: { productId: "p1", variantId: null, imageId: null, qty: 1, unitPrice: 89900, nombre: "Pijama Rosa" },
+      response_message: "Agregando...",
+    });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.enviarTexto).toHaveBeenCalledWith("573009998888", expect.stringContaining("89.900"));
+    expect(mocks.guardarSesion).toHaveBeenCalledWith("sesion-1", expect.objectContaining({
+      cart: [{ productId: "p1", variantId: null, imageId: null, qty: 1, unitPrice: 89900, nameSnapshot: "Pijama Rosa" }],
+    }));
+  });
+
+  it("manda el catalogo como documento ademas del texto", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.11", from: "573009998888", texto: "mandame el catalogo" });
+    mocks.decidirAccion.mockResolvedValue({ action: "generar_catalogo_pdf", params: {}, response_message: "" });
+    clienteMocks.generarCatalogoPdf.mockResolvedValue("https://x/catalogo-firmado.pdf");
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(clienteMocks.enviarDocumentoPorLink).toHaveBeenCalledWith("573009998888", "https://x/catalogo-firmado.pdf", "catalogo-merylay.pdf");
+  });
+
+  it("confirma el pedido con el carrito de la sesion y responde con el link de pago", async () => {
+    mocks.obtenerOCrearSesion.mockResolvedValue({
+      id: "sesion-1",
+      sessionData: {
+        cart: [{ productId: "p1", variantId: null, imageId: null, qty: 1, unitPrice: 89900, nameSnapshot: "Pijama Rosa" }],
+        pendingConfirmation: null,
+      },
+    });
+    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.12", from: "573009998888", texto: "confirmo, mi direccion es Calle 1, Bogota" });
+    mocks.decidirAccion.mockResolvedValue({
+      action: "confirmar_pedido",
+      params: { fullName: "Cliente Prueba", phone: "573009998888", address: "Calle 1", city: "Bogota" },
+      response_message: "",
+    });
+    clienteMocks.crearPedidoWompiDesdeCarrito.mockResolvedValue({ linkPago: "https://x/pagar/1", orderNumber: "ML-1" });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(clienteMocks.crearPedidoWompiDesdeCarrito).toHaveBeenCalledWith(
+      "perfil-1",
+      [{ productId: "p1", variantId: null, imageId: null, qty: 1, unitPrice: 89900, nameSnapshot: "Pijama Rosa" }],
+      { fullName: "Cliente Prueba", phone: "573009998888", address: "Calle 1", city: "Bogota" },
+    );
+    expect(mocks.enviarTexto).toHaveBeenCalledWith("573009998888", expect.stringContaining("https://x/pagar/1"));
+  });
+
+  it("no confirma el pedido si el carrito esta vacio", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.13", from: "573009998888", texto: "confirmo" });
+    mocks.decidirAccion.mockResolvedValue({ action: "confirmar_pedido", params: { fullName: "X", phone: "573009998888", address: "Y", city: "Z" }, response_message: "" });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(clienteMocks.crearPedidoWompiDesdeCarrito).not.toHaveBeenCalled();
+    expect(mocks.enviarTexto).toHaveBeenCalledWith("573009998888", expect.stringContaining("carrito está vacío"));
   });
 });

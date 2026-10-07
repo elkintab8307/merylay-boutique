@@ -1,11 +1,15 @@
 import { getSupabase } from "../_shared/db.ts";
-import { enviarTexto } from "../_shared/meta.ts";
+import { enviarTexto, enviarDocumentoPorLink } from "../_shared/meta.ts";
 import { parsearMensajeEntrante } from "./adapters.ts";
-import { buscarOCrearCliente, normalizarTelefono } from "./customers.ts";
+import { buscarOCrearCliente, normalizarTelefono, generarAccesoWeb } from "./customers.ts";
 import { obtenerOCrearSesion, guardarSesion } from "./sessions.ts";
 import { decidirAccion } from "./agent.ts";
 import * as ownerActions from "./owner-actions.ts";
 import { ACCIONES_ESCRITURA } from "./owner-actions.ts";
+import * as catalog from "./catalog.ts";
+import { crearPedidoWompiDesdeCarrito } from "./orders.ts";
+import type { ItemCarrito, SessionData } from "../_shared/types.ts";
+import { z } from "zod";
 
 const AFIRMACIONES = new Set(["si", "sí", "confirmo", "dale", "ok", "listo"]);
 
@@ -93,6 +97,101 @@ async function ejecutarAccionLectura(accion: string, params: Record<string, unkn
   }
 }
 
+const direccionEnvioSchema = z.object({
+  fullName: z.string().min(1),
+  phone: z.string().min(1),
+  address: z.string().min(1),
+  city: z.string().min(1),
+});
+
+async function ejecutarAccionCliente(
+  accion: string,
+  params: Record<string, unknown>,
+  profileId: string,
+  sessionData: SessionData,
+): Promise<{ texto: string; documentos: { link: string; filename: string }[] }> {
+  switch (accion) {
+    case "buscar_producto": {
+      const productos = await catalog.buscarProductos(params.consulta as string);
+      if (productos.length === 0) {
+        return { texto: `No encontré productos para "${params.consulta}".`, documentos: [] };
+      }
+      const texto = productos
+        .map((p) => `${p.nombre} — $${p.precio.toLocaleString("es-CO")} (stock: ${p.stock})`)
+        .join("\n");
+      return { texto, documentos: [] };
+    }
+
+    case "agregar_al_carrito": {
+      const item: ItemCarrito = {
+        productId: params.productId as string,
+        variantId: (params.variantId as string) ?? null,
+        imageId: (params.imageId as string) ?? null,
+        qty: (params.qty as number) ?? 1,
+        unitPrice: params.unitPrice as number,
+        nameSnapshot: params.nombre as string,
+      };
+      sessionData.cart.push(item);
+      const total = sessionData.cart.reduce((suma, i) => suma + i.unitPrice * i.qty, 0);
+      return {
+        texto: `Agregado. Tu carrito tiene ${sessionData.cart.length} producto(s), total $${total.toLocaleString("es-CO")}.`,
+        documentos: [],
+      };
+    }
+
+    case "quitar_del_carrito": {
+      sessionData.cart = sessionData.cart.filter((item) => item.productId !== params.productId);
+      return { texto: "Listo, lo quité del carrito.", documentos: [] };
+    }
+
+    case "generar_catalogo_pdf": {
+      const link = await catalog.generarCatalogoPdf();
+      return {
+        texto: "Aquí tienes nuestro catálogo completo 💕",
+        documentos: [{ link, filename: "catalogo-merylay.pdf" }],
+      };
+    }
+
+    case "generar_cotizacion_pdf": {
+      if (sessionData.cart.length === 0) {
+        return { texto: "Tu carrito está vacío, agrega algún producto antes de pedir la cotización.", documentos: [] };
+      }
+      const link = await catalog.generarCotizacionPdf(sessionData.cart);
+      return { texto: "Aquí tienes tu cotización 💕", documentos: [{ link, filename: "cotizacion-merylay.pdf" }] };
+    }
+
+    case "confirmar_pedido": {
+      if (sessionData.cart.length === 0) {
+        return { texto: "Tu carrito está vacío, agrega algún producto antes de confirmar un pedido.", documentos: [] };
+      }
+      const direccion = direccionEnvioSchema.safeParse(params);
+      if (!direccion.success) {
+        return {
+          texto: "Para confirmar necesito tu nombre completo, teléfono, dirección y ciudad de envío.",
+          documentos: [],
+        };
+      }
+      const { linkPago, orderNumber } = await crearPedidoWompiDesdeCarrito(profileId, sessionData.cart, direccion.data);
+      sessionData.cart = [];
+      return {
+        texto: `Tu pedido ${orderNumber} quedó listo. Paga aquí para confirmarlo: ${linkPago}`,
+        documentos: [],
+      };
+    }
+
+    case "generar_acceso_web": {
+      const { usuario, contrasena } = await generarAccesoWeb(profileId);
+      return {
+        texto: `Ya puedes entrar a merylayboutique.com con el usuario ${usuario} y la contraseña ${contrasena}. Te recomendamos cambiarla después de tu primer ingreso.`,
+        documentos: [],
+      };
+    }
+
+    default:
+      return { texto: "chat", documentos: [] }; // sobreescrito por response_message en el caller
+  }
+}
+
 export async function procesarMensajeEntrante(payload: unknown): Promise<void> {
   const entrante = parsearMensajeEntrante(payload);
   if (!entrante) return;
@@ -134,8 +233,15 @@ export async function procesarMensajeEntrante(payload: unknown): Promise<void> {
       respuesta = `¿Confirmas esta acción? ${decision.action} con ${JSON.stringify(decision.params)}. Responde "sí" para confirmar.`;
     } else if (rol === "owner") {
       respuesta = decision.action === "chat" ? decision.response_message : await ejecutarAccionLectura(decision.action, decision.params);
-    } else {
+    } else if (decision.action === "chat") {
       respuesta = decision.response_message;
+    } else {
+      const resultado = await ejecutarAccionCliente(decision.action, decision.params, profileId, sessionData);
+      respuesta = resultado.texto;
+      await guardarSesion(sessionId, sessionData);
+      for (const documento of resultado.documentos) {
+        await enviarDocumentoPorLink(telefono, documento.link, documento.filename);
+      }
     }
   }
 
