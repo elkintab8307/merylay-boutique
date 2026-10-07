@@ -39,6 +39,33 @@ describe("crearPedidoWompiDesdeCarrito", () => {
     expect(resultado.linkPago).toContain("sig=");
   });
 
+  it("lanza un error claro si falta una credencial de Wompi, sin llegar a llamar al RPC", async () => {
+    vi.stubGlobal("Deno", {
+      env: { get: vi.fn((key: string) => ({
+        WOMPI_PUBLIC_KEY: "pub_test_123",
+        WOMPI_INTEGRITY_SECRET: "",
+        SITE_URL: "https://merylayboutique.com",
+      } as Record<string, string>)[key]) },
+    });
+    const rpc = vi.fn(async () => ({
+      data: { id: "pedido-1", order_number: "ML-20261006-abc123", total: 100000 },
+      error: null,
+    }));
+    const supabase = { rpc };
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { crearPedidoWompiDesdeCarrito } = await import("./orders.ts");
+    await expect(
+      crearPedidoWompiDesdeCarrito(
+        "perfil-1",
+        [{ productId: "p1", variantId: null, imageId: null, qty: 1, unitPrice: 100000, nameSnapshot: "Pijama Rosa" }],
+        { fullName: "Prueba", phone: "573001234567", address: "Calle 1", city: "Bogota" },
+      ),
+    ).rejects.toThrow(/WOMPI_PUBLIC_KEY, WOMPI_INTEGRITY_SECRET o SITE_URL/);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
   it("lanza un error claro si no hay stock suficiente", async () => {
     const supabase = { rpc: vi.fn(async () => ({ data: null, error: { message: "No hay stock suficiente para uno de los productos del pedido." } })) };
     const { getSupabase } = await import("../_shared/db.ts");

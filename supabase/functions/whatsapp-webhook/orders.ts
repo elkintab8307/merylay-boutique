@@ -14,6 +14,19 @@ export async function crearPedidoWompiDesdeCarrito(
   items: ItemCarrito[],
   direccionEnvio: Record<string, unknown>,
 ): Promise<{ linkPago: string; orderNumber: string }> {
+  // Fail-closed: se valida ANTES de llamar a la RPC. Igual que en
+  // src/app/(store)/checkout/wompi-actions.ts (obtenerCredencialesWompi),
+  // si esto se revisara despues de crear_pedido_wompi_whatsapp, una variable
+  // de entorno faltante dejaria un pedido real en estado "pendiente" ya
+  // creado en la base de datos (con stock ya descontado), huerfano e
+  // imposible de pagar, antes de que la funcion lance el error.
+  const publicKey = Deno.env.get("WOMPI_PUBLIC_KEY");
+  const secretoIntegridad = Deno.env.get("WOMPI_INTEGRITY_SECRET");
+  const siteUrl = Deno.env.get("SITE_URL");
+  if (!publicKey || !secretoIntegridad || !siteUrl) {
+    throw new Error("Faltan WOMPI_PUBLIC_KEY, WOMPI_INTEGRITY_SECRET o SITE_URL.");
+  }
+
   const supabase = getSupabase();
 
   const { data: pedido, error } = await supabase.rpc("crear_pedido_wompi_whatsapp", {
@@ -29,13 +42,6 @@ export async function crearPedidoWompiDesdeCarrito(
 
   if (error || !pedido) {
     throw new Error(error?.message ?? "No se pudo crear el pedido.");
-  }
-
-  const publicKey = Deno.env.get("WOMPI_PUBLIC_KEY");
-  const secretoIntegridad = Deno.env.get("WOMPI_INTEGRITY_SECRET");
-  const siteUrl = Deno.env.get("SITE_URL");
-  if (!publicKey || !secretoIntegridad || !siteUrl) {
-    throw new Error("Faltan WOMPI_PUBLIC_KEY, WOMPI_INTEGRITY_SECRET o SITE_URL.");
   }
 
   const amountInCents = Math.round((pedido as { total: number }).total * 100);
