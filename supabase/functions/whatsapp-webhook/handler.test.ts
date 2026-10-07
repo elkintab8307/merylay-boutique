@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   parsearMensajeEntrante: vi.fn(),
@@ -69,6 +69,11 @@ beforeEach(() => {
   mocks.buscarOCrearCliente.mockResolvedValue({ profileId: "perfil-1", esNuevo: false });
   mocks.obtenerOCrearSesion.mockResolvedValue({ id: "sesion-1", sessionData: { cart: [], pendingConfirmation: null } });
   mocks.cargarHistorial.mockResolvedValue([]);
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("procesarMensajeEntrante", () => {
@@ -162,6 +167,69 @@ describe("procesarMensajeEntrante", () => {
     expect(mocks.guardarSesion).toHaveBeenCalledWith("sesion-1", expect.objectContaining({
       pendingConfirmation: { action: "actualizar_precio_producto", params: { idOSku: "P1", nuevoPrecio: 50000 } },
     }));
+  });
+});
+
+describe("manejo de errores en procesarMensajeEntrante", () => {
+  it("si una accion lanza, igual responde al usuario con una disculpa generica", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.obtenerOCrearSesion.mockResolvedValue({
+      id: "sesion-1",
+      sessionData: {
+        cart: [{ productId: "p1", variantId: null, imageId: null, qty: 1, unitPrice: 89900, nameSnapshot: "Pijama Rosa" }],
+        pendingConfirmation: null,
+      },
+    });
+    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.20", from: "573009998888", texto: "confirmo" });
+    mocks.decidirAccion.mockResolvedValue({
+      action: "confirmar_pedido",
+      params: { fullName: "X", phone: "573009998888", address: "Y", city: "Z" },
+      response_message: "",
+    });
+    clienteMocks.crearPedidoWompiDesdeCarrito.mockRejectedValueOnce(new Error("No hay stock suficiente"));
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await expect(procesarMensajeEntrante({})).resolves.toBeUndefined();
+
+    expect(mocks.enviarTexto).toHaveBeenCalledWith("573009998888", expect.stringContaining("Disculpa, tuve un problema"));
+    expect(console.error).toHaveBeenCalled();
+  });
+
+  it("si falla la accion de escritura confirmada, igual limpia pendingConfirmation y responde", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.obtenerOCrearSesion.mockResolvedValue({
+      id: "sesion-1",
+      sessionData: { cart: [], pendingConfirmation: { action: "actualizar_precio_producto", params: { idOSku: "P1", nuevoPrecio: 50000 } } },
+    });
+    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.21", from: "573215879805", texto: "si" });
+    mocks.actualizarPrecioProducto.mockRejectedValueOnce(new Error("fallo de base de datos"));
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.guardarSesion).toHaveBeenCalledWith("sesion-1", expect.objectContaining({ pendingConfirmation: null }));
+    expect(mocks.enviarTexto).toHaveBeenCalledWith("573215879805", expect.stringContaining("Disculpa, tuve un problema"));
+  });
+
+  it("no deja escapar el error si falla el envio de la respuesta por WhatsApp", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.22", from: "573009998888", texto: "hola" });
+    mocks.decidirAccion.mockResolvedValue({ action: "chat", params: {}, response_message: "Hola!" });
+    mocks.enviarTexto.mockRejectedValueOnce(new Error("Graph API caida"));
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await expect(procesarMensajeEntrante({})).resolves.toBeUndefined();
+    expect(errorSpy).toHaveBeenCalled();
+  });
+
+  it("si el agente devuelve action 'error' para el dueño, usa su response_message y no el respaldo generico", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ messageId: "wamid.23", from: "573215879805", texto: "ventas de hoy" });
+    mocks.decidirAccion.mockResolvedValue({ action: "error", params: {}, response_message: "Disculpa, OpenAI no respondio." });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.enviarTexto).toHaveBeenCalledWith("573215879805", "Disculpa, OpenAI no respondio.");
   });
 });
 

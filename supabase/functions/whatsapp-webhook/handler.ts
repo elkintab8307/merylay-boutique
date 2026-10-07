@@ -262,52 +262,83 @@ export async function procesarMensajeEntrante(payload: unknown): Promise<void> {
   const esNuevo = await registrarMensaje(telefono, "inbound", entrante.texto, entrante.messageId);
   if (!esNuevo) return; // ya procesado antes (reintento de Meta)
 
+  // A partir de aqui el mensaje ya quedo marcado como procesado (Meta no
+  // lo va a reintentar), asi que cualquier excepcion sin capturar dejaria
+  // al usuario sin ninguna respuesta. Se captura todo, se registra el
+  // error real y se responde con una disculpa generica.
+  let respuesta: string;
+  try {
+    respuesta = await generarRespuesta(telefono, entrante);
+  } catch (error) {
+    console.error(`[handler] Error procesando el mensaje ${entrante.messageId} de ${telefono}:`, error);
+    respuesta = MENSAJE_ERROR_GENERICO;
+  }
+
+  try {
+    await enviarTexto(telefono, respuesta);
+    await registrarMensaje(telefono, "outbound", respuesta);
+  } catch (error) {
+    console.error(`[handler] No se pudo enviar/registrar la respuesta a ${telefono}:`, error);
+  }
+}
+
+const MENSAJE_ERROR_GENERICO = "Disculpa, tuve un problema procesando tu mensaje. Intenta de nuevo en un momento.";
+
+async function generarRespuesta(
+  telefono: string,
+  entrante: { messageId: string; texto: string },
+): Promise<string> {
   const nombreDueno = esDueno(telefono);
   const rol = nombreDueno ? "owner" : "customer";
 
   const { profileId } = await buscarOCrearCliente(telefono);
   const { id: sessionId, sessionData } = await obtenerOCrearSesion(telefono, profileId);
 
-  let respuesta: string;
-
   if (sessionData.pendingConfirmation) {
     if (esConfirmacionAfirmativa(entrante.texto)) {
       const { action, params } = sessionData.pendingConfirmation;
-      respuesta = await ejecutarAccionEscritura(action, params);
-      sessionData.pendingConfirmation = null;
-      await guardarSesion(sessionId, sessionData);
-    } else {
-      sessionData.pendingConfirmation = null;
-      await guardarSesion(sessionId, sessionData);
-      respuesta = "Entendido, no hice ningún cambio. ¿En qué más te ayudo?";
-    }
-  } else {
-    const historial = await cargarHistorial(telefono, entrante.messageId);
-    const decision = await decidirAccion({
-      rol,
-      nombreDueno: nombreDueno ?? undefined,
-      historial,
-      mensajeEntrante: entrante.texto,
-    });
-
-    if (rol === "owner" && ACCIONES_ESCRITURA.has(decision.action)) {
-      sessionData.pendingConfirmation = { action: decision.action, params: decision.params };
-      await guardarSesion(sessionId, sessionData);
-      respuesta = `¿Confirmas esta acción? ${decision.action} con ${JSON.stringify(decision.params)}. Responde "sí" para confirmar.`;
-    } else if (rol === "owner") {
-      respuesta = decision.action === "chat" ? decision.response_message : await ejecutarAccionLectura(decision.action, decision.params);
-    } else if (decision.action === "chat") {
-      respuesta = decision.response_message;
-    } else {
-      const resultado = await ejecutarAccionCliente(decision.action, decision.params, profileId, sessionData, decision.response_message);
-      respuesta = resultado.texto;
-      await guardarSesion(sessionId, sessionData);
-      for (const documento of resultado.documentos) {
-        await enviarDocumentoPorLink(telefono, documento.link, documento.filename);
+      // La confirmacion pendiente se consume SIEMPRE, aunque la accion
+      // falle: si quedara colgada, un "si" posterior sin relacion la
+      // volveria a disparar.
+      try {
+        return await ejecutarAccionEscritura(action, params);
+      } finally {
+        sessionData.pendingConfirmation = null;
+        await guardarSesion(sessionId, sessionData);
       }
     }
+    sessionData.pendingConfirmation = null;
+    await guardarSesion(sessionId, sessionData);
+    return "Entendido, no hice ningún cambio. ¿En qué más te ayudo?";
   }
 
-  await enviarTexto(telefono, respuesta);
-  await registrarMensaje(telefono, "outbound", respuesta);
+  const historial = await cargarHistorial(telefono, entrante.messageId);
+  const decision = await decidirAccion({
+    rol,
+    nombreDueno: nombreDueno ?? undefined,
+    historial,
+    mensajeEntrante: entrante.texto,
+  });
+
+  // "chat" es una respuesta libre y "error" trae la disculpa que ya armo
+  // decidirAccion: en ambos casos se usa response_message tal cual.
+  if (decision.action === "chat" || decision.action === "error") {
+    return decision.response_message;
+  }
+
+  if (rol === "owner") {
+    if (ACCIONES_ESCRITURA.has(decision.action)) {
+      sessionData.pendingConfirmation = { action: decision.action, params: decision.params };
+      await guardarSesion(sessionId, sessionData);
+      return `¿Confirmas esta acción? ${decision.action} con ${JSON.stringify(decision.params)}. Responde "sí" para confirmar.`;
+    }
+    return ejecutarAccionLectura(decision.action, decision.params);
+  }
+
+  const resultado = await ejecutarAccionCliente(decision.action, decision.params, profileId, sessionData, decision.response_message);
+  await guardarSesion(sessionId, sessionData);
+  for (const documento of resultado.documentos) {
+    await enviarDocumentoPorLink(telefono, documento.link, documento.filename);
+  }
+  return resultado.texto;
 }
