@@ -24,4 +24,22 @@ describe("verificarFirmaMeta", () => {
     const hmac = createHmac("sha256", secreto).update(payload).digest("hex");
     expect(verificarFirmaMeta('{"hola":"mundo!"}', `sha256=${hmac}`, secreto)).toBe(false);
   });
+
+  it("rechaza una firma invalida de la misma longitud que la correcta", () => {
+    const hmac = createHmac("sha256", secreto).update(payload).digest("hex");
+    const alterada = (hmac[0] === "a" ? "b" : "a") + hmac.slice(1);
+    expect(alterada.length).toBe(hmac.length);
+    expect(verificarFirmaMeta(payload, `sha256=${alterada}`, secreto)).toBe(false);
+  });
+
+  it("rechaza (sin lanzar) una firma de distinta longitud", () => {
+    const hmac = createHmac("sha256", secreto).update(payload).digest("hex");
+    expect(verificarFirmaMeta(payload, `sha256=${hmac.slice(0, 10)}`, secreto)).toBe(false);
+    expect(verificarFirmaMeta(payload, `sha256=${hmac}00`, secreto)).toBe(false);
+  });
+
+  it("rechaza siempre si el secreto esta vacio, aunque la firma se haya calculado con ese secreto vacio", () => {
+    const hmacVacio = createHmac("sha256", "").update(payload).digest("hex");
+    expect(verificarFirmaMeta(payload, `sha256=${hmacVacio}`, "")).toBe(false);
+  });
 });
