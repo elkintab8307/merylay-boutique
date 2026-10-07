@@ -91,7 +91,11 @@ async function llamarOpenAI(mensajes: { role: string; content: string }[]): Prom
       }
       ultimoError = e;
     }
-    await esperar(500 * 2 ** intento);
+    // Solo se espera ENTRE intentos: tras el ultimo fallo no hay nada que
+    // reintentar, esperar solo retrasaria la respuesta de error al usuario.
+    if (intento < maxIntentos - 1) {
+      await esperar(500 * 2 ** intento);
+    }
   }
 
   throw ultimoError;

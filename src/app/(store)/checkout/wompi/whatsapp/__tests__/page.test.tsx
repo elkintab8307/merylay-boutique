@@ -1,6 +1,19 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import Page from "../[orderId]/page";
+
+const WOMPI_PUBLIC_KEY_ORIGINAL = process.env.WOMPI_PUBLIC_KEY;
+
+// Restaura la variable de entorno tras cada test para que el valor
+// asignado aqui no se filtre a otros tests (ni entre los de este archivo).
+afterEach(() => {
+  if (WOMPI_PUBLIC_KEY_ORIGINAL === undefined) {
+    delete process.env.WOMPI_PUBLIC_KEY;
+  } else {
+    process.env.WOMPI_PUBLIC_KEY = WOMPI_PUBLIC_KEY_ORIGINAL;
+  }
+  vi.unstubAllEnvs();
+});
 
 vi.mock("../../../wompi-checkout-button", () => ({
   WompiCheckoutButton: (props: Record<string, unknown>) => (

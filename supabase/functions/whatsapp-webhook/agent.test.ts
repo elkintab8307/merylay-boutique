@@ -56,6 +56,20 @@ describe("decidirAccion", () => {
     expect(promptSistema).toContain("Elkin");
   });
 
+  it("no espera el backoff despues del ultimo intento fallido", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("error de servidor", { status: 500 })));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
+
+    const { decidirAccion } = await import("./agent.ts");
+    await decidirAccion({ rol: "customer", historial: [], mensajeEntrante: "hola" });
+
+    // 3 intentos => solo 2 esperas (entre el 1o y 2o, y entre el 2o y 3o).
+    const esperasDeBackoff = setTimeoutSpy.mock.calls.filter(([, ms]) => typeof ms === "number" && ms >= 500);
+    expect(esperasDeBackoff.map(([, ms]) => ms)).toEqual([500, 1000]);
+    setTimeoutSpy.mockRestore();
+  });
+
   it("documenta en el prompt de cliente los parametros exactos de cada accion", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({
       choices: [{ message: { content: JSON.stringify({ action: "chat", params: {}, response_message: "Hola" }) } }],
