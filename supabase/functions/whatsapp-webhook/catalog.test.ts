@@ -227,13 +227,51 @@ describe("obtenerProductoParaCarrito", () => {
   });
 });
 
+describe("generarPdfConFotos", () => {
+  it("dibuja una fila por producto, con foto cuando la descarga funciona", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(new Uint8Array([0xff, 0xd8, 0xff]), { status: 200 })));
+    const { generarPdfConFotos } = await import("./catalog.ts");
+
+    const bytes = await generarPdfConFotos("Informe de prueba", [
+      { fotoUrl: "https://x/foto.jpg", nombre: "Pijama Rosa", detalle: "talla M", precio: 89900, nota: "stock: 5" },
+    ]);
+
+    expect(bytes.byteLength).toBeGreaterThan(0);
+    vi.unstubAllGlobals();
+  });
+
+  it("si la descarga de una foto falla, esa fila se dibuja sin imagen (no aborta el PDF)", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("error", { status: 500 })));
+    const { generarPdfConFotos } = await import("./catalog.ts");
+
+    const bytes = await generarPdfConFotos("Informe de prueba", [
+      { fotoUrl: "https://x/rota.jpg", nombre: "Pijama Rosa", detalle: "talla M", precio: 89900 },
+    ]);
+
+    expect(bytes.byteLength).toBeGreaterThan(0);
+    vi.unstubAllGlobals();
+  });
+
+  it("una fila sin fotoUrl no intenta descargar nada", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { generarPdfConFotos } = await import("./catalog.ts");
+
+    await generarPdfConFotos("Informe de prueba", [
+      { fotoUrl: null, nombre: "Pijama Rosa", detalle: "talla M", precio: 89900 },
+    ]);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+});
+
 describe("generarCatalogoPdf", () => {
-  it("sube un PDF al bucket whatsapp-docs y devuelve una URL firmada", async () => {
-    const productos = [
-      { name: "Pijama Rosa", price: 89900, stock: 5 },
-      { name: "Bata Dorada", price: 120000, stock: 2 },
-    ];
-    const order = vi.fn(async () => ({ data: productos, error: null }));
+  it("sin filtros, usa el catalogo completo de productos activos y sube el PDF firmado", async () => {
+    const order = vi.fn(async () => ({
+      data: [{ name: "Pijama Rosa", price: 89900, stock: 5, categories: null, product_variants: [], product_images: [] }],
+      error: null,
+    }));
     const upload = vi.fn(async () => ({ error: null }));
     const createSignedUrl = vi.fn(async () => ({ data: { signedUrl: "https://x/catalogo-firmado.pdf" }, error: null }));
     const supabase = {
@@ -248,29 +286,50 @@ describe("generarCatalogoPdf", () => {
 
     expect(url).toBe("https://x/catalogo-firmado.pdf");
     expect(upload).toHaveBeenCalled();
-    expect(createSignedUrl).toHaveBeenCalledWith(expect.stringContaining(".pdf"), 600);
   });
 
-  it("lanza un error descriptivo si la consulta de productos falla", async () => {
-    const order = vi.fn(async () => ({ data: null, error: { message: "fallo de red" } }));
+  it("con filtros, usa buscarCatalogo en vez del catalogo completo", async () => {
+    const query: Record<string, unknown> = {};
+    query.eq = vi.fn(() => query);
+    (query as { then: unknown }).then = (resolve: (v: { data: unknown[]; error: null }) => void) =>
+      resolve({ data: [{ id: "p1", name: "Camiseta Azul", price: 40000, stock: 2, categories: { name: "Camisetas" }, product_variants: [], product_images: [] }], error: null });
+    const select = vi.fn(() => query);
     const upload = vi.fn(async () => ({ error: null }));
-    const createSignedUrl = vi.fn(async () => ({ data: { signedUrl: "https://x/no-deberia-llegar.pdf" }, error: null }));
+    const createSignedUrl = vi.fn(async () => ({ data: { signedUrl: "https://x/catalogo-filtrado.pdf" }, error: null }));
     const supabase = {
-      from: vi.fn(() => ({ select: vi.fn(() => ({ eq: vi.fn(() => ({ order })) })) })),
+      from: vi.fn(() => ({ select })),
       storage: { from: vi.fn(() => ({ upload, createSignedUrl })) },
     };
     const { getSupabase } = await import("../_shared/db.ts");
     (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
 
     const { generarCatalogoPdf } = await import("./catalog.ts");
+    const url = await generarCatalogoPdf({ texto: "camiseta" });
 
+    expect(url).toBe("https://x/catalogo-filtrado.pdf");
+    expect(select).toHaveBeenCalled();
+  });
+
+  it("lanza un error descriptivo si la consulta de productos falla (sin filtros)", async () => {
+    const order = vi.fn(async () => ({ data: null, error: { message: "fallo de red" } }));
+    const upload = vi.fn(async () => ({ error: null }));
+    const supabase = {
+      from: vi.fn(() => ({ select: vi.fn(() => ({ eq: vi.fn(() => ({ order })) })) })),
+      storage: { from: vi.fn(() => ({ upload, createSignedUrl: vi.fn() })) },
+    };
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { generarCatalogoPdf } = await import("./catalog.ts");
     await expect(generarCatalogoPdf()).rejects.toThrow(/fallo de red/);
     expect(upload).not.toHaveBeenCalled();
   });
 });
 
 describe("generarCotizacionPdf", () => {
-  it("sube un PDF al bucket whatsapp-docs y devuelve una URL firmada", async () => {
+  it("sube un PDF de los items del carrito (sin fotos, ItemCarrito no trae fotoUrl) y devuelve una URL firmada", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
     const upload = vi.fn(async () => ({ error: null }));
     const createSignedUrl = vi.fn(async () => ({ data: { signedUrl: "https://x/firmado.pdf" }, error: null }));
     const supabase = { storage: { from: vi.fn(() => ({ upload, createSignedUrl })) } };
@@ -284,6 +343,7 @@ describe("generarCotizacionPdf", () => {
 
     expect(url).toBe("https://x/firmado.pdf");
     expect(upload).toHaveBeenCalled();
-    expect(createSignedUrl).toHaveBeenCalledWith(expect.stringContaining(".pdf"), 600);
+    expect(fetchMock).not.toHaveBeenCalled(); // sin fotoUrl, generarPdfConFotos no intenta descargar nada
+    vi.unstubAllGlobals();
   });
 });

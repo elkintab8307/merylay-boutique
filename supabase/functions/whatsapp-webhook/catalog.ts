@@ -279,18 +279,51 @@ export async function obtenerProductoParaCarrito(
   };
 }
 
-async function pdfDesdeLineas(titulo: string, lineas: string[], total: number): Promise<Uint8Array> {
+export interface FilaPdf {
+  fotoUrl: string | null;
+  nombre: string;
+  detalle: string;
+  precio: number;
+  nota?: string;
+}
+
+const ALTO_FILA_PDF = 70;
+
+export async function generarPdfConFotos(titulo: string, filas: FilaPdf[]): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
-  const pagina = pdf.addPage([400, 120 + lineas.length * 20]);
+  const pagina = pdf.addPage([450, 140 + filas.length * ALTO_FILA_PDF]);
   const fuente = await pdf.embedFont(StandardFonts.Helvetica);
   let y = pagina.getHeight() - 40;
   pagina.drawText(titulo, { x: 20, y, size: 16, font: fuente });
-  y -= 30;
-  for (const linea of lineas) {
-    pagina.drawText(linea, { x: 20, y, size: 11, font: fuente });
-    y -= 20;
+  y -= 35;
+
+  for (const fila of filas) {
+    let anchoTexto = 20;
+    if (fila.fotoUrl) {
+      try {
+        const bytes = await fetch(fila.fotoUrl).then((r) => {
+          if (!r.ok) throw new Error(`descarga respondio ${r.status}`);
+          return r.arrayBuffer();
+        });
+        const imagen = fila.fotoUrl.toLowerCase().endsWith(".png")
+          ? await pdf.embedPng(bytes)
+          : await pdf.embedJpg(bytes);
+        const alto = 50;
+        const ancho = (imagen.width / imagen.height) * alto;
+        pagina.drawImage(imagen, { x: 20, y: y - alto + 10, width: ancho, height: alto });
+        anchoTexto = 20 + ancho + 15;
+      } catch (error) {
+        console.error(`[catalog] No se pudo incrustar la foto de "${fila.nombre}" en el PDF:`, error);
+      }
+    }
+    pagina.drawText(fila.nombre, { x: anchoTexto, y, size: 12, font: fuente });
+    pagina.drawText(
+      `${fila.detalle} — $${fila.precio.toLocaleString("es-CO")}${fila.nota ? ` — ${fila.nota}` : ""}`,
+      { x: anchoTexto, y: y - 18, size: 10, font: fuente },
+    );
+    y -= ALTO_FILA_PDF;
   }
-  pagina.drawText(`Total: $${total.toLocaleString("es-CO")}`, { x: 20, y: y - 10, size: 13, font: fuente });
+
   return pdf.save();
 }
 
@@ -313,30 +346,44 @@ async function subirYFirmar(bytes: Uint8Array, nombreArchivo: string): Promise<s
   return data.signedUrl;
 }
 
-export async function generarCatalogoPdf(): Promise<string> {
-  const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from("products")
-    .select("name, price, stock")
-    .eq("is_active", true)
-    .order("name");
+export async function generarCatalogoPdf(filtros?: FiltrosCatalogo): Promise<string> {
+  const productos = filtros
+    ? await buscarCatalogo(filtros)
+    : await (async () => {
+        const supabase = getSupabase();
+        const { data, error } = await supabase
+          .from("products")
+          .select("name, price, stock")
+          .eq("is_active", true)
+          .order("name");
+        if (error) {
+          throw new Error(`No se pudo consultar los productos para el catalogo: ${error.message}`);
+        }
+        return ((data ?? []) as Array<{ name: string; price: number; stock: number }>).map((p) => ({
+          productId: "", variantId: null, nombre: p.name, talla: null, color: null,
+          precio: p.price, stock: p.stock, imageId: null, fotoUrl: null,
+        }));
+      })();
 
-  if (error) {
-    throw new Error(`No se pudo consultar los productos para el catalogo: ${error.message}`);
-  }
+  const filas: FilaPdf[] = productos.map((p) => ({
+    fotoUrl: p.fotoUrl,
+    nombre: p.nombre,
+    detalle: [p.talla ? `talla ${p.talla}` : null, p.color ? `color ${p.color}` : null].filter(Boolean).join(", ") || "—",
+    precio: p.precio,
+    nota: `stock: ${p.stock}`,
+  }));
 
-  const lineas = ((data ?? []) as Array<{ name: string; price: number; stock: number }>).map(
-    (p) => `${p.name} — $${p.price.toLocaleString("es-CO")} (stock: ${p.stock})`,
-  );
-  const bytes = await pdfDesdeLineas("Catalogo MeryLay Boutique", lineas, 0);
+  const bytes = await generarPdfConFotos("Catalogo MeryLay Boutique", filas);
   return subirYFirmar(bytes, "catalogo.pdf");
 }
 
 export async function generarCotizacionPdf(items: ItemCarrito[]): Promise<string> {
-  const lineas = items.map(
-    (item) => `${item.nameSnapshot} x${item.qty} — $${(item.unitPrice * item.qty).toLocaleString("es-CO")}`,
-  );
-  const total = items.reduce((suma, item) => suma + item.unitPrice * item.qty, 0);
-  const bytes = await pdfDesdeLineas("Cotizacion MeryLay Boutique", lineas, total);
+  const filas: FilaPdf[] = items.map((item) => ({
+    fotoUrl: null,
+    nombre: item.nameSnapshot,
+    detalle: `x${item.qty}`,
+    precio: item.unitPrice * item.qty,
+  }));
+  const bytes = await generarPdfConFotos("Cotizacion MeryLay Boutique", filas);
   return subirYFirmar(bytes, "cotizacion.pdf");
 }
