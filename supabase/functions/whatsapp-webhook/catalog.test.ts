@@ -111,7 +111,7 @@ describe("obtenerProductoParaCarrito", () => {
     expect(eqVariante1).toHaveBeenCalledWith("id", "v2");
     expect(eqVariante2).toHaveBeenCalledWith("product_id", "p2");
     expect(resultado).toEqual({
-      productId: "p2", variantId: "v2", nombre: "Bata Dorada (Talla M / Rosa)", precio: 130000, stock: 4, imageId: "img-gen",
+      productId: "p2", variantId: "v2", nombre: "Bata Dorada (Talla M / Rosa)", precio: 130000, stock: 4, imageId: null,
     });
   });
 
@@ -140,7 +140,7 @@ describe("obtenerProductoParaCarrito", () => {
 
     const { obtenerProductoParaCarrito } = await import("./catalog.ts");
     expect(await obtenerProductoParaCarrito("p2", null)).toEqual({
-      productId: "p2", variantId: null, nombre: "Bata Dorada", precio: 120000, stock: 7, imageId: "img-gen",
+      productId: "p2", variantId: null, nombre: "Bata Dorada", precio: 120000, stock: 7, imageId: null,
     });
   });
 

@@ -242,7 +242,7 @@ describe("ejecutarAccionCliente via procesarMensajeEntrante", () => {
       response_message: "Agregando...",
     });
     clienteMocks.obtenerProductoParaCarrito.mockResolvedValue({
-      productId: PRODUCTO_ID, variantId: VARIANTE_ID, nombre: "Pijama Rosa (Talla M)", precio: 89900, stock: 5, imageId: "img-1",
+      productId: PRODUCTO_ID, variantId: VARIANTE_ID, nombre: "Pijama Rosa (Talla M)", precio: 89900, stock: 5, imageId: null,
     });
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
@@ -251,7 +251,7 @@ describe("ejecutarAccionCliente via procesarMensajeEntrante", () => {
     expect(clienteMocks.obtenerProductoParaCarrito).toHaveBeenCalledWith(PRODUCTO_ID, VARIANTE_ID);
     expect(mocks.enviarTexto).toHaveBeenCalledWith("573009998888", expect.stringContaining("179.800"));
     expect(mocks.guardarSesion).toHaveBeenCalledWith("sesion-1", expect.objectContaining({
-      cart: [{ productId: PRODUCTO_ID, variantId: VARIANTE_ID, imageId: "img-1", qty: 2, unitPrice: 89900, nameSnapshot: "Pijama Rosa (Talla M)" }],
+      cart: [{ productId: PRODUCTO_ID, variantId: VARIANTE_ID, imageId: null, qty: 2, unitPrice: 89900, nameSnapshot: "Pijama Rosa (Talla M)" }],
     }));
   });
 

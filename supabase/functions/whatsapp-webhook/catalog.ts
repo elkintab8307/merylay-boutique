@@ -157,7 +157,12 @@ export async function obtenerProductoParaCarrito(
       nombre: p.name,
       precio: p.price,
       stock: p.stock,
-      imageId: elegirImagen(p.product_images, null)?.id ?? null,
+      // imageId siempre null: este bot de WhatsApp no deja al cliente elegir
+      // un estampado/foto especifico (ver migraciones 046/048). Un image_id
+      // no nulo en order_items hace que el trigger de confirmacion de Wompi
+      // solo marque esa foto como vendida y se salte el descuento normal de
+      // stock del producto/variante.
+      imageId: null,
     };
   }
 
@@ -178,7 +183,8 @@ export async function obtenerProductoParaCarrito(
     nombre: `${p.name} (${v.name})`,
     precio: v.price_override ?? p.price,
     stock: v.stock,
-    imageId: elegirImagen(p.product_images, v.id)?.id ?? null,
+    // imageId siempre null: ver comentario arriba en la rama sin variante.
+    imageId: null,
   };
 }
 
