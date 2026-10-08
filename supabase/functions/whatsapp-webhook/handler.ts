@@ -6,7 +6,7 @@ import { obtenerOCrearSesion, guardarSesion, cargarHistorial } from "./sessions.
 import { decidirAccion } from "./agent.ts";
 import * as ownerActions from "./owner-actions.ts";
 import { ACCIONES_ESCRITURA } from "./owner-actions.ts";
-import { informeVentas, productosMasVendidos, informeClientes, historialCliente, informeGastos } from "./reports.ts";
+import { informeVentas, productosMasVendidos, informeClientes, historialCliente, informeGastos, informeCreditos, informeAbonos } from "./reports.ts";
 import * as catalog from "./catalog.ts";
 import { crearPedidoWompiDesdeCarrito } from "./orders.ts";
 import { transcribirAudio } from "./voice.ts";
@@ -129,31 +129,29 @@ async function ejecutarAccionLectura(accion: string, params: Record<string, unkn
       return { texto: await ownerActions.buscarCliente(params.consulta as string), fotos: [], documentos: [] };
     case "consultar_pedido":
       return { texto: await ownerActions.consultarPedido(params.numeroOId as string), fotos: [], documentos: [] };
-    case "buscar_inventario": {
+    case "consultar_productos": {
       const filtros = {
         texto: params.texto as string | undefined,
         talla: params.talla as string | undefined,
         color: params.color as string | undefined,
+        agregadoDesdeDias: params.agregadoDesdeDias as number | undefined,
       };
-      // buscarCatalogo exige al menos un filtro y lanza si no lo recibe; el
-      // modelo a veces manda esta accion sin ninguno (ej. confundio "informe
-      // de ventas" con esta busqueda de productos). Preguntar en vez de
-      // dejar que la excepcion caiga al mensaje generico de error.
-      if (!filtros.texto && !filtros.talla && !filtros.color) {
-        return { texto: "¿Qué producto o categoría quieres que busque? Dime el nombre, la talla o el color.", fotos: [], documentos: [] };
+      if (!filtros.texto && !filtros.talla && !filtros.color && !filtros.agregadoDesdeDias) {
+        return { texto: "¿Qué producto o categoría quieres que busque? Dime el nombre, la talla, el color, o desde cuándo se agregó.", fotos: [], documentos: [] };
       }
-      return ownerActions.buscarInventario(filtros, Boolean(params.conFotos));
+      const formatosValidos = ["conteo", "lista", "pdf_fotos", "pdf_tabla"];
+      const formato = formatosValidos.includes(params.formato as string)
+        ? (params.formato as "conteo" | "lista" | "pdf_fotos" | "pdf_tabla")
+        : "conteo";
+      return ownerActions.consultarProductos(filtros, formato, Boolean(params.conFotos));
     }
-    case "generar_informe_pdf": {
-      const filtros = {
-        texto: params.texto as string | undefined,
-        talla: params.talla as string | undefined,
-        color: params.color as string | undefined,
-      };
-      if (!filtros.texto && !filtros.talla && !filtros.color) {
-        return { texto: "¿Sobre qué producto o categoría quieres el informe? Dime un nombre, talla o color para buscar.", fotos: [], documentos: [] };
-      }
-      return ownerActions.generarInformePdf(filtros);
+    case "informe_creditos": {
+      const dias = diasValidos(params.dias, 30);
+      return informeCreditos(dias, Boolean(params.conPdf));
+    }
+    case "informe_abonos": {
+      const dias = diasValidos(params.dias, 1);
+      return informeAbonos(dias, Boolean(params.conPdf));
     }
     default:
       return { texto: "No reconozco esa consulta todavia.", fotos: [], documentos: [] };
