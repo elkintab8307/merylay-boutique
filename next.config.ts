@@ -35,8 +35,13 @@ const nextConfig: NextConfig = {
   // binario ("input directory .../bin does not exist" en runtime, visto en
   // el smoke test de Vercel del 2026-10-08). Se fuerza su inclusion
   // explicita -- ver https://github.com/Sparticuz/chromium#bundler-configuration.
+  // Solo el patron del symlink -- el glob extra hacia adentro de
+  // node_modules/.pnpm (probado junto con @sparticuz/chromium@148.0.0)
+  // hizo que Vercel rechazara el build de @sparticuz/chromium@131.0.1 con
+  // "produces files in symlinked directories" (ver PR #60). El patron del
+  // symlink solo ya demostro ser suficiente (funciono con la 148.0.0).
   outputFileTracingIncludes: {
-    "/api/pdf/render": ["./node_modules/@sparticuz/chromium/bin/**", "./node_modules/.pnpm/@sparticuz+chromium@*/node_modules/@sparticuz/chromium/bin/**"],
+    "/api/pdf/render": ["./node_modules/@sparticuz/chromium/bin/**"],
   },
 };
 
