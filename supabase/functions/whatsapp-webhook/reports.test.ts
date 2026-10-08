@@ -18,10 +18,28 @@ vi.mock("pdf-lib", () => ({
         drawText: vi.fn((texto: string) => {
           pdfLibCapturado.textos.push(texto);
         }),
+        drawRectangle: vi.fn(),
+        drawImage: vi.fn(),
       })),
       embedFont: vi.fn(async () => ({})),
+      embedPng: vi.fn(async () => ({})),
+      registerFontkit: vi.fn(),
       save: vi.fn(async () => new Uint8Array([1, 2, 3])),
     })),
+  },
+}));
+
+// pdf-marca.ts hace su propia descarga por red (fuentes/logo) -- se mockea
+// por completo para que los tests de este archivo no dependan de internet
+// ni se demoren por eso. Su logica real (descarga, cache, fallback) ya
+// esta cubierta en pdf-marca.test.ts.
+vi.mock("./pdf-marca.ts", () => ({
+  cargarFuentesMarca: vi.fn(async () => ({ texto: {}, textoNegrita: {}, titulo: {} })),
+  cargarLogoMarca: vi.fn(async () => null),
+  dibujarEncabezado: vi.fn(() => 700),
+  dibujarPiePagina: vi.fn(),
+  COLORES_MARCA: {
+    rosaFuerte: {}, dorado: {}, rosaClaro: {}, ciruela: {}, crema: {}, blanco: {},
   },
 }));
 
