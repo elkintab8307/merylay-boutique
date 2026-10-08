@@ -36,6 +36,15 @@ export async function enviarDocumentoPorLink(to: string, link: string, filename:
   await enviarMensaje({ to, type: "document", document: { link, filename } });
 }
 
+// Marca el mensaje entrante como leido y activa el indicador de "escribiendo..."
+// (los 3 puntos) por hasta 25 segundos o hasta que se envie un mensaje real --
+// justo la ventana que tarda la llamada a OpenAI/la base de datos antes de
+// responder. Mismo endpoint que el resto de mensajes salientes, pero sin "to":
+// la Graph API identifica el chat por message_id.
+export async function marcarLeidoYEscribiendo(messageId: string): Promise<void> {
+  await enviarMensaje({ status: "read", message_id: messageId, typing_indicator: { type: "text" } });
+}
+
 export async function obtenerUrlMedia(mediaId: string): Promise<string> {
   const { token } = credenciales();
   const respuesta = await fetch(`https://graph.facebook.com/v21.0/${mediaId}`, {

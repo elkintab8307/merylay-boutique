@@ -108,6 +108,39 @@ describe("descargarMedia", () => {
   });
 });
 
+describe("marcarLeidoYEscribiendo", () => {
+  beforeEach(() => {
+    vi.stubGlobal("Deno", {
+      env: { get: vi.fn((key: string) => ({
+        META_ACCESS_TOKEN: "token-de-prueba",
+        META_PHONE_NUMBER_ID: "123456",
+      } as Record<string, string>)[key]) },
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 200 })));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("marca el mensaje como leido y activa el indicador de escribiendo", async () => {
+    const { marcarLeidoYEscribiendo } = await import("./meta.ts");
+
+    await marcarLeidoYEscribiendo("wamid.abc123");
+
+    const [, opciones] = (fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls[0] as [string, RequestInit];
+    const cuerpo = JSON.parse(opciones.body as string);
+    expect(cuerpo).toMatchObject({
+      status: "read",
+      message_id: "wamid.abc123",
+      typing_indicator: { type: "text" },
+    });
+  });
+
+  it("lanza un error si la Graph API responde con error", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{\"error\":\"token invalido\"}", { status: 401 })));
+    const { marcarLeidoYEscribiendo } = await import("./meta.ts");
+    await expect(marcarLeidoYEscribiendo("wamid.abc123")).rejects.toThrow(/401/);
+  });
+});
+
 describe("enviarBotonProducto", () => {
   beforeEach(() => {
     vi.stubGlobal("Deno", {

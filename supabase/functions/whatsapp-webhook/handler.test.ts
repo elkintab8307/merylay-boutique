@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   enviarTexto: vi.fn(),
   enviarImagenPorLink: vi.fn(),
   enviarBotonProducto: vi.fn(),
+  marcarLeidoYEscribiendo: vi.fn(),
   consultarStockBajo: vi.fn(),
   actualizarPrecioProducto: vi.fn(),
   buscarInventario: vi.fn(),
@@ -49,6 +50,7 @@ vi.mock("../_shared/meta.ts", () => ({
   enviarImagenPorLink: mocks.enviarImagenPorLink,
   enviarBotonProducto: mocks.enviarBotonProducto,
   enviarDocumentoPorLink: clienteMocks.enviarDocumentoPorLink,
+  marcarLeidoYEscribiendo: mocks.marcarLeidoYEscribiendo,
 }));
 vi.mock("./owner-actions.ts", () => ({
   consultarStockBajo: mocks.consultarStockBajo,
@@ -722,5 +724,52 @@ describe("boton 'Agregar al carrito'", () => {
     await expect(procesarMensajeEntrante({})).resolves.not.toThrow();
     expect(mocks.enviarTexto).toHaveBeenCalledWith("573001234567", expect.any(String));
     expect(clienteMocks.obtenerProductoParaCarrito).not.toHaveBeenCalled();
+  });
+});
+
+describe("indicador de escribiendo", () => {
+  it("activa el indicador con el messageId de un mensaje de texto", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.TYPING1", from: "573001234567", texto: "hola" });
+    mocks.decidirAccion.mockResolvedValue({ action: "chat", params: {}, response_message: "Hola" });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.marcarLeidoYEscribiendo).toHaveBeenCalledWith("wamid.TYPING1");
+  });
+
+  it("activa el indicador con el messageId de una nota de voz, antes de transcribirla", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "audio", messageId: "wamid.TYPING2", from: "573001234567", mediaId: "media-1" });
+    mocks.transcribirAudio.mockResolvedValue("hola");
+    mocks.decidirAccion.mockResolvedValue({ action: "chat", params: {}, response_message: "Hola" });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.marcarLeidoYEscribiendo).toHaveBeenCalledWith("wamid.TYPING2");
+    const ordenEscribiendo = mocks.marcarLeidoYEscribiendo.mock.invocationCallOrder[0];
+    const ordenTranscripcion = mocks.transcribirAudio.mock.invocationCallOrder[0];
+    expect(ordenEscribiendo).toBeLessThan(ordenTranscripcion);
+  });
+
+  it("activa el indicador con el messageId de un boton", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "boton", messageId: "wamid.TYPING3", from: "573001234567", botonId: `add:${PRODUCTO_ID}:-` });
+    clienteMocks.obtenerProductoParaCarrito.mockResolvedValue({ productId: PRODUCTO_ID, variantId: null, nombre: "Pijama Rosa", precio: 89900, stock: 5, imageId: null });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.marcarLeidoYEscribiendo).toHaveBeenCalledWith("wamid.TYPING3");
+  });
+
+  it("si falla, no bloquea la respuesta real", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.TYPING4", from: "573001234567", texto: "hola" });
+    mocks.marcarLeidoYEscribiendo.mockRejectedValue(new Error("Graph API caida"));
+    mocks.decidirAccion.mockResolvedValue({ action: "chat", params: {}, response_message: "Hola" });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await expect(procesarMensajeEntrante({})).resolves.not.toThrow();
+
+    expect(mocks.enviarTexto).toHaveBeenCalledWith("573001234567", "Hola");
   });
 });
