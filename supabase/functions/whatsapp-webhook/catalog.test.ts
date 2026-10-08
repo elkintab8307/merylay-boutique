@@ -1,33 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import { rgb, StandardFonts } from "pdf-lib";
 
 vi.mock("../_shared/db.ts", () => ({ getSupabase: vi.fn() }));
 
-// pdf-marca.ts descarga fuentes/logo por red -- se mockea por completo para
-// que los tests de PDF de este archivo (que SI usan pdf-lib real para el
-// resto del dibujo) no dependan de internet. Las fuentes que devuelve el
-// mock son fuentes ESTANDAR reales incrustadas en el pdf de la prueba (no
-// strings ni objetos falsos): pdf-lib real necesita un PDFFont real para
-// poder dibujar texto. Su logica de descarga/cache/fallback real ya esta
-// cubierta en pdf-marca.test.ts.
-vi.mock("./pdf-marca.ts", () => ({
-  cargarFuentesMarca: vi.fn(async (pdf: { embedFont: (f: string) => Promise<unknown> }) => {
-    const texto = await pdf.embedFont(StandardFonts.Helvetica);
-    const textoNegrita = await pdf.embedFont(StandardFonts.HelveticaBold);
-    return { texto, textoNegrita, titulo: textoNegrita };
-  }),
-  cargarLogoMarca: vi.fn(async () => null),
-  dibujarEncabezado: vi.fn((_pagina: unknown, opts: { altoPagina: number }) => opts.altoPagina - 70),
-  dibujarPiePagina: vi.fn(),
+// pdf-render.ts le pide a un endpoint de Vercel que renderice el PDF (ver
+// pdf-render.test.ts para la cobertura real de esa llamada HTTP) -- aqui
+// solo se mockea generarPdfTarjetas, el UNICO export que catalog.ts
+// realmente importa de ese modulo.
+vi.mock("./pdf-render.ts", () => ({
   generarPdfTarjetas: vi.fn(async () => new Uint8Array([1])),
-  COLORES_MARCA: {
-    rosaFuerte: rgb(0xe9 / 255, 0x6a / 255, 0x9e / 255),
-    dorado: rgb(0xd9 / 255, 0xa4 / 255, 0x41 / 255),
-    rosaClaro: rgb(0xf8 / 255, 0xd4 / 255, 0xdd / 255),
-    ciruela: rgb(0x6e / 255, 0x2a / 255, 0x44 / 255),
-    crema: rgb(0xff / 255, 0xf8 / 255, 0xf4 / 255),
-    blanco: rgb(1, 1, 1),
-  },
 }));
 
 function mockCatalogo(productos: unknown[]) {
@@ -358,6 +338,19 @@ describe("agruparPorProducto", () => {
     });
   });
 
+  it("agrupa por NOMBRE incluso si vienen con distinto productId (bug real: cada talla es un producto separado en el catalogo, no una variante)", async () => {
+    const { agruparPorProducto } = await import("./catalog.ts");
+    const resultado = agruparPorProducto([
+      { productId: "p1", variantId: null, nombre: "Camiseta algodón licrado manga doblada", talla: "S", color: null, precio: 40000, stock: 1, imageId: null, fotoUrl: "https://x/s.jpg", categoria: "Camisetas" },
+      { productId: "p2", variantId: null, nombre: "Camiseta algodón licrado manga doblada", talla: "XL", color: null, precio: 40000, stock: 1, imageId: null, fotoUrl: null, categoria: "Camisetas" },
+      { productId: "p3", variantId: null, nombre: "Camiseta algodón licrado manga doblada", talla: "M", color: null, precio: 40000, stock: 1, imageId: null, fotoUrl: null, categoria: "Camisetas" },
+    ]);
+
+    expect(resultado).toHaveLength(1);
+    expect(resultado[0].tallas).toEqual(["S", "XL", "M"]);
+    expect(resultado[0].stockTotal).toBe(3);
+  });
+
   it("deja productos distintos en filas separadas", async () => {
     const { agruparPorProducto } = await import("./catalog.ts");
     const resultado = agruparPorProducto([
@@ -580,11 +573,11 @@ describe("generarCotizacionPdf", () => {
   });
 
   it("cuando product_images tiene una foto para el item, la resuelve y se la pasa a generarPdfTarjetas en la tarjeta", async () => {
-    // La descarga/incrustacion real de la foto vive en pdf-marca.ts
+    // La descarga/incrustacion real de la foto vive en pdf-render.ts
     // (mockeado a nivel de archivo), asi que aqui solo se verifica que
     // obtenerFotoPrincipal resuelve la URL correcta y que llega intacta
     // hasta la tarjeta -- no que fetch() se haya llamado.
-    const { generarPdfTarjetas } = await import("./pdf-marca.ts");
+    const { generarPdfTarjetas } = await import("./pdf-render.ts");
     const upload = vi.fn(async () => ({ error: null }));
     const createSignedUrl = vi.fn(async () => ({ data: { signedUrl: "https://x/firmado-foto.pdf" }, error: null }));
     const { select: selectImagenes } = mockProductImages({
