@@ -166,49 +166,6 @@ describe("buscarCliente", () => {
   });
 });
 
-describe("consultarVentas", () => {
-  function mockVentas(pedidos: unknown[] | null, ventasPos: unknown[] | null, errorPos: unknown = null) {
-    const eqPedidos = vi.fn(async () => ({ data: pedidos, error: null }));
-    const gtePedidos = vi.fn(() => ({ in: eqPedidos }));
-    const gtePos = vi.fn(async () => ({ data: ventasPos, error: errorPos }));
-    const supabase = {
-      from: vi.fn((tabla: string) => ({
-        select: vi.fn(() => ({ gte: tabla === "pos_sales" ? gtePos : gtePedidos })),
-      })),
-    };
-    return { supabase, eqPedidos, gtePos };
-  }
-
-  it("suma pedidos pagados de tienda/WhatsApp y ventas POS, con el desglose", async () => {
-    const { supabase, eqPedidos, gtePos } = mockVentas(
-      [{ total: 100000 }, { total: 50000 }],
-      [{ total: 30000 }, { total: 20000 }, { total: 10000 }],
-    );
-    const { getSupabase } = await import("../_shared/db.ts");
-    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
-
-    const { consultarVentas } = await import("./owner-actions.ts");
-    const resultado = await consultarVentas(7);
-
-    // Mismo criterio que los informes (migracion 018): un pedido enviado o
-    // entregado tambien es una venta pagada.
-    expect(eqPedidos).toHaveBeenCalledWith("status", ["pagado", "enviado", "entregado"]);
-    expect(gtePos).toHaveBeenCalledWith("created_at", expect.any(String));
-    expect(resultado).toBe(
-      "Ventas de los ultimos 7 dias: $210.000 (tienda/WhatsApp: $150.000 en 2 pedidos pagados; POS: $60.000 en 3 ventas).",
-    );
-  });
-
-  it("lanza un error si falla la consulta de ventas POS, en vez de reportar un total incompleto", async () => {
-    const { supabase } = mockVentas([{ total: 100000 }], null, { message: "fallo POS" });
-    const { getSupabase } = await import("../_shared/db.ts");
-    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
-
-    const { consultarVentas } = await import("./owner-actions.ts");
-    await expect(consultarVentas(1)).rejects.toThrow(/fallo POS/);
-  });
-});
-
 describe("buscarInventario", () => {
   afterEach(() => {
     vi.doUnmock("./catalog.ts");

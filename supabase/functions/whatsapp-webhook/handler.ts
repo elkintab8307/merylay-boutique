@@ -6,6 +6,7 @@ import { obtenerOCrearSesion, guardarSesion, cargarHistorial } from "./sessions.
 import { decidirAccion } from "./agent.ts";
 import * as ownerActions from "./owner-actions.ts";
 import { ACCIONES_ESCRITURA } from "./owner-actions.ts";
+import { informeVentas, productosMasVendidos, informeClientes, historialCliente, informeGastos } from "./reports.ts";
 import * as catalog from "./catalog.ts";
 import { crearPedidoWompiDesdeCarrito } from "./orders.ts";
 import { transcribirAudio } from "./voice.ts";
@@ -81,10 +82,47 @@ async function ejecutarAccionEscritura(accion: string, params: Record<string, un
   }
 }
 
+// El modelo controla `dias`/`limite` por params, y puede mandar valores que
+// corrompen el reporte en vez de simplemente estar ausentes: un `limite` sin
+// tope produce un texto de mas de 4096 caracteres (rechazado por la Graph
+// API de WhatsApp), un `limite` <= 0 corrompe el .slice() del reporte, y un
+// `dias` no numerico hace que new Date(NaN).toISOString() lance un
+// RangeError crudo en vez de un mensaje amable. Estos helpers normalizan
+// ambos valores ANTES de pasarlos a reports.ts.
+function diasValidos(valor: unknown, porDefecto: number): number {
+  const n = Math.floor(Number(valor));
+  return Number.isFinite(n) && n >= 1 ? n : porDefecto;
+}
+
+function limiteValido(valor: unknown, porDefecto: number, tope: number): number {
+  const n = Math.floor(Number(valor));
+  const base = Number.isFinite(n) && n >= 1 ? n : porDefecto;
+  return Math.min(base, tope);
+}
+
 async function ejecutarAccionLectura(accion: string, params: Record<string, unknown>): Promise<ownerActions.RespuestaLectura> {
   switch (accion) {
-    case "consultar_ventas":
-      return { texto: await ownerActions.consultarVentas((params.dias as number) ?? 1), fotos: [], documentos: [] };
+    case "informe_ventas": {
+      const dias = diasValidos(params.dias, 1);
+      const resultado = await informeVentas(dias, Boolean(params.conPdf));
+      return resultado;
+    }
+    case "productos_mas_vendidos": {
+      const dias = diasValidos(params.dias, 30);
+      const limite = limiteValido(params.limite, 10, 10);
+      return productosMasVendidos(dias, limite, Boolean(params.conPdf));
+    }
+    case "informe_clientes": {
+      const dias = diasValidos(params.dias, 30);
+      const limite = limiteValido(params.limite, 10, 10);
+      return informeClientes(dias, limite, Boolean(params.conPdf));
+    }
+    case "historial_cliente":
+      return historialCliente(params.nombreOTelefono as string);
+    case "informe_gastos": {
+      const dias = diasValidos(params.dias, 30);
+      return informeGastos(dias, Boolean(params.conPdf));
+    }
     case "consultar_stock_bajo":
       return { texto: await ownerActions.consultarStockBajo((params.umbral as number) ?? 5), fotos: [], documentos: [] };
     case "buscar_cliente":

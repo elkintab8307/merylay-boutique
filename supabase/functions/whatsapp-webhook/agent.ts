@@ -16,7 +16,11 @@ const ACCIONES_CLIENTE = `
 
 const ACCIONES_DUENO = `
 Lectura (se ejecutan de inmediato):
-- consultar_ventas: params {"dias": entero >= 1} — ventas pagadas de los ultimos N dias (tienda/WhatsApp + POS). "hoy" = 1.
+- informe_ventas: params {"dias": entero >= 1, "conPdf": boolean} — ventas del periodo (tienda/WhatsApp + POS), desglosadas por canal y metodo de pago. "hoy" = 1 dia, "esta semana" = 7, "este mes" = 30. "conPdf" es true solo si el dueño pide el detalle completo/descargable ("mandamelo en pdf", "el detalle completo"); si solo pregunta el total/resumen, usa conPdf false.
+- productos_mas_vendidos: params {"dias": entero >= 1, "limite": entero >= 1, "conPdf": boolean} — ranking de productos por unidades vendidas e ingresos en el periodo. "limite" por defecto 10 si el dueño no especifica cuantos quiere ver.
+- informe_clientes: params {"dias": entero >= 1, "limite": entero >= 1, "conPdf": boolean} — ranking de mejores clientes por total gastado en el periodo. "limite" por defecto 10.
+- historial_cliente: params {"nombreOTelefono": string} — historial completo de compras de UN cliente especifico (nombre o telefono); usala cuando el dueño pregunte "que le ha comprado X" o "cuanto ha gastado X", a diferencia de buscar_cliente que solo da datos de contacto.
+- informe_gastos: params {"dias": entero >= 1, "conPdf": boolean} — gastos del negocio en el periodo (arriendo, servicios, nomina, insumos, etc.), desglosados por categoria. Mismo criterio de "dias" y "conPdf" que informe_ventas.
 - consultar_stock_bajo: params {"umbral": entero >= 0} — productos activos con stock menor al umbral (por defecto 5).
 - buscar_cliente: params {"consulta": string} — nombre o telefono del cliente.
 - consultar_pedido: params {"numeroOId": string} — numero de pedido (ej. "ML-20261006-abc123") o su id uuid.

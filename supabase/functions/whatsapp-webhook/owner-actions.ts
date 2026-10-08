@@ -1,7 +1,7 @@
 import { getSupabase } from "../_shared/db.ts";
 import { buscarCatalogo, generarPdfConFotos, subirYFirmar, TOPE_BUSCAR_CATALOGO, type FiltrosCatalogo, type FilaPdf } from "./catalog.ts";
 
-const formatoMoneda = (valor: number) => `$${valor.toLocaleString("es-CO")}`;
+export const formatoMoneda = (valor: number) => `$${valor.toLocaleString("es-CO")}`;
 
 // Los valores interpolados en un filtro .or() de PostgREST vienen, en
 // ultima instancia, de un mensaje de WhatsApp interpretado por un LLM
@@ -13,7 +13,7 @@ const formatoMoneda = (valor: number) => `$${valor.toLocaleString("es-CO")}`;
 // comas que contenga. Dentro del literal se escapa primero la barra
 // invertida y DESPUES las comillas: al reves, un valor con \ y " a la
 // vez desincronizaria el escape.
-function escaparValorFiltro(valor: string): string {
+export function escaparValorFiltro(valor: string): string {
   return `"${valor.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
@@ -33,32 +33,7 @@ const noEncontreProducto = (idOSku: string) => `No encontré ningún producto co
 
 // Mismo criterio que los informes (migracion 018_informes.sql): un pedido
 // enviado o entregado ya fue pagado, tambien cuenta como venta.
-const ESTADOS_PEDIDO_VENDIDO = ["pagado", "enviado", "entregado"];
-
-// Suma las dos fuentes de ventas del negocio: pedidos de tienda/WhatsApp
-// (orders) y ventas presenciales (pos_sales, que no tienen estado: se
-// insertan ya completadas). Si alguna consulta falla se lanza en vez de
-// reportar un total incompleto como si fuera el real.
-export async function consultarVentas(dias: number): Promise<string> {
-  const supabase = getSupabase();
-  const desde = new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString();
-
-  const [pedidos, ventasPos] = await Promise.all([
-    supabase.from("orders").select("total").gte("created_at", desde).in("status", ESTADOS_PEDIDO_VENDIDO),
-    supabase.from("pos_sales").select("total").gte("created_at", desde),
-  ]);
-  if (pedidos.error) throw new Error(`No se pudieron consultar los pedidos: ${pedidos.error.message}`);
-  if (ventasPos.error) throw new Error(`No se pudieron consultar las ventas POS: ${ventasPos.error.message}`);
-
-  const filasPedidos = (pedidos.data ?? []) as { total: number }[];
-  const filasPos = (ventasPos.data ?? []) as { total: number }[];
-  const totalPedidos = filasPedidos.reduce((suma, o) => suma + Number(o.total), 0);
-  const totalPos = filasPos.reduce((suma, v) => suma + Number(v.total), 0);
-
-  return `Ventas de los ultimos ${dias} dias: ${formatoMoneda(totalPedidos + totalPos)} ` +
-    `(tienda/WhatsApp: ${formatoMoneda(totalPedidos)} en ${filasPedidos.length} pedidos pagados; ` +
-    `POS: ${formatoMoneda(totalPos)} en ${filasPos.length} ventas).`;
-}
+export const ESTADOS_PEDIDO_VENDIDO = ["pagado", "enviado", "entregado"];
 
 export async function consultarStockBajo(umbral: number): Promise<string> {
   const supabase = getSupabase();
