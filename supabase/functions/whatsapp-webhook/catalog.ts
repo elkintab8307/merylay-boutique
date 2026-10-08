@@ -94,10 +94,13 @@ export async function buscarCatalogo(filtros: FiltrosCatalogo): Promise<Producto
   // llamada -- a esta escala de catalogo (decenas de productos activos) el
   // costo es insignificante.
   const textoNormalizado = filtros.texto?.toLowerCase();
-  const filtrados = textoNormalizado
-    ? productos.filter((p) =>
-        p.name.toLowerCase().includes(textoNormalizado) ||
-        (p.categories?.name ?? "").toLowerCase().includes(textoNormalizado))
+  const candidatosTexto = textoNormalizado ? candidatosSingularPlural(textoNormalizado) : null;
+  const filtrados = candidatosTexto
+    ? productos.filter((p) => {
+        const nombre = p.name.toLowerCase();
+        const categoria = (p.categories?.name ?? "").toLowerCase();
+        return candidatosTexto.some((candidato) => nombre.includes(candidato) || categoria.includes(candidato));
+      })
     : productos;
 
   const expandido = filtrados.flatMap((producto): ProductoEncontrado[] => {
@@ -155,6 +158,23 @@ function elegirImagen(imagenes: ImagenProducto[] | null | undefined, variantId: 
 // para que una busqueda con esos caracteres los trate como literales.
 function escaparPatronLike(texto: string): string {
   return texto.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
+
+// Bug real observado: todos los nombres de producto/categoria del catalogo
+// estan en SINGULAR ("Camiseta algodón licrado"), pero el dueño pregunta en
+// PLURAL ("camisetas") y el modelo reenvia ese texto tal cual -- la
+// coincidencia por substring exacto entonces nunca encuentra nada (0 de 30
+// productos con "camiseta" contienen "camisetas" como substring literal).
+// Un texto en SINGULAR ya encuentra nombres en plural sin ningun cambio
+// (singular es prefijo de plural: "pijamas".includes("pijama") ya es true):
+// solo falta la direccion contraria. Por eso aqui solo se ACORTA el texto
+// (quitando un plural comun en español), nunca se alarga -- alargarlo
+// arriesgaria falsos positivos que no se observaron en el bug real.
+function candidatosSingularPlural(texto: string): string[] {
+  const candidatos = new Set([texto]);
+  if (texto.endsWith("es") && texto.length > 4) candidatos.add(texto.slice(0, -2));
+  if (texto.endsWith("s") && texto.length > 3) candidatos.add(texto.slice(0, -1));
+  return [...candidatos];
 }
 
 // Fuente de verdad para agregar al carrito: nunca se confia en el
