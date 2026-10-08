@@ -89,14 +89,13 @@ describe("POST /api/pdf/render", () => {
     expect(paginaMock.setContent).toHaveBeenCalledWith(expect.stringContaining("INFORME"), expect.anything());
   });
 
-  it("en Vercel, lanza puppeteer-core con @sparticuz/chromium usando el preset 'shell' recomendado por el paquete", async () => {
+  it("en Vercel, lanza puppeteer-core con @sparticuz/chromium usando headless:true (no 'shell': crashea en Vercel real, ver PR #60)", async () => {
     vi.stubEnv("PDF_RENDER_SECRET", "secreto-real");
     vi.stubEnv("VERCEL", "1");
     const paginaMock = { setContent: vi.fn(async () => {}), evaluate: vi.fn(async () => 1000), pdf: vi.fn(async () => new Uint8Array([1])) };
     const navegadorMock = { newPage: vi.fn(async () => paginaMock), close: vi.fn(async () => {}) };
     const launchMock = vi.fn(async () => navegadorMock);
-    const defaultArgsMock = vi.fn(() => ["--arg-por-defecto"]);
-    vi.doMock("puppeteer-core", () => ({ launch: launchMock, defaultArgs: defaultArgsMock }));
+    vi.doMock("puppeteer-core", () => ({ launch: launchMock, defaultArgs: vi.fn() }));
     const chromiumMock = { args: ["--chromium-arg"], executablePath: vi.fn(async () => "/tmp/chromium"), setGraphicsMode: true };
     vi.doMock("@sparticuz/chromium", () => ({ default: chromiumMock }));
     const { POST } = await import("./route");
@@ -105,13 +104,16 @@ describe("POST /api/pdf/render", () => {
 
     // Recomendado por el README de @sparticuz/chromium para serverless: sin
     // esto, Chromium intenta extraer e inicializar el stack de WebGL
-    // (swiftshader) en /tmp, lo que se sospecha causo el crash real visto
-    // en el smoke test de Vercel ("exit status: 128", Target closed).
+    // (swiftshader) en /tmp.
     expect(chromiumMock.setGraphicsMode).toBe(false);
 
-    expect(defaultArgsMock).toHaveBeenCalledWith(expect.objectContaining({ args: ["--chromium-arg"], headless: "shell" }));
+    // headless:"shell" (el preset que sugiere el README) crasheaba SIEMPRE
+    // en el smoke test real contra Vercel ("exit status: 128", Protocol
+    // error Target closed justo despues de "DevTools listening...") --
+    // probado con Node 22.x/24.x y memoria de sobra, descartando ambas
+    // causas. headless:true es la unica combinacion que genero un PDF real.
     expect(launchMock).toHaveBeenCalledWith(
-      expect.objectContaining({ args: ["--arg-por-defecto"], executablePath: "/tmp/chromium", headless: "shell" }),
+      expect.objectContaining({ args: ["--chromium-arg"], executablePath: "/tmp/chromium", headless: true }),
     );
   });
 

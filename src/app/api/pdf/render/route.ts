@@ -29,18 +29,19 @@ async function lanzarNavegador(): Promise<NavegadorMinimo> {
     const chromium = (await import("@sparticuz/chromium")).default;
     const puppeteer = await import("puppeteer-core");
     // Desactiva WebGL/swiftshader -- recomendado por el README de
-    // @sparticuz/chromium para serverless. Sin esto, el smoke test real
-    // contra Vercel crasheaba a mitad del render ("exit status: 128",
-    // Protocol error Target closed) incluso con memoria de sobra.
+    // @sparticuz/chromium para serverless.
     chromium.setGraphicsMode = false;
-    // "shell" (no `true`) y envolver los args con `defaultArgs` es el uso
-    // documentado por @sparticuz/chromium para Lambda/Vercel -- ver su
-    // README ("Usage"). `true` no esta probado contra este binario.
+    // El README de @sparticuz/chromium sugiere headless:"shell", pero en
+    // el smoke test real contra Vercel (ver PR #60) esa combinacion
+    // crasheaba SIEMPRE justo despues de "DevTools listening..." (Protocol
+    // error: Target closed, exit status 128) -- probado con Node 22.x/24.x
+    // y memoria de sobra, descartando ambas causas. headless:true (el
+    // modo headless "nuevo", default de Puppeteer) es la UNICA combinacion
+    // que genero un PDF real en las pruebas (tanto local como en Vercel).
     return (await puppeteer.launch({
-      args: puppeteer.defaultArgs({ args: chromium.args, headless: "shell" }),
+      args: chromium.args,
       executablePath: await chromium.executablePath(),
-      headless: "shell",
-      dumpio: true, // DIAGNOSTICO TEMPORAL: ver stderr real de Chrome en los logs de Vercel.
+      headless: true,
     })) as unknown as NavegadorMinimo;
   }
   // Desarrollo local: `puppeteer` (no `puppeteer-core`) instala su propio
