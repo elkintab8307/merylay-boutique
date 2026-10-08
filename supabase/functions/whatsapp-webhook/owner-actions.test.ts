@@ -169,7 +169,7 @@ describe("buscarCliente", () => {
 describe("consultarProductos", () => {
   afterEach(() => {
     vi.doUnmock("./catalog.ts");
-    vi.doUnmock("./pdf-marca.ts");
+    vi.doUnmock("./pdf-render.ts");
     vi.resetModules();
   });
 
@@ -246,7 +246,7 @@ describe("consultarProductos", () => {
       subirYFirmar: vi.fn(async () => "https://x/informe-firmado.pdf"),
       TOPE_BUSCAR_CATALOGO: 50,
     }));
-    vi.doMock("./pdf-marca.ts", () => ({ generarPdfTarjetas }));
+    vi.doMock("./pdf-render.ts", () => ({ generarPdfTarjetas }));
 
     const { consultarProductos } = await import("./owner-actions.ts");
     const resultado = await consultarProductos({ texto: "camiseta" }, "pdf_fotos", false);
@@ -274,7 +274,7 @@ describe("consultarProductos", () => {
       subirYFirmar: vi.fn(async () => "https://x/informe-firmado.pdf"),
       TOPE_BUSCAR_CATALOGO: 50,
     }));
-    vi.doMock("./pdf-marca.ts", () => ({ generarPdfTabla }));
+    vi.doMock("./pdf-render.ts", () => ({ generarPdfTabla }));
 
     const { consultarProductos } = await import("./owner-actions.ts");
     const resultado = await consultarProductos({ texto: "camiseta" }, "pdf_tabla", true);

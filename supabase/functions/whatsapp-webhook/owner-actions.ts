@@ -1,6 +1,6 @@
 import { getSupabase } from "../_shared/db.ts";
 import { buscarCatalogo, construirTarjetasProductos, subirYFirmar, TOPE_BUSCAR_CATALOGO, type FiltrosCatalogo } from "./catalog.ts";
-import { generarPdfTabla, generarPdfTarjetas } from "./pdf-marca.ts";
+import { generarPdfTabla, generarPdfTarjetas } from "./pdf-render.ts";
 
 export const formatoMoneda = (valor: number) => `$${valor.toLocaleString("es-CO")}`;
 
