@@ -618,3 +618,129 @@ describe("informeGastos", () => {
     expect(resultado.documentos).toEqual([{ link: "https://x/informe-firmado.pdf", filename: "informe-gastos-merylay.pdf" }]);
   });
 });
+
+describe("informeCreditos", () => {
+  it("desglosa total vendido a credito, cuantas ventas y cuantas con saldo pendiente", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      pos_sales: [{
+        data: [
+          { id: "venta-1", sale_number: "POS-1", customer_id: "cli-1", total: 200000, created_at: "2026-10-05T10:00:00Z" },
+          { id: "venta-2", sale_number: "POS-2", customer_id: "cli-2", total: 100000, created_at: "2026-10-06T10:00:00Z" },
+        ],
+        error: null,
+      }],
+      credit_installments: [{
+        data: [
+          { sale_id: "venta-1", amount: 100000, paid_amount: 50000, status: "parcial" },
+          { sale_id: "venta-2", amount: 100000, paid_amount: 100000, status: "pagada" },
+        ],
+        error: null,
+      }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { informeCreditos } = await import("./reports.ts");
+    const resultado = await informeCreditos(7, false);
+
+    expect(resultado.texto).toContain("$300.000 en 2 venta(s)");
+    expect(resultado.texto).toContain("1 con saldo pendiente");
+    expect(resultado.documentos).toHaveLength(0);
+  });
+
+  it("sin ventas a credito en el periodo, responde un mensaje claro", async () => {
+    const supabase = mockSupabaseDesdeTablas({ pos_sales: [{ data: [], error: null }] });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { informeCreditos } = await import("./reports.ts");
+    const resultado = await informeCreditos(7, false);
+
+    expect(resultado.texto).toContain("No hubo ventas a crédito");
+  });
+
+  it("con conPdf=true, el detalle incluye cliente (fusion de identidad), productos y saldo pendiente por venta", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      pos_sales: [{
+        data: [{ id: "venta-1", sale_number: "POS-1", customer_id: "cli-1", total: 200000, created_at: "2026-10-05T10:00:00Z" }],
+        error: null,
+      }],
+      credit_installments: [{
+        data: [{ sale_id: "venta-1", amount: 200000, paid_amount: 50000, status: "parcial" }],
+        error: null,
+      }],
+      pos_customers: [{ data: [{ id: "cli-1", profile_id: "profile-1", nombre: "Juan (POS)" }], error: null }],
+      profiles: [{ data: [{ id: "profile-1", full_name: "Juan Pérez", username: "juan" }], error: null }],
+      pos_sale_items: [{ data: [{ sale_id: "venta-1", product_id: "prod-1" }, { sale_id: "venta-1", product_id: "prod-2" }], error: null }],
+      products: [{ data: [{ id: "prod-1", name: "Pijama Rosa" }, { id: "prod-2", name: "Bata Dorada" }], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+    const { generarPdfTabla } = await import("./pdf-marca.ts");
+
+    const { informeCreditos } = await import("./reports.ts");
+    await informeCreditos(7, true);
+
+    expect(generarPdfTabla).toHaveBeenCalledWith(
+      expect.any(String),
+      ["Fecha", "Cliente", "Productos", "Total", "Saldo pendiente"],
+      [["5/10/2026", "Juan Pérez", "Pijama Rosa, Bata Dorada", "$200.000", "$150.000"]],
+    );
+  });
+
+  it("una venta a credito sin customer_id (mostrador) no revienta: muestra un nombre generico", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      pos_sales: [{
+        data: [{ id: "venta-1", sale_number: "POS-1", customer_id: null, total: 50000, created_at: "2026-10-05T10:00:00Z" }],
+        error: null,
+      }],
+      credit_installments: [{ data: [], error: null }],
+      pos_sale_items: [{ data: [], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+    const { generarPdfTabla } = await import("./pdf-marca.ts");
+
+    const { informeCreditos } = await import("./reports.ts");
+    await expect(informeCreditos(7, true)).resolves.not.toThrow();
+
+    expect(generarPdfTabla).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Array),
+      [["5/10/2026", "Cliente", "—", "$50.000", "$0"]],
+    );
+  });
+
+  it("la fecha del PDF usa hora de Bogota, no UTC, para una venta tarde en la noche", async () => {
+    // 2026-10-08T01:30:00Z son las 8:30pm del 7 de octubre en Bogota
+    // (UTC-5). Si la fila usara UTC en vez de America/Bogota, mostraria
+    // 8/10/2026 en lugar de 7/10/2026 -- mismo caso limite que ya se
+    // prueba en informeVentas/historialCliente, repetido aqui porque
+    // informeCreditos formatea la fecha con su propio codigo (no
+    // comparte esa linea con los demas informes).
+    const supabase = mockSupabaseDesdeTablas({
+      pos_sales: [{
+        data: [{ id: "venta-1", sale_number: "POS-1", customer_id: null, total: 50000, created_at: "2026-10-08T01:30:00Z" }],
+        error: null,
+      }],
+      credit_installments: [{ data: [], error: null }],
+      pos_sale_items: [{ data: [], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+    const { generarPdfTabla } = await import("./pdf-marca.ts");
+
+    const { informeCreditos } = await import("./reports.ts");
+    await informeCreditos(7, true);
+
+    // Se usa la ULTIMA llamada (no calls[0]): el mock de generarPdfTabla no
+    // se limpia entre describe blocks de este archivo (salvo un
+    // vi.clearAllMocks() puntual dentro de "informeVentas"), asi que para
+    // este punto del archivo el indice 0 ya no corresponde a esta prueba
+    // sino a una llamada de un informe anterior.
+    const llamadas = (generarPdfTabla as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const [, , filas] = llamadas[llamadas.length - 1] as [string, string[], string[][]];
+    expect(filas[0][0]).toBe("7/10/2026");
+    expect(filas[0][0]).not.toBe("8/10/2026");
+  });
+});

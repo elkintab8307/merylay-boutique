@@ -345,3 +345,107 @@ export async function informeGastos(dias: number, conPdf: boolean): Promise<Resp
 
   return { texto, fotos: [], documentos: [{ link, filename: "informe-gastos-merylay.pdf" }] };
 }
+
+// Resuelve el nombre a mostrar de uno o mas pos_customers.id: el nombre
+// real del perfil si esta vinculado (profile_id), si no el nombre
+// registrado en POS. Mismo criterio de fusion de identidad que
+// informeClientes/historialCliente, pero como resolucion de nombre
+// simple (no suma montos) -- lo reutilizan informeCreditos e
+// informeAbonos para mostrar el cliente de cada venta/abono individual.
+async function nombresClientesPos(customerIds: string[]): Promise<Map<string, string>> {
+  if (customerIds.length === 0) return new Map();
+  const supabase = getSupabase();
+  const { data: posCustomers, error } = await supabase.from("pos_customers").select("id, profile_id, nombre").in("id", customerIds);
+  if (error) throw new Error(`No se pudieron consultar los clientes de POS: ${error.message}`);
+  const filas = (posCustomers ?? []) as { id: string; profile_id: string | null; nombre: string }[];
+
+  const idsConPerfil = filas.filter((f) => f.profile_id).map((f) => f.profile_id as string);
+  const { data: perfiles, error: errorPerfiles } = idsConPerfil.length > 0
+    ? await supabase.from("profiles").select("id, full_name, username").in("id", idsConPerfil)
+    : { data: [] as { id: string; full_name: string | null; username: string }[], error: null };
+  if (errorPerfiles) throw new Error(`No se pudieron consultar los nombres de clientes: ${errorPerfiles.message}`);
+  const nombrePorProfile = new Map(((perfiles ?? []) as { id: string; full_name: string | null; username: string }[]).map((p) => [p.id, p.full_name ?? p.username]));
+
+  return new Map(filas.map((f) => [f.id, (f.profile_id && nombrePorProfile.get(f.profile_id)) || f.nombre]));
+}
+
+export async function informeCreditos(dias: number, conPdf: boolean): Promise<RespuestaLectura> {
+  const supabase = getSupabase();
+  const desde = new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data, error } = await supabase
+    .from("pos_sales")
+    .select("id, sale_number, customer_id, total, created_at")
+    .eq("payment_method", "credito")
+    .gte("created_at", desde);
+  if (error) throw new Error(`No se pudieron consultar las ventas a crédito: ${error.message}`);
+
+  const ventas = (data ?? []) as { id: string; sale_number: string; customer_id: string | null; total: number; created_at: string }[];
+  if (ventas.length === 0) {
+    return { texto: `No hubo ventas a crédito en los últimos ${dias} día(s).`, fotos: [], documentos: [] };
+  }
+
+  const idsVenta = ventas.map((v) => v.id);
+  const { data: cuotas, error: errorCuotas } = await supabase
+    .from("credit_installments")
+    .select("sale_id, amount, paid_amount, status")
+    .in("sale_id", idsVenta);
+  if (errorCuotas) throw new Error(`No se pudieron consultar las cuotas de crédito: ${errorCuotas.message}`);
+  const filasCuotas = (cuotas ?? []) as { sale_id: string; amount: number; paid_amount: number; status: string }[];
+
+  const saldoPorVenta = new Map<string, number>();
+  const pendientePorVenta = new Map<string, boolean>();
+  for (const c of filasCuotas) {
+    saldoPorVenta.set(c.sale_id, (saldoPorVenta.get(c.sale_id) ?? 0) + Number(c.amount) - Number(c.paid_amount));
+    if (c.status !== "pagada") pendientePorVenta.set(c.sale_id, true);
+  }
+
+  const totalVendido = ventas.reduce((suma, v) => suma + Number(v.total), 0);
+  const conSaldoPendiente = ventas.filter((v) => pendientePorVenta.get(v.id)).length;
+
+  const texto = `Ventas a crédito de los últimos ${dias} día(s): ${formatoMoneda(totalVendido)} en ${ventas.length} venta(s), ${conSaldoPendiente} con saldo pendiente.`;
+
+  if (!conPdf) {
+    return { texto, fotos: [], documentos: [] };
+  }
+
+  const idsCliente = [...new Set(ventas.map((v) => v.customer_id).filter((id): id is string => Boolean(id)))];
+  const nombrePorCliente = await nombresClientesPos(idsCliente);
+
+  const { data: items, error: errorItems } = await supabase
+    .from("pos_sale_items")
+    .select("sale_id, product_id")
+    .in("sale_id", idsVenta);
+  if (errorItems) throw new Error(`No se pudieron consultar los productos de las ventas a crédito: ${errorItems.message}`);
+  const filasItems = (items ?? []) as { sale_id: string; product_id: string | null }[];
+
+  const idsProductos = [...new Set(filasItems.map((i) => i.product_id).filter((id): id is string => Boolean(id)))];
+  const { data: productosData, error: errorProductos } = idsProductos.length > 0
+    ? await supabase.from("products").select("id, name").in("id", idsProductos)
+    : { data: [] as { id: string; name: string }[], error: null };
+  if (errorProductos) throw new Error(`No se pudieron consultar los nombres de productos: ${errorProductos.message}`);
+  const nombrePorProducto = new Map(((productosData ?? []) as { id: string; name: string }[]).map((p) => [p.id, p.name]));
+
+  const productosPorVenta = new Map<string, string[]>();
+  for (const it of filasItems) {
+    const lista = productosPorVenta.get(it.sale_id) ?? [];
+    lista.push(it.product_id ? (nombrePorProducto.get(it.product_id) ?? "(producto eliminado)") : "(producto eliminado)");
+    productosPorVenta.set(it.sale_id, lista);
+  }
+
+  const filasTabla = [...ventas]
+    .sort((a, b) => (a.created_at > b.created_at ? -1 : 1))
+    .slice(0, TOPE_FILAS_PDF_DETALLE)
+    .map((v) => [
+      new Date(v.created_at).toLocaleDateString("es-CO", { timeZone: "America/Bogota" }),
+      v.customer_id ? (nombrePorCliente.get(v.customer_id) ?? "Cliente") : "Cliente",
+      (productosPorVenta.get(v.id) ?? []).join(", ") || "—",
+      formatoMoneda(Number(v.total)),
+      formatoMoneda(Math.max(0, saldoPorVenta.get(v.id) ?? 0)),
+    ]);
+
+  const bytes = await generarPdfTabla(`Ventas a crédito — últimos ${dias} día(s)`, ["Fecha", "Cliente", "Productos", "Total", "Saldo pendiente"], filasTabla);
+  const link = await subirYFirmar(bytes, "informe-creditos.pdf");
+
+  return { texto, fotos: [], documentos: [{ link, filename: "informe-creditos-merylay.pdf" }] };
+}
