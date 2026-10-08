@@ -1,50 +1,9 @@
-import { PDFDocument } from "pdf-lib";
 import { getSupabase } from "../_shared/db.ts";
 import { subirYFirmar } from "./catalog.ts";
-import { COLORES_MARCA, cargarFuentesMarca, cargarLogoMarca, dibujarEncabezado, dibujarPiePagina } from "./pdf-marca.ts";
+import { generarPdfTabla } from "./pdf-marca.ts";
 import { ESTADOS_PEDIDO_VENDIDO, escaparValorFiltro, formatoMoneda, type RespuestaLectura } from "./owner-actions.ts";
 
 const TOPE_FILAS_PDF_DETALLE = 200;
-
-const ANCHO_PAGINA = 780; // horizontal (landscape) -- mas ancho que alto
-const ALTO_FILA = 20;
-const MARGEN_LATERAL = 24;
-const ALTO_PIE = 30;
-
-async function generarPdfTabla(titulo: string, encabezados: string[], filas: string[][]): Promise<Uint8Array> {
-  const pdf = await PDFDocument.create();
-  const altoContenido = (filas.length + 1) * ALTO_FILA;
-  const altoPagina = 140 + altoContenido + ALTO_PIE;
-  const pagina = pdf.addPage([ANCHO_PAGINA, altoPagina]);
-
-  const [fuentes, logo] = await Promise.all([cargarFuentesMarca(pdf), cargarLogoMarca(pdf)]);
-  let y = dibujarEncabezado(pagina, { titulo, fuentes, logo, anchoPagina: ANCHO_PAGINA, altoPagina });
-
-  const anchoColumna = (ANCHO_PAGINA - MARGEN_LATERAL * 2) / encabezados.length;
-
-  // Banda de color para la fila de encabezados de columna, texto en blanco.
-  pagina.drawRectangle({ x: 0, y: y - 4, width: ANCHO_PAGINA, height: ALTO_FILA + 4, color: COLORES_MARCA.rosaFuerte });
-  encabezados.forEach((encabezado, i) => {
-    pagina.drawText(encabezado, { x: MARGEN_LATERAL + i * anchoColumna, y, size: 10, font: fuentes.textoNegrita, color: COLORES_MARCA.blanco });
-  });
-  y -= ALTO_FILA;
-
-  filas.forEach((fila, indiceFila) => {
-    // Bandas alternadas (blanco / rosa claro) para que las filas se lean
-    // mas facil en una tabla ancha horizontal.
-    if (indiceFila % 2 === 1) {
-      pagina.drawRectangle({ x: 0, y: y - 4, width: ANCHO_PAGINA, height: ALTO_FILA, color: COLORES_MARCA.rosaClaro });
-    }
-    fila.forEach((valor, i) => {
-      pagina.drawText(valor, { x: MARGEN_LATERAL + i * anchoColumna, y, size: 9, font: fuentes.texto, color: COLORES_MARCA.ciruela });
-    });
-    y -= ALTO_FILA;
-  });
-
-  dibujarPiePagina(pagina, { fuentes, anchoPagina: ANCHO_PAGINA });
-
-  return pdf.save();
-}
 
 export async function informeVentas(dias: number, conPdf: boolean): Promise<RespuestaLectura> {
   const supabase = getSupabase();

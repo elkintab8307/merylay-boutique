@@ -3,44 +3,17 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("../_shared/db.ts", () => ({ getSupabase: vi.fn() }));
 vi.mock("./catalog.ts", () => ({ subirYFirmar: vi.fn(async () => "https://x/informe-firmado.pdf") }));
 
-// Mock de pdf-lib que captura cada texto dibujado con drawText, para poder
-// verificar (test de zona horaria, mas abajo) que la fecha de una fila del
-// PDF sale en hora de Bogota y no en UTC. El resto de tests de este archivo
-// que generan PDF no inspeccionan el contenido, solo que subirYFirmar fue
-// llamado -- este mock conserva esa interfaz minima sin tocarlos.
+// generarPdfTabla ahora vive en pdf-marca.ts (Tarea 1 de este plan) y se
+// mockea por completo -- reports.ts ya no importa pdf-lib directamente.
+// El mock captura el contenido de `filas` tal cual se lo pasan las
+// funciones de este archivo, para poder verificar (test de zona horaria,
+// mas abajo) que la fecha de una fila sale en hora de Bogota y no en UTC.
 const pdfLibCapturado = vi.hoisted(() => ({ textos: [] as string[] }));
-vi.mock("pdf-lib", () => ({
-  StandardFonts: { Helvetica: "Helvetica", HelveticaBold: "HelveticaBold" },
-  PDFDocument: {
-    create: vi.fn(async () => ({
-      addPage: vi.fn(() => ({
-        getHeight: () => 800,
-        drawText: vi.fn((texto: string) => {
-          pdfLibCapturado.textos.push(texto);
-        }),
-        drawRectangle: vi.fn(),
-        drawImage: vi.fn(),
-      })),
-      embedFont: vi.fn(async () => ({})),
-      embedPng: vi.fn(async () => ({})),
-      registerFontkit: vi.fn(),
-      save: vi.fn(async () => new Uint8Array([1, 2, 3])),
-    })),
-  },
-}));
-
-// pdf-marca.ts hace su propia descarga por red (fuentes/logo) -- se mockea
-// por completo para que los tests de este archivo no dependan de internet
-// ni se demoren por eso. Su logica real (descarga, cache, fallback) ya
-// esta cubierta en pdf-marca.test.ts.
 vi.mock("./pdf-marca.ts", () => ({
-  cargarFuentesMarca: vi.fn(async () => ({ texto: {}, textoNegrita: {}, titulo: {} })),
-  cargarLogoMarca: vi.fn(async () => null),
-  dibujarEncabezado: vi.fn(() => 700),
-  dibujarPiePagina: vi.fn(),
-  COLORES_MARCA: {
-    rosaFuerte: {}, dorado: {}, rosaClaro: {}, ciruela: {}, crema: {}, blanco: {},
-  },
+  generarPdfTabla: vi.fn(async (_titulo: string, _encabezados: string[], filas: string[][]) => {
+    filas.forEach((fila) => fila.forEach((valor) => pdfLibCapturado.textos.push(valor)));
+    return new Uint8Array([1, 2, 3]);
+  }),
 }));
 
 // Mock generico: cada tabla tiene una cola de respuestas {data, error} que
