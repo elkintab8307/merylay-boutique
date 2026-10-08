@@ -236,7 +236,7 @@ describe("consultarProductos", () => {
       expect.any(String),
       expect.arrayContaining([expect.objectContaining({ detalle: expect.stringContaining("Camisetas") })]),
     );
-    expect(resultado.documentos).toEqual([{ link: "https://x/informe-firmado.pdf", filename: "informe.pdf" }]);
+    expect(resultado.documentos).toEqual([{ link: "https://x/informe-firmado.pdf", filename: "informe-merylay.pdf" }]);
   });
 
   it("formato 'pdf_tabla': genera un PDF de tabla (sin fotos) via generarPdfTabla", async () => {

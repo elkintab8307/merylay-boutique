@@ -153,7 +153,7 @@ async function generarInformeProductosPdfFotos(productos: Awaited<ReturnType<typ
   }));
   const bytes = await generarPdfConFotos("Informe de inventario — MeryLay Boutique", filas);
   const link = await subirYFirmar(bytes, "informe.pdf");
-  return { texto: "Aquí tienes el informe 📋", fotos: [], documentos: [{ link, filename: "informe.pdf" }] };
+  return { texto: "Aquí tienes el informe 📋", fotos: [], documentos: [{ link, filename: "informe-merylay.pdf" }] };
 }
 
 async function generarInformeProductosPdfTabla(productos: Awaited<ReturnType<typeof buscarCatalogo>>): Promise<RespuestaLectura> {
