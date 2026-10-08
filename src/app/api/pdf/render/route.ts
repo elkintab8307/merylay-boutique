@@ -31,15 +31,21 @@ async function lanzarNavegador(): Promise<NavegadorMinimo> {
     // Desactiva WebGL/swiftshader -- recomendado por el README de
     // @sparticuz/chromium para serverless.
     chromium.setGraphicsMode = false;
-    // El README de @sparticuz/chromium sugiere headless:"shell", pero en
-    // el smoke test real contra Vercel (ver PR #60) esa combinacion
-    // crasheaba SIEMPRE justo despues de "DevTools listening..." (Protocol
-    // error: Target closed, exit status 128) -- probado con Node 22.x/24.x
-    // y memoria de sobra, descartando ambas causas. headless:true (el
-    // modo headless "nuevo", default de Puppeteer) es la UNICA combinacion
-    // que genero un PDF real en las pruebas (tanto local como en Vercel).
+    // chromium.args trae --disable-print-preview por defecto -- causa real
+    // del crash confirmada en el smoke test de Vercel (ver PR #60):
+    // setContent/evaluate pasaban bien, Page.printToPDF SIEMPRE truena
+    // ("Target closed", exit status 128) con ese flag presente, porque
+    // desactiva el subsistema del que depende printToPDF. Tambien trae
+    // --headless='shell' metido a la fuerza, chocando con el headless:true
+    // que le pasamos a Puppeteer (ese choque de modos fue la causa del
+    // primer crash, mas temprano, en Runtime.callFunctionOn). Se filtran
+    // ambos antes de lanzar -- probado con Node 22.x/24.x y memoria de
+    // sobra (2048MB), descartando esas dos causas.
+    const argsFiltrados = chromium.args.filter(
+      (arg) => arg !== "--disable-print-preview" && !arg.startsWith("--headless="),
+    );
     return (await puppeteer.launch({
-      args: chromium.args,
+      args: argsFiltrados,
       executablePath: await chromium.executablePath(),
       headless: true,
     })) as unknown as NavegadorMinimo;

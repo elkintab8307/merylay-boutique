@@ -96,7 +96,11 @@ describe("POST /api/pdf/render", () => {
     const navegadorMock = { newPage: vi.fn(async () => paginaMock), close: vi.fn(async () => {}) };
     const launchMock = vi.fn(async () => navegadorMock);
     vi.doMock("puppeteer-core", () => ({ launch: launchMock, defaultArgs: vi.fn() }));
-    const chromiumMock = { args: ["--chromium-arg"], executablePath: vi.fn(async () => "/tmp/chromium"), setGraphicsMode: true };
+    const chromiumMock = {
+      args: ["--chromium-arg", "--disable-print-preview", "--headless='shell'"],
+      executablePath: vi.fn(async () => "/tmp/chromium"),
+      setGraphicsMode: true,
+    };
     vi.doMock("@sparticuz/chromium", () => ({ default: chromiumMock }));
     const { POST } = await import("./route");
 
@@ -112,6 +116,13 @@ describe("POST /api/pdf/render", () => {
     // error Target closed justo despues de "DevTools listening...") --
     // probado con Node 22.x/24.x y memoria de sobra, descartando ambas
     // causas. headless:true es la unica combinacion que genero un PDF real.
+    //
+    // chromium.args TRAE --disable-print-preview por defecto -- eso
+    // desactiva el subsistema del que depende Page.printToPDF (causa real
+    // del crash, confirmada en el smoke test: setContent/evaluate pasaban
+    // bien, solo printToPDF truena). Tambien trae --headless='shell'
+    // metido a la fuerza, chocando con el headless:true que le pasamos a
+    // Puppeteer. Ambos se filtran antes de lanzar.
     expect(launchMock).toHaveBeenCalledWith(
       expect.objectContaining({ args: ["--chromium-arg"], executablePath: "/tmp/chromium", headless: true }),
     );
