@@ -166,159 +166,108 @@ describe("buscarCliente", () => {
   });
 });
 
-describe("buscarInventario", () => {
+describe("consultarProductos", () => {
   afterEach(() => {
     vi.doUnmock("./catalog.ts");
+    vi.doUnmock("./pdf-marca.ts");
     vi.resetModules();
   });
 
-  it("resume cuantos productos coinciden y el total de unidades en stock, con hasta 10 fotos", async () => {
-    vi.resetModules();
-    vi.doMock("./catalog.ts", () => ({
-      buscarCatalogo: vi.fn(async () => [
-        { productId: "p1", variantId: null, nombre: "Camiseta A", talla: null, color: null, precio: 40000, stock: 1, imageId: null, fotoUrl: "https://x/a.jpg" },
-        { productId: "p2", variantId: null, nombre: "Camiseta B", talla: null, color: null, precio: 40000, stock: 3, imageId: null, fotoUrl: "https://x/b.jpg" },
-      ]),
-      TOPE_BUSCAR_CATALOGO: 50,
-    }));
+  const PRODUCTOS_BASE = [
+    { productId: "p1", variantId: null, nombre: "Camiseta A", talla: "M", color: "Rosa", precio: 40000, stock: 1, imageId: null, fotoUrl: "https://x/a.jpg", categoria: "Camisetas" },
+    { productId: "p2", variantId: null, nombre: "Camiseta B", talla: "M", color: "Azul", precio: 42000, stock: 3, imageId: null, fotoUrl: "https://x/b.jpg", categoria: "Camisetas" },
+  ];
 
-    const { buscarInventario } = await import("./owner-actions.ts");
-    const resultado = await buscarInventario({ texto: "camiseta" }, true);
+  it("formato 'conteo' (por defecto): resume cuantos productos y el total de unidades, con fotos si conFotos=true", async () => {
+    vi.resetModules();
+    vi.doMock("./catalog.ts", () => ({ buscarCatalogo: vi.fn(async () => PRODUCTOS_BASE), TOPE_BUSCAR_CATALOGO: 50 }));
+
+    const { consultarProductos } = await import("./owner-actions.ts");
+    const resultado = await consultarProductos({ texto: "camiseta" }, "conteo", true);
 
     expect(resultado.texto).toContain("Encontré 2 producto(s)");
     expect(resultado.texto).toContain("4 unidad(es) en stock en total");
     expect(resultado.fotos).toHaveLength(2);
-    expect(resultado.fotos[0]).toEqual({ url: "https://x/a.jpg", caption: expect.stringContaining("Camiseta A") });
   });
 
-  it("con conFotos=false no manda ninguna foto aunque haya coincidencias, solo el conteo en texto", async () => {
+  it("formato 'lista': un renglon por producto, con nombre/talla/color/precio/stock", async () => {
     vi.resetModules();
-    vi.doMock("./catalog.ts", () => ({
-      buscarCatalogo: vi.fn(async () => [
-        { productId: "p1", variantId: null, nombre: "Camiseta A", talla: null, color: null, precio: 40000, stock: 1, imageId: null, fotoUrl: "https://x/a.jpg" },
-        { productId: "p2", variantId: null, nombre: "Camiseta B", talla: null, color: null, precio: 40000, stock: 3, imageId: null, fotoUrl: "https://x/b.jpg" },
-      ]),
-      TOPE_BUSCAR_CATALOGO: 50,
-    }));
+    vi.doMock("./catalog.ts", () => ({ buscarCatalogo: vi.fn(async () => PRODUCTOS_BASE), TOPE_BUSCAR_CATALOGO: 50 }));
 
-    const { buscarInventario } = await import("./owner-actions.ts");
-    const resultado = await buscarInventario({ texto: "camiseta" }, false);
+    const { consultarProductos } = await import("./owner-actions.ts");
+    const resultado = await consultarProductos({ texto: "camiseta" }, "lista", false);
 
-    expect(resultado.texto).toContain("Encontré 2 producto(s)");
-    expect(resultado.texto).toContain("4 unidad(es) en stock en total");
-    expect(resultado.texto).not.toContain("mostrando");
+    expect(resultado.texto).toContain("Camiseta A");
+    expect(resultado.texto).toContain("Camiseta B");
+    expect(resultado.texto).toContain("talla M");
+    expect(resultado.texto).toContain("$40.000");
     expect(resultado.fotos).toHaveLength(0);
   });
 
-  it("avisa truncamiento y limita a 10 fotos cuando hay mas de 10 coincidencias", async () => {
-    const productos = Array.from({ length: 15 }, (_, i) => ({
+  it("formato 'lista' con mas de 10 productos: corta en 10 y avisa cuantos mas hay", async () => {
+    const productos = Array.from({ length: 13 }, (_, i) => ({
       productId: `p${i}`, variantId: null, nombre: `Producto ${i}`, talla: null, color: null,
-      precio: 1000, stock: 1, imageId: null, fotoUrl: `https://x/${i}.jpg`,
+      precio: 1000, stock: 1, imageId: null, fotoUrl: null, categoria: null,
     }));
     vi.resetModules();
     vi.doMock("./catalog.ts", () => ({ buscarCatalogo: vi.fn(async () => productos), TOPE_BUSCAR_CATALOGO: 50 }));
 
-    const { buscarInventario } = await import("./owner-actions.ts");
-    const resultado = await buscarInventario({ texto: "producto" }, true);
+    const { consultarProductos } = await import("./owner-actions.ts");
+    const resultado = await consultarProductos({ texto: "producto" }, "lista", false);
 
-    expect(resultado.texto).toContain("Encontré 15 producto(s)");
-    expect(resultado.fotos).toHaveLength(10);
+    expect((resultado.texto.match(/Producto \d+/g) ?? []).length).toBe(10);
+    expect(resultado.texto).toContain("y 3 producto(s) más");
   });
 
-  it("sin coincidencias, responde un mensaje claro y sin fotos", async () => {
+  it("formato 'pdf_fotos': genera el PDF con fotos, incluyendo la categoria en el detalle", async () => {
+    vi.resetModules();
+    const generarPdfConFotos = vi.fn(async () => new Uint8Array([1]));
+    vi.doMock("./catalog.ts", () => ({
+      buscarCatalogo: vi.fn(async () => PRODUCTOS_BASE),
+      generarPdfConFotos,
+      subirYFirmar: vi.fn(async () => "https://x/informe-firmado.pdf"),
+      TOPE_BUSCAR_CATALOGO: 50,
+    }));
+
+    const { consultarProductos } = await import("./owner-actions.ts");
+    const resultado = await consultarProductos({ texto: "camiseta" }, "pdf_fotos", false);
+
+    expect(generarPdfConFotos).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.arrayContaining([expect.objectContaining({ detalle: expect.stringContaining("Camisetas") })]),
+    );
+    expect(resultado.documentos).toEqual([{ link: "https://x/informe-firmado.pdf", filename: "informe.pdf" }]);
+  });
+
+  it("formato 'pdf_tabla': genera un PDF de tabla (sin fotos) via generarPdfTabla", async () => {
+    vi.resetModules();
+    const generarPdfTabla = vi.fn(async () => new Uint8Array([1]));
+    vi.doMock("./catalog.ts", () => ({
+      buscarCatalogo: vi.fn(async () => PRODUCTOS_BASE),
+      subirYFirmar: vi.fn(async () => "https://x/informe-firmado.pdf"),
+      TOPE_BUSCAR_CATALOGO: 50,
+    }));
+    vi.doMock("./pdf-marca.ts", () => ({ generarPdfTabla }));
+
+    const { consultarProductos } = await import("./owner-actions.ts");
+    const resultado = await consultarProductos({ texto: "camiseta" }, "pdf_tabla", true);
+
+    expect(generarPdfTabla).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.arrayContaining(["Categoría"]),
+      expect.arrayContaining([expect.arrayContaining(["Camisetas"])]),
+    );
+    // conFotos=true se ignora cuando el formato ya es un PDF.
+    expect(resultado.fotos).toHaveLength(0);
+    expect(resultado.documentos).toEqual([{ link: "https://x/informe-firmado.pdf", filename: "informe-productos-merylay.pdf" }]);
+  });
+
+  it("sin coincidencias, responde un mensaje claro para cualquier formato", async () => {
     vi.resetModules();
     vi.doMock("./catalog.ts", () => ({ buscarCatalogo: vi.fn(async () => []), TOPE_BUSCAR_CATALOGO: 50 }));
 
-    const { buscarInventario } = await import("./owner-actions.ts");
-    const resultado = await buscarInventario({ texto: "inexistente" }, true);
-
-    expect(resultado.texto).toContain("No encontré ningún producto");
-    expect(resultado.fotos).toHaveLength(0);
-  });
-
-  it("cuenta productos distintos, no filas: 3 variantes del mismo producto cuentan como 1 producto, pero el stock de las 3 se suma", async () => {
-    vi.resetModules();
-    vi.doMock("./catalog.ts", () => ({
-      buscarCatalogo: vi.fn(async () => [
-        { productId: "p1", variantId: "v1", nombre: "Pijama Rosa (Talla S)", talla: "S", color: "Rosa", precio: 89900, stock: 2, imageId: null, fotoUrl: "https://x/s.jpg" },
-        { productId: "p1", variantId: "v2", nombre: "Pijama Rosa (Talla M)", talla: "M", color: "Rosa", precio: 89900, stock: 3, imageId: null, fotoUrl: "https://x/m.jpg" },
-        { productId: "p1", variantId: "v3", nombre: "Pijama Rosa (Talla L)", talla: "L", color: "Rosa", precio: 89900, stock: 1, imageId: null, fotoUrl: "https://x/l.jpg" },
-      ]),
-      TOPE_BUSCAR_CATALOGO: 50,
-    }));
-
-    const { buscarInventario } = await import("./owner-actions.ts");
-    const resultado = await buscarInventario({ texto: "pijama" }, true);
-
-    expect(resultado.texto).toContain("Encontré 1 producto(s)");
-    expect(resultado.texto).toContain("6 unidad(es) en stock en total");
-  });
-
-  it("cuando buscarCatalogo devuelve exactamente el tope (50 filas), avisa que podria haber mas", async () => {
-    const productos = Array.from({ length: 50 }, (_, i) => ({
-      productId: `p${i}`, variantId: null, nombre: `Producto ${i}`, talla: null, color: null,
-      precio: 1000, stock: 1, imageId: null, fotoUrl: `https://x/${i}.jpg`,
-    }));
-    vi.resetModules();
-    vi.doMock("./catalog.ts", () => ({ buscarCatalogo: vi.fn(async () => productos), TOPE_BUSCAR_CATALOGO: 50 }));
-
-    const { buscarInventario } = await import("./owner-actions.ts");
-    const resultado = await buscarInventario({ texto: "producto" }, true);
-
-    expect(resultado.texto).toContain("Encontré al menos 50 producto(s)");
-    expect(resultado.texto).toContain("alcancé el límite de búsqueda");
-  });
-
-  it("cuando buscarCatalogo devuelve menos del tope, no avisa de posible truncamiento", async () => {
-    const productos = Array.from({ length: 20 }, (_, i) => ({
-      productId: `p${i}`, variantId: null, nombre: `Producto ${i}`, talla: null, color: null,
-      precio: 1000, stock: 1, imageId: null, fotoUrl: `https://x/${i}.jpg`,
-    }));
-    vi.resetModules();
-    vi.doMock("./catalog.ts", () => ({ buscarCatalogo: vi.fn(async () => productos), TOPE_BUSCAR_CATALOGO: 50 }));
-
-    const { buscarInventario } = await import("./owner-actions.ts");
-    const resultado = await buscarInventario({ texto: "producto" }, true);
-
-    expect(resultado.texto).toContain("Encontré 20 producto(s)");
-    expect(resultado.texto).not.toContain("o más");
-  });
-});
-
-describe("generarInformePdf", () => {
-  afterEach(() => {
-    vi.doUnmock("./catalog.ts");
-    vi.resetModules();
-  });
-
-  it("genera el PDF con todas las coincidencias (sin el tope de 10) y lo manda como documento", async () => {
-    const productos = Array.from({ length: 15 }, (_, i) => ({
-      productId: `p${i}`, variantId: null, nombre: `Producto ${i}`, talla: null, color: null,
-      precio: 1000, stock: 1, imageId: null, fotoUrl: null,
-    }));
-    vi.resetModules();
-    vi.doMock("./catalog.ts", () => ({
-      buscarCatalogo: vi.fn(async () => productos),
-      generarPdfConFotos: vi.fn(async () => new Uint8Array([1])),
-      subirYFirmar: vi.fn(async () => "https://x/informe-firmado.pdf"),
-    }));
-
-    const { generarInformePdf } = await import("./owner-actions.ts");
-    const resultado = await generarInformePdf({ texto: "producto" });
-
-    expect(resultado.documentos).toEqual([{ link: "https://x/informe-firmado.pdf", filename: "informe-merylay.pdf" }]);
-  });
-
-  it("sin coincidencias, no genera ningun PDF", async () => {
-    vi.resetModules();
-    vi.doMock("./catalog.ts", () => ({
-      buscarCatalogo: vi.fn(async () => []),
-      generarPdfConFotos: vi.fn(),
-      subirYFirmar: vi.fn(),
-    }));
-
-    const { generarInformePdf } = await import("./owner-actions.ts");
-    const resultado = await generarInformePdf({ texto: "inexistente" });
+    const { consultarProductos } = await import("./owner-actions.ts");
+    const resultado = await consultarProductos({ texto: "inexistente" }, "lista", false);
 
     expect(resultado.texto).toContain("No encontré ningún producto");
     expect(resultado.documentos).toHaveLength(0);
