@@ -1,6 +1,6 @@
 import { getSupabase } from "../_shared/db.ts";
 import { subirYFirmar } from "./catalog.ts";
-import { generarPdfTabla } from "./pdf-marca.ts";
+import { generarPdfTabla } from "./pdf-render.ts";
 import { ESTADOS_PEDIDO_VENDIDO, escaparValorFiltro, formatoMoneda, type RespuestaLectura } from "./owner-actions.ts";
 
 const TOPE_FILAS_PDF_DETALLE = 200;

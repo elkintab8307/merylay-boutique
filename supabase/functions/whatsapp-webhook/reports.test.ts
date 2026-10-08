@@ -3,13 +3,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../_shared/db.ts", () => ({ getSupabase: vi.fn() }));
 vi.mock("./catalog.ts", () => ({ subirYFirmar: vi.fn(async () => "https://x/informe-firmado.pdf") }));
 
-// generarPdfTabla ahora vive en pdf-marca.ts (Tarea 1 de este plan) y se
-// mockea por completo -- reports.ts ya no importa pdf-lib directamente.
-// El mock captura el contenido de `filas` tal cual se lo pasan las
-// funciones de este archivo, para poder verificar (test de zona horaria,
-// mas abajo) que la fecha de una fila sale en hora de Bogota y no en UTC.
+// generarPdfTabla ahora vive en pdf-render.ts (le pide a un endpoint de
+// Vercel que renderice HTML a PDF) y se mockea por completo -- reports.ts
+// ya no dibuja PDFs directamente. El mock captura el contenido de `filas`
+// tal cual se lo pasan las funciones de este archivo, para poder verificar
+// (test de zona horaria, mas abajo) que la fecha de una fila sale en hora
+// de Bogota y no en UTC.
 const pdfLibCapturado = vi.hoisted(() => ({ textos: [] as string[] }));
-vi.mock("./pdf-marca.ts", () => ({
+vi.mock("./pdf-render.ts", () => ({
   generarPdfTabla: vi.fn(async (_titulo: string, _encabezados: string[], filas: string[][]) => {
     filas.forEach((fila) => fila.forEach((valor) => pdfLibCapturado.textos.push(valor)));
     return new Uint8Array([1, 2, 3]);
@@ -676,7 +677,7 @@ describe("informeCreditos", () => {
     });
     const { getSupabase } = await import("../_shared/db.ts");
     (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
-    const { generarPdfTabla } = await import("./pdf-marca.ts");
+    const { generarPdfTabla } = await import("./pdf-render.ts");
 
     const { informeCreditos } = await import("./reports.ts");
     await informeCreditos(7, true);
@@ -699,7 +700,7 @@ describe("informeCreditos", () => {
     });
     const { getSupabase } = await import("../_shared/db.ts");
     (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
-    const { generarPdfTabla } = await import("./pdf-marca.ts");
+    const { generarPdfTabla } = await import("./pdf-render.ts");
 
     const { informeCreditos } = await import("./reports.ts");
     await expect(informeCreditos(7, true)).resolves.not.toThrow();
@@ -728,7 +729,7 @@ describe("informeCreditos", () => {
     });
     const { getSupabase } = await import("../_shared/db.ts");
     (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
-    const { generarPdfTabla } = await import("./pdf-marca.ts");
+    const { generarPdfTabla } = await import("./pdf-render.ts");
 
     const { informeCreditos } = await import("./reports.ts");
     await informeCreditos(7, true);
@@ -813,7 +814,7 @@ describe("informeAbonos", () => {
     });
     const { getSupabase } = await import("../_shared/db.ts");
     (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
-    const { generarPdfTabla } = await import("./pdf-marca.ts");
+    const { generarPdfTabla } = await import("./pdf-render.ts");
 
     const { informeAbonos } = await import("./reports.ts");
     await informeAbonos(1, true);

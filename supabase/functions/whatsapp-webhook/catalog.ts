@@ -1,5 +1,5 @@
 import { getSupabase } from "../_shared/db.ts";
-import { generarPdfTarjetas, type TarjetaProducto } from "./pdf-marca.ts";
+import { generarPdfTarjetas, type TarjetaProducto } from "./pdf-render.ts";
 import type { ItemCarrito } from "../_shared/types.ts";
 
 // Una fila por "unidad pedible": cada variante de un producto con
@@ -312,10 +312,18 @@ export interface ProductoAgrupado {
 // diseño de referencia del dueño: "Camiseta Mariposa" con una sola tarjeta
 // y las 4 tallas S/M/L/XL como insignias), no una tarjeta separada por cada
 // combinacion de talla/color.
+// Se agrupa por NOMBRE, no por productId: en el catalogo real de MeryLay,
+// cada talla de un mismo estilo puede ser un PRODUCTO separado (mismo
+// nombre, distinto id/sku), no una variante dentro de product_variants.
+// Agrupar por productId dejaba cada talla como su propia tarjeta -- el bug
+// real que motivo este cambio. El nombre exacto SI identifica el "mismo
+// estilo" en ambos casos (productos con variantes reales tambien
+// comparten nombre, asi que agrupan igual que antes).
 export function agruparPorProducto(productos: ProductoEncontrado[]): ProductoAgrupado[] {
-  const porId = new Map<string, ProductoAgrupado>();
+  const porNombre = new Map<string, ProductoAgrupado>();
   for (const p of productos) {
-    const actual = porId.get(p.productId) ?? {
+    const clave = p.nombre.trim();
+    const actual = porNombre.get(clave) ?? {
       productId: p.productId,
       nombre: p.nombre,
       categoria: p.categoria,
@@ -332,9 +340,9 @@ export function agruparPorProducto(productos: ProductoEncontrado[]): ProductoAgr
     actual.precioMin = Math.min(actual.precioMin, p.precio);
     actual.precioMax = Math.max(actual.precioMax, p.precio);
     actual.stockTotal += p.stock;
-    porId.set(p.productId, actual);
+    porNombre.set(clave, actual);
   }
-  return [...porId.values()];
+  return [...porNombre.values()];
 }
 
 export async function subirYFirmar(bytes: Uint8Array, nombreArchivo: string): Promise<string> {
