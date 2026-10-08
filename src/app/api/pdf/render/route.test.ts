@@ -97,7 +97,7 @@ describe("POST /api/pdf/render", () => {
     const launchMock = vi.fn(async () => navegadorMock);
     vi.doMock("puppeteer-core", () => ({ launch: launchMock, defaultArgs: vi.fn() }));
     const chromiumMock = {
-      args: ["--chromium-arg", "--disable-print-preview", "--headless='shell'"],
+      args: ["--chromium-arg", "--disable-print-preview", "--headless='shell'", "--single-process", "--no-zygote"],
       executablePath: vi.fn(async () => "/tmp/chromium"),
       setGraphicsMode: true,
     };
@@ -118,11 +118,12 @@ describe("POST /api/pdf/render", () => {
     // causas. headless:true es la unica combinacion que genero un PDF real.
     //
     // chromium.args TRAE --disable-print-preview por defecto -- eso
-    // desactiva el subsistema del que depende Page.printToPDF (causa real
-    // del crash, confirmada en el smoke test: setContent/evaluate pasaban
-    // bien, solo printToPDF truena). Tambien trae --headless='shell'
-    // metido a la fuerza, chocando con el headless:true que le pasamos a
-    // Puppeteer. Ambos se filtran antes de lanzar.
+    // desactiva el subsistema del que depende Page.printToPDF. Tambien
+    // trae --headless='shell' metido a la fuerza, chocando con el
+    // headless:true que le pasamos a Puppeteer. Y trae --single-process +
+    // --no-zygote -- Chrome en single-process es inestable para
+    // printToPDF especificamente (necesita un proceso aparte para el
+    // compositor de PDF). Los 4 se filtran antes de lanzar.
     expect(launchMock).toHaveBeenCalledWith(
       expect.objectContaining({ args: ["--chromium-arg"], executablePath: "/tmp/chromium", headless: true }),
     );

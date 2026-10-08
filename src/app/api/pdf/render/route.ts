@@ -31,18 +31,25 @@ async function lanzarNavegador(): Promise<NavegadorMinimo> {
     // Desactiva WebGL/swiftshader -- recomendado por el README de
     // @sparticuz/chromium para serverless.
     chromium.setGraphicsMode = false;
-    // chromium.args trae --disable-print-preview por defecto -- causa real
-    // del crash confirmada en el smoke test de Vercel (ver PR #60):
-    // setContent/evaluate pasaban bien, Page.printToPDF SIEMPRE truena
-    // ("Target closed", exit status 128) con ese flag presente, porque
-    // desactiva el subsistema del que depende printToPDF. Tambien trae
-    // --headless='shell' metido a la fuerza, chocando con el headless:true
-    // que le pasamos a Puppeteer (ese choque de modos fue la causa del
-    // primer crash, mas temprano, en Runtime.callFunctionOn). Se filtran
-    // ambos antes de lanzar -- probado con Node 22.x/24.x y memoria de
-    // sobra (2048MB), descartando esas dos causas.
+    // chromium.args trae varios flags que rompen Page.printToPDF
+    // especificamente en el smoke test real de Vercel (ver PR #60) --
+    // setContent/evaluate siempre pasaban bien, solo printToPDF truena
+    // ("Target closed", exit status 128). Probado con Node 22.x/24.x y
+    // memoria de sobra (2048MB), descartando esas dos causas:
+    // - --disable-print-preview: desactiva el subsistema del que depende
+    //   printToPDF.
+    // - --headless='shell': choca con el headless:true que le pasamos a
+    //   Puppeteer (causo un crash distinto, mas temprano, en
+    //   Runtime.callFunctionOn, antes de llegar siquiera a printToPDF).
+    // - --single-process / --no-zygote: Chrome en modo single-process es
+    //   conocido por ser inestable para printToPDF, que necesita un
+    //   proceso aparte para el compositor de PDF.
     const argsFiltrados = chromium.args.filter(
-      (arg) => arg !== "--disable-print-preview" && !arg.startsWith("--headless="),
+      (arg) =>
+        arg !== "--disable-print-preview" &&
+        arg !== "--single-process" &&
+        arg !== "--no-zygote" &&
+        !arg.startsWith("--headless="),
     );
     return (await puppeteer.launch({
       args: argsFiltrados,
