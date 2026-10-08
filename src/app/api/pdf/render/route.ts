@@ -40,6 +40,7 @@ async function lanzarNavegador(): Promise<NavegadorMinimo> {
       args: puppeteer.defaultArgs({ args: chromium.args, headless: "shell" }),
       executablePath: await chromium.executablePath(),
       headless: "shell",
+      dumpio: true, // DIAGNOSTICO TEMPORAL: ver stderr real de Chrome en los logs de Vercel.
     })) as unknown as NavegadorMinimo;
   }
   // Desarrollo local: `puppeteer` (no `puppeteer-core`) instala su propio
