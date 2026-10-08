@@ -13,14 +13,15 @@ const mocks = vi.hoisted(() => ({
   marcarLeidoYEscribiendo: vi.fn(),
   consultarStockBajo: vi.fn(),
   actualizarPrecioProducto: vi.fn(),
-  buscarInventario: vi.fn(),
-  generarInformePdf: vi.fn(),
+  consultarProductos: vi.fn(),
   transcribirAudio: vi.fn(),
   informeVentas: vi.fn(),
   productosMasVendidos: vi.fn(),
   informeClientes: vi.fn(),
   historialCliente: vi.fn(),
   informeGastos: vi.fn(),
+  informeCreditos: vi.fn(),
+  informeAbonos: vi.fn(),
 }));
 
 const clienteMocks = vi.hoisted(() => ({
@@ -55,8 +56,7 @@ vi.mock("../_shared/meta.ts", () => ({
 vi.mock("./owner-actions.ts", () => ({
   consultarStockBajo: mocks.consultarStockBajo,
   actualizarPrecioProducto: mocks.actualizarPrecioProducto,
-  buscarInventario: mocks.buscarInventario,
-  generarInformePdf: mocks.generarInformePdf,
+  consultarProductos: mocks.consultarProductos,
   ACCIONES_ESCRITURA: new Set(["actualizar_precio_producto"]),
 }));
 vi.mock("./catalog.ts", () => ({
@@ -73,6 +73,8 @@ vi.mock("./reports.ts", () => ({
   informeClientes: mocks.informeClientes,
   historialCliente: mocks.historialCliente,
   informeGastos: mocks.informeGastos,
+  informeCreditos: mocks.informeCreditos,
+  informeAbonos: mocks.informeAbonos,
 }));
 
 const dbMocks = vi.hoisted(() => ({ insertarMensaje: vi.fn() }));
@@ -409,74 +411,98 @@ describe("ejecutarAccionCliente via procesarMensajeEntrante", () => {
 });
 
 describe("acciones de lectura del dueño con fotos/documentos", () => {
-  it("buscar_inventario manda las fotos antes del texto final, pasando conFotos al llamar a ownerActions", async () => {
-    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.1", from: "573215879805", texto: "muestrame las camisetas" });
-    mocks.decidirAccion.mockResolvedValue({ action: "buscar_inventario", params: { texto: "camiseta", conFotos: true }, response_message: "" });
-    mocks.buscarInventario.mockResolvedValue({
-      texto: "Encontré 2 producto(s) con 4 unidad(es) en stock en total.",
-      fotos: [{ url: "https://x/a.jpg", caption: "Camiseta A" }],
-      documentos: [],
+  it("consultar_productos: sin ningun filtro, pregunta en vez de llamar a la base de datos", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.6a", from: "573215879805", texto: "muestrame productos" });
+    mocks.decidirAccion.mockResolvedValue({ action: "consultar_productos", params: {}, response_message: "" });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.consultarProductos).not.toHaveBeenCalled();
+    expect(clienteMocks.enviarDocumentoPorLink).not.toHaveBeenCalled();
+  });
+
+  it("consultar_productos: pasa filtros, formato y conFotos a owner-actions tal cual", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.6b", from: "573215879805", texto: "lista de camisetas talla M agregadas en los ultimos 2 dias, sin foto" });
+    mocks.decidirAccion.mockResolvedValue({
+      action: "consultar_productos",
+      params: { texto: "camisetas", talla: "M", agregadoDesdeDias: 2, formato: "lista", conFotos: false },
+      response_message: "",
     });
+    mocks.consultarProductos.mockResolvedValue({ texto: "Encontré 3 producto(s)...", fotos: [], documentos: [] });
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
     await procesarMensajeEntrante({});
 
-    expect(mocks.buscarInventario).toHaveBeenCalledWith({ texto: "camiseta", talla: undefined, color: undefined }, true);
-    expect(mocks.enviarImagenPorLink).toHaveBeenCalledWith("573215879805", "https://x/a.jpg", "Camiseta A");
-    expect(mocks.enviarTexto).toHaveBeenCalledWith("573215879805", "Encontré 2 producto(s) con 4 unidad(es) en stock en total.");
+    expect(mocks.consultarProductos).toHaveBeenCalledWith(
+      { texto: "camisetas", talla: "M", color: undefined, agregadoDesdeDias: 2 },
+      "lista",
+      false,
+    );
   });
 
-  it("buscar_inventario sin conFotos en los params lo pasa como false (pregunta de solo conteo)", async () => {
-    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.1b", from: "573215879805", texto: "cuantas camisetas hay" });
-    mocks.decidirAccion.mockResolvedValue({ action: "buscar_inventario", params: { texto: "camiseta" }, response_message: "" });
-    mocks.buscarInventario.mockResolvedValue({
-      texto: "Encontré 2 producto(s) con 4 unidad(es) en stock en total.",
-      fotos: [],
-      documentos: [],
+  it("consultar_productos: un formato desconocido/ausente cae a 'conteo'", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.6c", from: "573215879805", texto: "cuantas camisetas hay" });
+    mocks.decidirAccion.mockResolvedValue({ action: "consultar_productos", params: { texto: "camisetas" }, response_message: "" });
+    mocks.consultarProductos.mockResolvedValue({ texto: "Encontré...", fotos: [], documentos: [] });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.consultarProductos).toHaveBeenCalledWith(expect.anything(), "conteo", false);
+  });
+
+  it("consultar_productos: un agregadoDesdeDias corrupto (NaN/negativo) se ignora en vez de corromper el filtro", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.6f", from: "573215879805", texto: "camisetas agregadas no sé cuándo" });
+    mocks.decidirAccion.mockResolvedValue({
+      action: "consultar_productos",
+      params: { texto: "camisetas", agregadoDesdeDias: "no-numero" },
+      response_message: "",
     });
+    mocks.consultarProductos.mockResolvedValue({ texto: "Encontré...", fotos: [], documentos: [] });
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
     await procesarMensajeEntrante({});
 
-    expect(mocks.buscarInventario).toHaveBeenCalledWith({ texto: "camiseta", talla: undefined, color: undefined }, false);
-    expect(mocks.enviarImagenPorLink).not.toHaveBeenCalled();
+    expect(mocks.consultarProductos).toHaveBeenCalledWith(
+      { texto: "camisetas", talla: undefined, color: undefined, agregadoDesdeDias: undefined },
+      "conteo",
+      false,
+    );
   });
 
-  it("buscar_inventario sin ningun filtro responde pidiendo mas detalle, sin llamar a ownerActions (no debe reventar)", async () => {
-    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.1c", from: "573215879805", texto: "dame un informe" });
-    mocks.decidirAccion.mockResolvedValue({ action: "buscar_inventario", params: {}, response_message: "" });
+  it("informe_creditos llama a reports.informeCreditos con dias y conPdf", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.6d", from: "573215879805", texto: "cuantos creditos hay" });
+    mocks.decidirAccion.mockResolvedValue({ action: "informe_creditos", params: { dias: 30, conPdf: true }, response_message: "" });
+    mocks.informeCreditos.mockResolvedValue({ texto: "Ventas a crédito: $500.000", fotos: [], documentos: [{ link: "https://x/c.pdf", filename: "informe-creditos-merylay.pdf" }] });
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
     await procesarMensajeEntrante({});
 
-    expect(mocks.buscarInventario).not.toHaveBeenCalled();
-    expect(mocks.enviarTexto).toHaveBeenCalledWith("573215879805", expect.stringContaining("producto"));
+    expect(mocks.informeCreditos).toHaveBeenCalledWith(30, true);
+    expect(clienteMocks.enviarDocumentoPorLink).toHaveBeenCalledWith("573215879805", "https://x/c.pdf", "informe-creditos-merylay.pdf");
   });
 
-  it("generar_informe_pdf sin ningun filtro responde pidiendo mas detalle, sin llamar a ownerActions (no debe reventar)", async () => {
-    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.2b", from: "573215879805", texto: "dame un informe de ventas" });
-    mocks.decidirAccion.mockResolvedValue({ action: "generar_informe_pdf", params: {}, response_message: "" });
+  it("informe_creditos sin 'dias' en los params usa un default muy grande (ve todo el historial, no solo 30 dias)", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.6e", from: "573215879805", texto: "cuantos creditos hay" });
+    mocks.decidirAccion.mockResolvedValue({ action: "informe_creditos", params: {}, response_message: "" });
+    mocks.informeCreditos.mockResolvedValue({ texto: "Ventas a crédito: $500.000", fotos: [], documentos: [] });
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
     await procesarMensajeEntrante({});
 
-    expect(mocks.generarInformePdf).not.toHaveBeenCalled();
-    expect(mocks.enviarTexto).toHaveBeenCalledWith("573215879805", expect.stringContaining("informe"));
+    expect(mocks.informeCreditos).toHaveBeenCalledWith(3650, false);
   });
 
-  it("generar_informe_pdf manda el documento", async () => {
-    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.2", from: "573215879805", texto: "mandame el informe" });
-    mocks.decidirAccion.mockResolvedValue({ action: "generar_informe_pdf", params: { texto: "camiseta" }, response_message: "" });
-    mocks.generarInformePdf.mockResolvedValue({
-      texto: "Aquí tienes el informe 📋",
-      fotos: [],
-      documentos: [{ link: "https://x/informe.pdf", filename: "informe-merylay.pdf" }],
-    });
+  it("informe_abonos llama a reports.informeAbonos con dias y conPdf (default dias=1 si el modelo no lo manda)", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.6e", from: "573215879805", texto: "que cliente abono hoy" });
+    mocks.decidirAccion.mockResolvedValue({ action: "informe_abonos", params: {}, response_message: "" });
+    mocks.informeAbonos.mockResolvedValue({ texto: "Abonos: $50.000", fotos: [], documentos: [] });
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
     await procesarMensajeEntrante({});
 
-    expect(clienteMocks.enviarDocumentoPorLink).toHaveBeenCalledWith("573215879805", "https://x/informe.pdf", "informe-merylay.pdf");
+    expect(mocks.informeAbonos).toHaveBeenCalledWith(1, false);
   });
 
   it("informe_ventas llama a reports.informeVentas con dias y conPdf", async () => {

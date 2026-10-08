@@ -1,46 +1,19 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../_shared/db.ts", () => ({ getSupabase: vi.fn() }));
 vi.mock("./catalog.ts", () => ({ subirYFirmar: vi.fn(async () => "https://x/informe-firmado.pdf") }));
 
-// Mock de pdf-lib que captura cada texto dibujado con drawText, para poder
-// verificar (test de zona horaria, mas abajo) que la fecha de una fila del
-// PDF sale en hora de Bogota y no en UTC. El resto de tests de este archivo
-// que generan PDF no inspeccionan el contenido, solo que subirYFirmar fue
-// llamado -- este mock conserva esa interfaz minima sin tocarlos.
+// generarPdfTabla ahora vive en pdf-marca.ts (Tarea 1 de este plan) y se
+// mockea por completo -- reports.ts ya no importa pdf-lib directamente.
+// El mock captura el contenido de `filas` tal cual se lo pasan las
+// funciones de este archivo, para poder verificar (test de zona horaria,
+// mas abajo) que la fecha de una fila sale en hora de Bogota y no en UTC.
 const pdfLibCapturado = vi.hoisted(() => ({ textos: [] as string[] }));
-vi.mock("pdf-lib", () => ({
-  StandardFonts: { Helvetica: "Helvetica", HelveticaBold: "HelveticaBold" },
-  PDFDocument: {
-    create: vi.fn(async () => ({
-      addPage: vi.fn(() => ({
-        getHeight: () => 800,
-        drawText: vi.fn((texto: string) => {
-          pdfLibCapturado.textos.push(texto);
-        }),
-        drawRectangle: vi.fn(),
-        drawImage: vi.fn(),
-      })),
-      embedFont: vi.fn(async () => ({})),
-      embedPng: vi.fn(async () => ({})),
-      registerFontkit: vi.fn(),
-      save: vi.fn(async () => new Uint8Array([1, 2, 3])),
-    })),
-  },
-}));
-
-// pdf-marca.ts hace su propia descarga por red (fuentes/logo) -- se mockea
-// por completo para que los tests de este archivo no dependan de internet
-// ni se demoren por eso. Su logica real (descarga, cache, fallback) ya
-// esta cubierta en pdf-marca.test.ts.
 vi.mock("./pdf-marca.ts", () => ({
-  cargarFuentesMarca: vi.fn(async () => ({ texto: {}, textoNegrita: {}, titulo: {} })),
-  cargarLogoMarca: vi.fn(async () => null),
-  dibujarEncabezado: vi.fn(() => 700),
-  dibujarPiePagina: vi.fn(),
-  COLORES_MARCA: {
-    rosaFuerte: {}, dorado: {}, rosaClaro: {}, ciruela: {}, crema: {}, blanco: {},
-  },
+  generarPdfTabla: vi.fn(async (_titulo: string, _encabezados: string[], filas: string[][]) => {
+    filas.forEach((fila) => fila.forEach((valor) => pdfLibCapturado.textos.push(valor)));
+    return new Uint8Array([1, 2, 3]);
+  }),
 }));
 
 // Mock generico: cada tabla tiene una cola de respuestas {data, error} que
@@ -643,5 +616,212 @@ describe("informeGastos", () => {
 
     expect(subirYFirmar).toHaveBeenCalled();
     expect(resultado.documentos).toEqual([{ link: "https://x/informe-firmado.pdf", filename: "informe-gastos-merylay.pdf" }]);
+  });
+});
+
+describe("informeCreditos", () => {
+  it("desglosa total vendido a credito, cuantas ventas y cuantas con saldo pendiente", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      pos_sales: [{
+        data: [
+          { id: "venta-1", sale_number: "POS-1", customer_id: "cli-1", total: 200000, created_at: "2026-10-05T10:00:00Z" },
+          { id: "venta-2", sale_number: "POS-2", customer_id: "cli-2", total: 100000, created_at: "2026-10-06T10:00:00Z" },
+        ],
+        error: null,
+      }],
+      credit_installments: [{
+        data: [
+          { sale_id: "venta-1", amount: 100000, paid_amount: 50000, status: "parcial" },
+          { sale_id: "venta-2", amount: 100000, paid_amount: 100000, status: "pagada" },
+        ],
+        error: null,
+      }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { informeCreditos } = await import("./reports.ts");
+    const resultado = await informeCreditos(7, false);
+
+    expect(resultado.texto).toContain("$300.000 en 2 venta(s)");
+    expect(resultado.texto).toContain("1 con saldo pendiente");
+    expect(resultado.documentos).toHaveLength(0);
+  });
+
+  it("sin ventas a credito en el periodo, responde un mensaje claro", async () => {
+    const supabase = mockSupabaseDesdeTablas({ pos_sales: [{ data: [], error: null }] });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { informeCreditos } = await import("./reports.ts");
+    const resultado = await informeCreditos(7, false);
+
+    expect(resultado.texto).toContain("No hubo ventas a crédito");
+  });
+
+  it("con conPdf=true, el detalle incluye cliente (fusion de identidad), productos y saldo pendiente por venta", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      pos_sales: [{
+        data: [{ id: "venta-1", sale_number: "POS-1", customer_id: "cli-1", total: 200000, created_at: "2026-10-05T10:00:00Z" }],
+        error: null,
+      }],
+      credit_installments: [{
+        data: [{ sale_id: "venta-1", amount: 200000, paid_amount: 50000, status: "parcial" }],
+        error: null,
+      }],
+      pos_customers: [{ data: [{ id: "cli-1", profile_id: "profile-1", nombre: "Juan (POS)" }], error: null }],
+      profiles: [{ data: [{ id: "profile-1", full_name: "Juan Pérez", username: "juan" }], error: null }],
+      pos_sale_items: [{ data: [{ sale_id: "venta-1", product_id: "prod-1" }, { sale_id: "venta-1", product_id: "prod-2" }], error: null }],
+      products: [{ data: [{ id: "prod-1", name: "Pijama Rosa" }, { id: "prod-2", name: "Bata Dorada" }], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+    const { generarPdfTabla } = await import("./pdf-marca.ts");
+
+    const { informeCreditos } = await import("./reports.ts");
+    await informeCreditos(7, true);
+
+    expect(generarPdfTabla).toHaveBeenCalledWith(
+      expect.any(String),
+      ["Fecha", "Cliente", "Productos", "Total", "Saldo pendiente"],
+      [["5/10/2026", "Juan Pérez", "Pijama Rosa, Bata Dorada", "$200.000", "$150.000"]],
+    );
+  });
+
+  it("una venta a credito sin customer_id (mostrador) no revienta: muestra un nombre generico", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      pos_sales: [{
+        data: [{ id: "venta-1", sale_number: "POS-1", customer_id: null, total: 50000, created_at: "2026-10-05T10:00:00Z" }],
+        error: null,
+      }],
+      credit_installments: [{ data: [], error: null }],
+      pos_sale_items: [{ data: [], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+    const { generarPdfTabla } = await import("./pdf-marca.ts");
+
+    const { informeCreditos } = await import("./reports.ts");
+    await expect(informeCreditos(7, true)).resolves.not.toThrow();
+
+    expect(generarPdfTabla).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Array),
+      [["5/10/2026", "Cliente", "—", "$50.000", "$0"]],
+    );
+  });
+
+  it("la fecha del PDF usa hora de Bogota, no UTC, para una venta tarde en la noche", async () => {
+    // 2026-10-08T01:30:00Z son las 8:30pm del 7 de octubre en Bogota
+    // (UTC-5). Si la fila usara UTC en vez de America/Bogota, mostraria
+    // 8/10/2026 en lugar de 7/10/2026 -- mismo caso limite que ya se
+    // prueba en informeVentas/historialCliente, repetido aqui porque
+    // informeCreditos formatea la fecha con su propio codigo (no
+    // comparte esa linea con los demas informes).
+    const supabase = mockSupabaseDesdeTablas({
+      pos_sales: [{
+        data: [{ id: "venta-1", sale_number: "POS-1", customer_id: null, total: 50000, created_at: "2026-10-08T01:30:00Z" }],
+        error: null,
+      }],
+      credit_installments: [{ data: [], error: null }],
+      pos_sale_items: [{ data: [], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+    const { generarPdfTabla } = await import("./pdf-marca.ts");
+
+    const { informeCreditos } = await import("./reports.ts");
+    await informeCreditos(7, true);
+
+    // Se usa la ULTIMA llamada (no calls[0]): el mock de generarPdfTabla no
+    // se limpia entre describe blocks de este archivo (salvo un
+    // vi.clearAllMocks() puntual dentro de "informeVentas"), asi que para
+    // este punto del archivo el indice 0 ya no corresponde a esta prueba
+    // sino a una llamada de un informe anterior.
+    const llamadas = (generarPdfTabla as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const [, , filas] = llamadas[llamadas.length - 1] as [string, string[], string[][]];
+    expect(filas[0][0]).toBe("7/10/2026");
+    expect(filas[0][0]).not.toBe("8/10/2026");
+  });
+});
+
+describe("informeAbonos", () => {
+  // A diferencia del resto del archivo, este describe SI limpia los mocks
+  // antes de cada prueba: el mock de generarPdfTabla acumula llamadas de
+  // TODOS los describe blocks anteriores (no hay un beforeEach a nivel de
+  // archivo), y con esto nuestras pruebas pueden usar mock.calls[0] en vez
+  // de tener que indexar a la ultima llamada como hizo informeCreditos.
+  beforeEach(() => vi.clearAllMocks());
+
+  it("desglosa el total abonado y lista cada abono con su cliente (a diferencia de otros informes, el texto SI lista cada uno)", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      credit_payments: [{
+        data: [
+          { id: "pago-1", sale_id: "venta-1", amount: 50000, payment_method: "efectivo", created_at: "2026-10-05T15:00:00Z" },
+        ],
+        error: null,
+      }],
+      pos_sales: [{ data: [{ id: "venta-1", sale_number: "POS-1", customer_id: "cli-1" }], error: null }],
+      pos_customers: [{ data: [{ id: "cli-1", profile_id: null, nombre: "Ana López" }], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { informeAbonos } = await import("./reports.ts");
+    const resultado = await informeAbonos(1, false);
+
+    expect(resultado.texto).toContain("$50.000 en 1 abono(s)");
+    expect(resultado.texto).toContain("Ana López");
+    expect(resultado.texto).toContain("$50.000");
+  });
+
+  it("sin abonos en el periodo, responde un mensaje claro", async () => {
+    const supabase = mockSupabaseDesdeTablas({ credit_payments: [{ data: [], error: null }] });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { informeAbonos } = await import("./reports.ts");
+    const resultado = await informeAbonos(1, false);
+
+    expect(resultado.texto).toContain("No hubo abonos registrados");
+  });
+
+  it("con mas de 10 abonos, el texto corta en 10 y avisa cuantos mas hay", async () => {
+    const abonos = Array.from({ length: 12 }, (_, i) => ({
+      id: `pago-${i}`, sale_id: `venta-${i}`, amount: 10000, payment_method: "efectivo", created_at: `2026-10-0${(i % 9) + 1}T15:00:00Z`,
+    }));
+    const supabase = mockSupabaseDesdeTablas({
+      credit_payments: [{ data: abonos, error: null }],
+      pos_sales: [{ data: abonos.map((a) => ({ id: a.sale_id, sale_number: "POS-X", customer_id: null })), error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { informeAbonos } = await import("./reports.ts");
+    const resultado = await informeAbonos(9, false);
+
+    expect(resultado.texto).toContain("y 2 abono(s) más");
+  });
+
+  it("con conPdf=true, cada fila liga el abono a su venta (sale_number)", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      credit_payments: [{
+        data: [{ id: "pago-1", sale_id: "venta-1", amount: 50000, payment_method: "nequi", created_at: "2026-10-05T15:00:00Z" }],
+        error: null,
+      }],
+      pos_sales: [{ data: [{ id: "venta-1", sale_number: "POS-7", customer_id: null }], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+    const { generarPdfTabla } = await import("./pdf-marca.ts");
+
+    const { informeAbonos } = await import("./reports.ts");
+    await informeAbonos(1, true);
+
+    expect(generarPdfTabla).toHaveBeenCalledWith(
+      expect.any(String),
+      ["Fecha", "Cliente", "Monto", "Método", "Venta"],
+      [["5/10/2026", "Cliente", "$50.000", "nequi", "POS-7"]],
+    );
   });
 });

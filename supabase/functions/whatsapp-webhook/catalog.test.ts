@@ -35,6 +35,7 @@ function mockCatalogo(productos: unknown[]) {
   const encadenable = vi.fn(() => query);
   query.eq = encadenable;
   query.ilike = encadenable;
+  query.gte = encadenable;
   (query as { then: unknown }).then = (resolve: (v: typeof resultado) => void) => resolve(resultado);
   const select = vi.fn(() => query);
   const supabase = { from: vi.fn(() => ({ select })) };
@@ -82,8 +83,34 @@ describe("buscarCatalogo", () => {
     expect(select).toHaveBeenCalledWith(expect.stringContaining("product_variants!inner"));
     expect(resultado).toEqual([{
       productId: "p1", variantId: "v1", nombre: "Pijama Rosa", talla: "M", color: "Rosa",
-      precio: 89900, stock: 4, imageId: null, fotoUrl: null,
+      precio: 89900, stock: 4, imageId: null, fotoUrl: null, categoria: "Pijamas",
     }]);
+  });
+
+  it("con talla 'L', NO devuelve variantes 'XL' ni 'XXL' aunque el .ilike de la consulta las traiga (bug real: substring collision)", async () => {
+    const productos = [
+      {
+        id: "p1", name: "Camiseta Blanca", price: 40000, stock: 10, categories: null,
+        product_variants: [
+          { id: "v1", talla: "L", color: null, price_override: null, stock: 3 },
+          { id: "v2", talla: "XL", color: null, price_override: null, stock: 4 },
+          { id: "v3", talla: "XXL", color: null, price_override: null, stock: 2 },
+          { id: "v4", talla: "L-XL", color: null, price_override: null, stock: 1 },
+        ],
+        product_images: [],
+      },
+    ];
+    const { supabase } = mockCatalogo(productos);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { buscarCatalogo } = await import("./catalog.ts");
+    const resultado = await buscarCatalogo({ talla: "L" });
+
+    // Solo "L" y "L-XL" (talla compuesta que incluye L) deben quedar --
+    // "XL" y "XXL" se excluyen aunque el .ilike("%L%") de la consulta
+    // ya los haya traido en este mock.
+    expect(resultado.map((p) => p.variantId).sort()).toEqual(["v1", "v4"]);
   });
 
   it("con texto en plural, encuentra productos cuyo nombre esta en singular (bug real: 'camisetas' no encontraba 'Camiseta...')", async () => {
@@ -128,6 +155,97 @@ describe("buscarCatalogo", () => {
     const resultado = await buscarCatalogo({ texto: "bolsos" });
 
     expect(resultado).toHaveLength(0);
+  });
+
+  it("con texto en plural y SIN tildes, encuentra un nombre en singular CON tildes (bug real del dueño: 'Camisetas Algodon licrado')", async () => {
+    const productos = [
+      { id: "p1", name: "Camiseta algodón licrado", price: 40000, stock: 5, categories: { name: "Ropa" }, product_variants: [], product_images: [] },
+      { id: "p2", name: "Bata Dorada", price: 120000, stock: 2, categories: { name: "Batas" }, product_variants: [], product_images: [] },
+    ];
+    const { supabase } = mockCatalogo(productos);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { buscarCatalogo } = await import("./catalog.ts");
+    const resultado = await buscarCatalogo({ texto: "Camisetas Algodon licrado" });
+
+    expect(resultado).toHaveLength(1);
+    expect(resultado[0].nombre).toBe("Camiseta algodón licrado");
+  });
+
+  it("incluye la categoria del producto en el resultado", async () => {
+    const productos = [
+      { id: "p1", name: "Camiseta Blanca", price: 40000, stock: 3, categories: { name: "Camiseta algodón licrado" }, product_variants: [], product_images: [] },
+    ];
+    const { supabase } = mockCatalogo(productos);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { buscarCatalogo } = await import("./catalog.ts");
+    const resultado = await buscarCatalogo({ texto: "camiseta" });
+
+    expect(resultado[0].categoria).toBe("Camiseta algodón licrado");
+  });
+
+  it("sin categoria asignada, categoria queda en null (no revienta)", async () => {
+    const productos = [
+      { id: "p1", name: "Producto suelto", price: 10000, stock: 1, categories: null, product_variants: [], product_images: [] },
+    ];
+    const { supabase } = mockCatalogo(productos);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { buscarCatalogo } = await import("./catalog.ts");
+    const resultado = await buscarCatalogo({ texto: "producto" });
+
+    expect(resultado[0].categoria).toBeNull();
+  });
+
+  it("con agregadoDesdeDias, filtra products por created_at", async () => {
+    const productos = [
+      { id: "p1", name: "Camiseta Nueva", price: 40000, stock: 3, categories: null, product_variants: [], product_images: [] },
+    ];
+    const { supabase, query } = mockCatalogo(productos);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { buscarCatalogo } = await import("./catalog.ts");
+    const resultado = await buscarCatalogo({ agregadoDesdeDias: 2 });
+
+    expect(query.gte).toHaveBeenCalledWith("created_at", expect.any(String));
+    expect(resultado).toHaveLength(1);
+  });
+
+  it("agregadoDesdeDias solo, sin texto/talla/color, es un filtro valido (no lanza)", async () => {
+    const { supabase } = mockCatalogo([]);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { buscarCatalogo } = await import("./catalog.ts");
+    await expect(buscarCatalogo({ agregadoDesdeDias: 2 })).resolves.toEqual([]);
+  });
+
+  it("agregadoDesdeDias combinado con talla: ambos filtros se aplican (variantesEmbed sigue usando !inner por la talla)", async () => {
+    const productos = [
+      {
+        id: "p1", name: "Camiseta Nueva", price: 40000, stock: 3, categories: null,
+        product_variants: [{ id: "v1", talla: "M", color: null, price_override: null, stock: 2 }],
+        product_images: [],
+      },
+    ];
+    const { supabase, select, query } = mockCatalogo(productos);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { buscarCatalogo } = await import("./catalog.ts");
+    const resultado = await buscarCatalogo({ talla: "M", agregadoDesdeDias: 2 });
+
+    // product_variants!inner se sigue usando porque hay talla -- confirma
+    // que agregar el filtro de fecha no cambia esa decision.
+    expect(select).toHaveBeenCalledWith(expect.stringContaining("product_variants!inner"));
+    expect(query.gte).toHaveBeenCalledWith("created_at", expect.any(String));
+    expect(resultado).toHaveLength(1);
+    expect(resultado[0].talla).toBe("M");
   });
 
   it("devuelve como maximo 50 filas", async () => {

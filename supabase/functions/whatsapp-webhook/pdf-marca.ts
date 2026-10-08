@@ -1,5 +1,5 @@
 import fontkit from "@pdf-lib/fontkit";
-import { type PDFDocument, type PDFFont, type PDFImage, type PDFPage, rgb, StandardFonts } from "pdf-lib";
+import { PDFDocument, type PDFFont, type PDFImage, type PDFPage, rgb, StandardFonts } from "pdf-lib";
 
 // Paleta oficial de MeryLay Boutique (CLAUDE.md seccion 3) convertida a 0..1
 // para pdf-lib (rgb() espera fracciones, no 0..255).
@@ -167,4 +167,45 @@ export function dibujarPiePagina(pagina: PDFPage, opts: { fuentes: FuentesMarca;
     font: opts.fuentes.texto,
     color: COLORES_MARCA.ciruela,
   });
+}
+
+const ANCHO_PAGINA_TABLA = 780; // horizontal (landscape) -- mismo ancho que catalog.ts
+const ALTO_FILA_TABLA = 20;
+const MARGEN_LATERAL_TABLA = 24;
+const ALTO_PIE_TABLA = 30;
+
+// Genera un PDF de marca con una tabla simple (encabezados de columna +
+// filas de texto, bandas alternadas). Sin logica de negocio: solo recibe
+// texto ya formateado -- usado por los informes de negocio (reports.ts)
+// y por el informe de productos sin fotos (owner-actions.ts).
+export async function generarPdfTabla(titulo: string, encabezados: string[], filas: string[][]): Promise<Uint8Array> {
+  const pdf = await PDFDocument.create();
+  const altoContenido = (filas.length + 1) * ALTO_FILA_TABLA;
+  const altoPagina = 140 + altoContenido + ALTO_PIE_TABLA;
+  const pagina = pdf.addPage([ANCHO_PAGINA_TABLA, altoPagina]);
+
+  const [fuentes, logo] = await Promise.all([cargarFuentesMarca(pdf), cargarLogoMarca(pdf)]);
+  let y = dibujarEncabezado(pagina, { titulo, fuentes, logo, anchoPagina: ANCHO_PAGINA_TABLA, altoPagina });
+
+  const anchoColumna = (ANCHO_PAGINA_TABLA - MARGEN_LATERAL_TABLA * 2) / encabezados.length;
+
+  pagina.drawRectangle({ x: 0, y: y - 4, width: ANCHO_PAGINA_TABLA, height: ALTO_FILA_TABLA + 4, color: COLORES_MARCA.rosaFuerte });
+  encabezados.forEach((encabezado, i) => {
+    pagina.drawText(encabezado, { x: MARGEN_LATERAL_TABLA + i * anchoColumna, y, size: 10, font: fuentes.textoNegrita, color: COLORES_MARCA.blanco });
+  });
+  y -= ALTO_FILA_TABLA;
+
+  filas.forEach((fila, indiceFila) => {
+    if (indiceFila % 2 === 1) {
+      pagina.drawRectangle({ x: 0, y: y - 4, width: ANCHO_PAGINA_TABLA, height: ALTO_FILA_TABLA, color: COLORES_MARCA.rosaClaro });
+    }
+    fila.forEach((valor, i) => {
+      pagina.drawText(valor, { x: MARGEN_LATERAL_TABLA + i * anchoColumna, y, size: 9, font: fuentes.texto, color: COLORES_MARCA.ciruela });
+    });
+    y -= ALTO_FILA_TABLA;
+  });
+
+  dibujarPiePagina(pagina, { fuentes, anchoPagina: ANCHO_PAGINA_TABLA });
+
+  return pdf.save();
 }
