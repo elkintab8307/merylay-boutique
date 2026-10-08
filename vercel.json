@@ -1,8 +1,0 @@
-{
-  "functions": {
-    "src/app/api/pdf/render/route.ts": {
-      "memory": 2048,
-      "maxDuration": 60
-    }
-  }
-}
