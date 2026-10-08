@@ -17,6 +17,7 @@ export interface ProductoEncontrado {
   stock: number;
   imageId: string | null;
   fotoUrl: string | null;
+  categoria: string | null;
 }
 
 export interface ProductoParaCarrito {
@@ -48,13 +49,14 @@ export interface FiltrosCatalogo {
   texto?: string;
   talla?: string;
   color?: string;
+  agregadoDesdeDias?: number;
 }
 
 export const TOPE_BUSCAR_CATALOGO = 50;
 
 export async function buscarCatalogo(filtros: FiltrosCatalogo): Promise<ProductoEncontrado[]> {
-  if (!filtros.texto && !filtros.talla && !filtros.color) {
-    throw new Error("buscarCatalogo requiere al menos un filtro (texto, talla o color).");
+  if (!filtros.texto && !filtros.talla && !filtros.color && !filtros.agregadoDesdeDias) {
+    throw new Error("buscarCatalogo requiere al menos un filtro (texto, talla, color o agregadoDesdeDias).");
   }
 
   const supabase = getSupabase();
@@ -69,11 +71,15 @@ export async function buscarCatalogo(filtros: FiltrosCatalogo): Promise<Producto
 
   let query = supabase
     .from("products")
-    .select(`id, name, price, stock, categories(name), ${variantesEmbed}, product_images(id, url, is_primary, variant_id, vendida)`)
+    .select(`id, name, price, stock, created_at, categories(name), ${variantesEmbed}, product_images(id, url, is_primary, variant_id, vendida)`)
     .eq("is_active", true);
 
   if (filtros.talla) query = query.ilike("product_variants.talla", `%${escaparPatronLike(filtros.talla)}%`);
   if (filtros.color) query = query.ilike("product_variants.color", `%${escaparPatronLike(filtros.color)}%`);
+  if (filtros.agregadoDesdeDias) {
+    const desde = new Date(Date.now() - filtros.agregadoDesdeDias * 24 * 60 * 60 * 1000).toISOString();
+    query = query.gte("created_at", desde);
+  }
 
   const { data, error } = await query;
   if (error || !data) return [];
@@ -117,6 +123,7 @@ export async function buscarCatalogo(filtros: FiltrosCatalogo): Promise<Producto
         stock: producto.stock,
         imageId: imagen?.id ?? null,
         fotoUrl: imagen?.url ?? null,
+        categoria: producto.categories?.name ?? null,
       }];
     }
     return variantes.map((variante) => {
@@ -131,6 +138,7 @@ export async function buscarCatalogo(filtros: FiltrosCatalogo): Promise<Producto
         stock: variante.stock,
         imageId: imagen?.id ?? null,
         fotoUrl: imagen?.url ?? null,
+        categoria: producto.categories?.name ?? null,
       };
     });
   });
