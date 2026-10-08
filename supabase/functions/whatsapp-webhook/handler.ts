@@ -100,6 +100,17 @@ function limiteValido(valor: unknown, porDefecto: number, tope: number): number 
   return Math.min(base, tope);
 }
 
+// A diferencia de diasValidos/limiteValido, agregadoDesdeDias es un filtro
+// OPCIONAL sin default razonable: ausente significa "no filtrar por fecha",
+// no "usar N dias". Un valor presente pero corrupto (NaN, <1, no numerico)
+// se trata igual que ausente -- se ignora -- en vez de corromper el filtro
+// de fecha en catalog.ts o rechazar toda la solicitud.
+function agregadoDesdeDiasValido(valor: unknown): number | undefined {
+  if (valor === undefined || valor === null) return undefined;
+  const n = Math.floor(Number(valor));
+  return Number.isFinite(n) && n >= 1 ? n : undefined;
+}
+
 async function ejecutarAccionLectura(accion: string, params: Record<string, unknown>): Promise<ownerActions.RespuestaLectura> {
   switch (accion) {
     case "informe_ventas": {
@@ -134,7 +145,7 @@ async function ejecutarAccionLectura(accion: string, params: Record<string, unkn
         texto: params.texto as string | undefined,
         talla: params.talla as string | undefined,
         color: params.color as string | undefined,
-        agregadoDesdeDias: params.agregadoDesdeDias as number | undefined,
+        agregadoDesdeDias: agregadoDesdeDiasValido(params.agregadoDesdeDias),
       };
       if (!filtros.texto && !filtros.talla && !filtros.color && !filtros.agregadoDesdeDias) {
         return { texto: "¿Qué producto o categoría quieres que busque? Dime el nombre, la talla, el color, o desde cuándo se agregó.", fotos: [], documentos: [] };
@@ -146,7 +157,12 @@ async function ejecutarAccionLectura(accion: string, params: Record<string, unkn
       return ownerActions.consultarProductos(filtros, formato, Boolean(params.conFotos));
     }
     case "informe_creditos": {
-      const dias = diasValidos(params.dias, 30);
+      // Sin periodo mencionado, "cuantos creditos hay" debe ver TODOS los
+      // creditos reales del negocio, no solo los ultimos 30 dias (bug real:
+      // una venta a credito de hace mas de 30 dias con saldo pendiente real
+      // quedaba excluida en silencio). ~10 anios cubre toda la historia del
+      // negocio sin tener que redefinir la semantica de informeCreditos.
+      const dias = diasValidos(params.dias, 3650);
       return informeCreditos(dias, Boolean(params.conPdf));
     }
     case "informe_abonos": {

@@ -452,6 +452,25 @@ describe("acciones de lectura del dueño con fotos/documentos", () => {
     expect(mocks.consultarProductos).toHaveBeenCalledWith(expect.anything(), "conteo", false);
   });
 
+  it("consultar_productos: un agregadoDesdeDias corrupto (NaN/negativo) se ignora en vez de corromper el filtro", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.6f", from: "573215879805", texto: "camisetas agregadas no sé cuándo" });
+    mocks.decidirAccion.mockResolvedValue({
+      action: "consultar_productos",
+      params: { texto: "camisetas", agregadoDesdeDias: "no-numero" },
+      response_message: "",
+    });
+    mocks.consultarProductos.mockResolvedValue({ texto: "Encontré...", fotos: [], documentos: [] });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.consultarProductos).toHaveBeenCalledWith(
+      { texto: "camisetas", talla: undefined, color: undefined, agregadoDesdeDias: undefined },
+      "conteo",
+      false,
+    );
+  });
+
   it("informe_creditos llama a reports.informeCreditos con dias y conPdf", async () => {
     mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.6d", from: "573215879805", texto: "cuantos creditos hay" });
     mocks.decidirAccion.mockResolvedValue({ action: "informe_creditos", params: { dias: 30, conPdf: true }, response_message: "" });
@@ -462,6 +481,17 @@ describe("acciones de lectura del dueño con fotos/documentos", () => {
 
     expect(mocks.informeCreditos).toHaveBeenCalledWith(30, true);
     expect(clienteMocks.enviarDocumentoPorLink).toHaveBeenCalledWith("573215879805", "https://x/c.pdf", "informe-creditos-merylay.pdf");
+  });
+
+  it("informe_creditos sin 'dias' en los params usa un default muy grande (ve todo el historial, no solo 30 dias)", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.6e", from: "573215879805", texto: "cuantos creditos hay" });
+    mocks.decidirAccion.mockResolvedValue({ action: "informe_creditos", params: {}, response_message: "" });
+    mocks.informeCreditos.mockResolvedValue({ texto: "Ventas a crédito: $500.000", fotos: [], documentos: [] });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.informeCreditos).toHaveBeenCalledWith(3650, false);
   });
 
   it("informe_abonos llama a reports.informeAbonos con dias y conPdf (default dias=1 si el modelo no lo manda)", async () => {

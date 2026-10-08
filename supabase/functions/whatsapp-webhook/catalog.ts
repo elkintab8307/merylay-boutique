@@ -99,14 +99,8 @@ export async function buscarCatalogo(filtros: FiltrosCatalogo): Promise<Producto
   // columna de una tabla relacionada (categories.name) dentro de la misma
   // llamada -- a esta escala de catalogo (decenas de productos activos) el
   // costo es insignificante.
-  const textoNormalizado = filtros.texto?.toLowerCase();
-  const candidatosTexto = textoNormalizado ? candidatosSingularPlural(textoNormalizado) : null;
-  const filtrados = candidatosTexto
-    ? productos.filter((p) => {
-        const nombre = p.name.toLowerCase();
-        const categoria = (p.categories?.name ?? "").toLowerCase();
-        return candidatosTexto.some((candidato) => nombre.includes(candidato) || categoria.includes(candidato));
-      })
+  const filtrados = filtros.texto
+    ? productos.filter((p) => coincideTexto(filtros.texto!, p.name, p.categories?.name ?? ""))
     : productos;
 
   const expandido = filtrados.flatMap((producto): ProductoEncontrado[] => {
@@ -143,7 +137,27 @@ export async function buscarCatalogo(filtros: FiltrosCatalogo): Promise<Producto
     });
   });
 
-  return expandido.slice(0, TOPE_BUSCAR_CATALOGO);
+  // El .ilike() de arriba es un pre-filtro amplio por substring (reduce
+  // cuantas filas trae Postgres antes del join); aqui se aplica la
+  // coincidencia EXACTA de talla en memoria, porque "%L%" tambien machea
+  // "XL"/"XXL"/"L-XL" (bug real: "talla L" devolvia tambien XL/XXL). No se
+  // expande a color -- no hay evidencia de una colision equivalente ahi.
+  const porTalla = filtros.talla
+    ? expandido.filter((p) => tallaCoincideExacta(p.talla, filtros.talla!))
+    : expandido;
+
+  return porTalla.slice(0, TOPE_BUSCAR_CATALOGO);
+}
+
+// Coincidencia EXACTA de talla (no substring): "L" no debe encontrar "XL"
+// ni "XXL" solo porque la letra "L" aparece dentro de esas cadenas (bug
+// real: .ilike("%L%") en la consulta tambien las trae). Las tallas
+// compuestas ("L-XL") se tratan como dos tokens separados por "-": "L" SI
+// coincide con "L-XL" (es una de sus dos tallas), pero no con "XL" sola.
+function tallaCoincideExacta(tallaReal: string | null, busqueda: string): boolean {
+  if (!tallaReal) return false;
+  const tokens = tallaReal.toLowerCase().split("-").map((t) => t.trim());
+  return tokens.includes(busqueda.toLowerCase().trim());
 }
 
 // Elige la foto a mostrar/registrar para una variante (o para el producto
@@ -168,21 +182,43 @@ function escaparPatronLike(texto: string): string {
   return texto.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
 }
 
-// Bug real observado: todos los nombres de producto/categoria del catalogo
-// estan en SINGULAR ("Camiseta algodón licrado"), pero el dueño pregunta en
-// PLURAL ("camisetas") y el modelo reenvia ese texto tal cual -- la
-// coincidencia por substring exacto entonces nunca encuentra nada (0 de 30
-// productos con "camiseta" contienen "camisetas" como substring literal).
-// Un texto en SINGULAR ya encuentra nombres en plural sin ningun cambio
-// (singular es prefijo de plural: "pijamas".includes("pijama") ya es true):
-// solo falta la direccion contraria. Por eso aqui solo se ACORTA el texto
-// (quitando un plural comun en español), nunca se alarga -- alargarlo
-// arriesgaria falsos positivos que no se observaron en el bug real.
-function candidatosSingularPlural(texto: string): string[] {
-  const candidatos = new Set([texto]);
-  if (texto.endsWith("es") && texto.length > 4) candidatos.add(texto.slice(0, -2));
-  if (texto.endsWith("s") && texto.length > 3) candidatos.add(texto.slice(0, -1));
-  return [...candidatos];
+// Quita tildes y pasa a minusculas: el dueño escribe desde WhatsApp sin
+// acentos casi siempre ("algodon"), pero los nombres reales del catalogo si
+// los llevan ("algodón") -- sin esto, ninguna de las dos formas encuentra a
+// la otra.
+function normalizarTexto(texto: string): string {
+  return texto.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
+// Quita un plural comun en español de UNA SOLA palabra ("camisetas" ->
+// "camiseta", "pantalones" -> "pantalon"). Solo ACORTA, nunca alarga -- ver
+// la nota de coincideTexto() sobre por que.
+function singularizarPalabra(palabra: string): string {
+  if (palabra.endsWith("es") && palabra.length > 4) return palabra.slice(0, -2);
+  if (palabra.endsWith("s") && palabra.length > 3) return palabra.slice(0, -1);
+  return palabra;
+}
+
+// Bug real observado dos veces: (1) los nombres del catalogo estan en
+// SINGULAR pero el dueño pregunta en PLURAL, y (2) el dueño escribe sin
+// tildes. Exigir que la FRASE COMPLETA fuera un substring literal fallaba en
+// ambos casos a la vez cuando la busqueda tiene varias palabras (ej.
+// "camisetas algodon licrado": el plural no esta al final de la frase,
+// esta a mitad). Ahora se exige que CADA PALABRA de la busqueda
+// (normalizada sin tildes, probando tambien su forma singular) aparezca en
+// el nombre o la categoria -- tambien normalizados -- en vez de que la
+// frase entera sea un unico substring. Solo se intenta singularizar (nunca
+// pluralizar) por la misma razon que antes: un singular ya es casi siempre
+// prefijo de su plural, asi que alargar arriesgaria falsos positivos no
+// observados.
+function coincideTexto(textoBusqueda: string, nombre: string, categoria: string): boolean {
+  const nombreNorm = normalizarTexto(nombre);
+  const categoriaNorm = normalizarTexto(categoria);
+  const palabras = normalizarTexto(textoBusqueda).split(/\s+/).filter(Boolean);
+  return palabras.every((palabra) => {
+    const candidatos = [palabra, singularizarPalabra(palabra)];
+    return candidatos.some((c) => nombreNorm.includes(c) || categoriaNorm.includes(c));
+  });
 }
 
 // Fuente de verdad para agregar al carrito: nunca se confia en el

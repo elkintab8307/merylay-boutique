@@ -87,6 +87,32 @@ describe("buscarCatalogo", () => {
     }]);
   });
 
+  it("con talla 'L', NO devuelve variantes 'XL' ni 'XXL' aunque el .ilike de la consulta las traiga (bug real: substring collision)", async () => {
+    const productos = [
+      {
+        id: "p1", name: "Camiseta Blanca", price: 40000, stock: 10, categories: null,
+        product_variants: [
+          { id: "v1", talla: "L", color: null, price_override: null, stock: 3 },
+          { id: "v2", talla: "XL", color: null, price_override: null, stock: 4 },
+          { id: "v3", talla: "XXL", color: null, price_override: null, stock: 2 },
+          { id: "v4", talla: "L-XL", color: null, price_override: null, stock: 1 },
+        ],
+        product_images: [],
+      },
+    ];
+    const { supabase } = mockCatalogo(productos);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { buscarCatalogo } = await import("./catalog.ts");
+    const resultado = await buscarCatalogo({ talla: "L" });
+
+    // Solo "L" y "L-XL" (talla compuesta que incluye L) deben quedar --
+    // "XL" y "XXL" se excluyen aunque el .ilike("%L%") de la consulta
+    // ya los haya traido en este mock.
+    expect(resultado.map((p) => p.variantId).sort()).toEqual(["v1", "v4"]);
+  });
+
   it("con texto en plural, encuentra productos cuyo nombre esta en singular (bug real: 'camisetas' no encontraba 'Camiseta...')", async () => {
     const productos = [
       { id: "p1", name: "Camiseta algodón licrado", price: 40000, stock: 5, categories: { name: "Camiseta algodón licrado" }, product_variants: [], product_images: [] },
@@ -129,6 +155,22 @@ describe("buscarCatalogo", () => {
     const resultado = await buscarCatalogo({ texto: "bolsos" });
 
     expect(resultado).toHaveLength(0);
+  });
+
+  it("con texto en plural y SIN tildes, encuentra un nombre en singular CON tildes (bug real del dueño: 'Camisetas Algodon licrado')", async () => {
+    const productos = [
+      { id: "p1", name: "Camiseta algodón licrado", price: 40000, stock: 5, categories: { name: "Ropa" }, product_variants: [], product_images: [] },
+      { id: "p2", name: "Bata Dorada", price: 120000, stock: 2, categories: { name: "Batas" }, product_variants: [], product_images: [] },
+    ];
+    const { supabase } = mockCatalogo(productos);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { buscarCatalogo } = await import("./catalog.ts");
+    const resultado = await buscarCatalogo({ texto: "Camisetas Algodon licrado" });
+
+    expect(resultado).toHaveLength(1);
+    expect(resultado[0].nombre).toBe("Camiseta algodón licrado");
   });
 
   it("incluye la categoria del producto en el resultado", async () => {
