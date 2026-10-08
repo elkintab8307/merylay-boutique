@@ -28,6 +28,11 @@ async function lanzarNavegador(): Promise<NavegadorMinimo> {
   if (process.env.VERCEL) {
     const chromium = (await import("@sparticuz/chromium")).default;
     const puppeteer = await import("puppeteer-core");
+    // Desactiva WebGL/swiftshader -- recomendado por el README de
+    // @sparticuz/chromium para serverless. Sin esto, el smoke test real
+    // contra Vercel crasheaba a mitad del render ("exit status: 128",
+    // Protocol error Target closed) incluso con memoria de sobra.
+    chromium.setGraphicsMode = false;
     // "shell" (no `true`) y envolver los args con `defaultArgs` es el uso
     // documentado por @sparticuz/chromium para Lambda/Vercel -- ver su
     // README ("Usage"). `true` no esta probado contra este binario.

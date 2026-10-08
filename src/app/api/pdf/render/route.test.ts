@@ -97,12 +97,17 @@ describe("POST /api/pdf/render", () => {
     const launchMock = vi.fn(async () => navegadorMock);
     const defaultArgsMock = vi.fn(() => ["--arg-por-defecto"]);
     vi.doMock("puppeteer-core", () => ({ launch: launchMock, defaultArgs: defaultArgsMock }));
-    vi.doMock("@sparticuz/chromium", () => ({
-      default: { args: ["--chromium-arg"], executablePath: vi.fn(async () => "/tmp/chromium") },
-    }));
+    const chromiumMock = { args: ["--chromium-arg"], executablePath: vi.fn(async () => "/tmp/chromium"), setGraphicsMode: true };
+    vi.doMock("@sparticuz/chromium", () => ({ default: chromiumMock }));
     const { POST } = await import("./route");
 
     await POST(peticion({ tipo: "tabla", titulo: "x", encabezados: [], filas: [] }, { "x-pdf-render-secret": "secreto-real" }));
+
+    // Recomendado por el README de @sparticuz/chromium para serverless: sin
+    // esto, Chromium intenta extraer e inicializar el stack de WebGL
+    // (swiftshader) en /tmp, lo que se sospecha causo el crash real visto
+    // en el smoke test de Vercel ("exit status: 128", Target closed).
+    expect(chromiumMock.setGraphicsMode).toBe(false);
 
     expect(defaultArgsMock).toHaveBeenCalledWith(expect.objectContaining({ args: ["--chromium-arg"], headless: "shell" }));
     expect(launchMock).toHaveBeenCalledWith(
