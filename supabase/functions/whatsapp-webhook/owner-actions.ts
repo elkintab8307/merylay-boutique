@@ -1,6 +1,6 @@
 import { getSupabase } from "../_shared/db.ts";
-import { buscarCatalogo, generarPdfConFotos, subirYFirmar, TOPE_BUSCAR_CATALOGO, type FiltrosCatalogo, type FilaPdf } from "./catalog.ts";
-import { generarPdfTabla } from "./pdf-marca.ts";
+import { buscarCatalogo, construirTarjetasProductos, subirYFirmar, TOPE_BUSCAR_CATALOGO, type FiltrosCatalogo } from "./catalog.ts";
+import { generarPdfTabla, generarPdfTarjetas } from "./pdf-marca.ts";
 
 export const formatoMoneda = (valor: number) => `$${valor.toLocaleString("es-CO")}`;
 
@@ -144,14 +144,8 @@ export async function consultarProductos(
 }
 
 async function generarInformeProductosPdfFotos(productos: Awaited<ReturnType<typeof buscarCatalogo>>): Promise<RespuestaLectura> {
-  const filas: FilaPdf[] = productos.map((p) => ({
-    fotoUrl: p.fotoUrl,
-    nombre: p.nombre,
-    detalle: [p.talla ? `talla ${p.talla}` : null, p.color ? `color ${p.color}` : null, p.categoria].filter(Boolean).join(", ") || "—",
-    precio: p.precio,
-    nota: `stock: ${p.stock}`,
-  }));
-  const bytes = await generarPdfConFotos("Informe de inventario — MeryLay Boutique", filas);
+  const { estadisticas, tarjetas, fotoHero } = construirTarjetasProductos(productos);
+  const bytes = await generarPdfTarjetas("INFORME DE PRODUCTOS", "CATÁLOGO MERYLAY BOUTIQUE", fotoHero, estadisticas, tarjetas);
   const link = await subirYFirmar(bytes, "informe.pdf");
   return { texto: "Aquí tienes el informe 📋", fotos: [], documentos: [{ link, filename: "informe-merylay.pdf" }] };
 }
