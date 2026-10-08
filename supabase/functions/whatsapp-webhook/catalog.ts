@@ -1,6 +1,5 @@
-import { PDFDocument } from "pdf-lib";
 import { getSupabase } from "../_shared/db.ts";
-import { COLORES_MARCA, cargarFuentesMarca, cargarLogoMarca, dibujarEncabezado, dibujarPiePagina } from "./pdf-marca.ts";
+import { generarPdfTarjetas, type TarjetaProducto } from "./pdf-marca.ts";
 import type { ItemCarrito } from "../_shared/types.ts";
 
 // Una fila por "unidad pedible": cada variante de un producto con
@@ -58,7 +57,15 @@ export async function buscarCatalogo(filtros: FiltrosCatalogo): Promise<Producto
   if (!filtros.texto && !filtros.talla && !filtros.color && !filtros.agregadoDesdeDias) {
     throw new Error("buscarCatalogo requiere al menos un filtro (texto, talla, color o agregadoDesdeDias).");
   }
+  return buscarCatalogoInterno(filtros);
+}
 
+// Misma logica que buscarCatalogo, sin el guard de "al menos un filtro" --
+// la usa generarCatalogoPdf para traer el catalogo COMPLETO (sin filtros)
+// con el mismo detalle (variantes/fotos/categoria) que necesita la
+// cuadricula de tarjetas, en vez de la consulta reducida (solo
+// name/price/stock) que tenia antes de ese informe.
+async function buscarCatalogoInterno(filtros: FiltrosCatalogo): Promise<ProductoEncontrado[]> {
   const supabase = getSupabase();
   // product_variants!inner: cuando se filtra por talla/color, Postgres solo
   // devuelve las variantes que cumplen el filtro (no todas las del
@@ -287,67 +294,47 @@ export async function obtenerProductoParaCarrito(
   };
 }
 
-export interface FilaPdf {
-  fotoUrl: string | null;
+export interface ProductoAgrupado {
+  productId: string;
   nombre: string;
-  detalle: string;
-  precio: number;
-  nota?: string;
+  categoria: string | null;
+  fotoUrl: string | null;
+  tallas: string[];
+  colores: string[];
+  precioMin: number;
+  precioMax: number;
+  stockTotal: number;
 }
 
-const ALTO_FILA_PDF = 70;
-const ANCHO_PAGINA_PDF = 780; // horizontal (landscape) -- mas ancho que alto
-const MARGEN_LATERAL_PDF = 24;
-const ALTO_PIE_PDF = 30;
-
-export async function generarPdfConFotos(titulo: string, filas: FilaPdf[], total?: number): Promise<Uint8Array> {
-  const pdf = await PDFDocument.create();
-  const alturaExtra = total !== undefined ? ALTO_FILA_PDF : 0;
-  const altoPagina = 140 + filas.length * ALTO_FILA_PDF + alturaExtra + ALTO_PIE_PDF;
-  const pagina = pdf.addPage([ANCHO_PAGINA_PDF, altoPagina]);
-
-  const [fuentes, logo] = await Promise.all([cargarFuentesMarca(pdf), cargarLogoMarca(pdf)]);
-  let y = dibujarEncabezado(pagina, { titulo, fuentes, logo, anchoPagina: ANCHO_PAGINA_PDF, altoPagina });
-
-  for (let indiceFila = 0; indiceFila < filas.length; indiceFila++) {
-    const fila = filas[indiceFila];
-    if (indiceFila % 2 === 1) {
-      pagina.drawRectangle({ x: 0, y: y - ALTO_FILA_PDF + 18, width: ANCHO_PAGINA_PDF, height: ALTO_FILA_PDF, color: COLORES_MARCA.rosaClaro });
-    }
-
-    let anchoTexto = MARGEN_LATERAL_PDF;
-    if (fila.fotoUrl) {
-      try {
-        const bytes = await fetch(fila.fotoUrl).then((r) => {
-          if (!r.ok) throw new Error(`descarga respondio ${r.status}`);
-          return r.arrayBuffer();
-        });
-        const imagen = fila.fotoUrl.toLowerCase().endsWith(".png")
-          ? await pdf.embedPng(bytes)
-          : await pdf.embedJpg(bytes);
-        const alto = 55;
-        const ancho = (imagen.width / imagen.height) * alto;
-        pagina.drawImage(imagen, { x: MARGEN_LATERAL_PDF, y: y - alto + 12, width: ancho, height: alto });
-        anchoTexto = MARGEN_LATERAL_PDF + ancho + 18;
-      } catch (error) {
-        console.error(`[catalog] No se pudo incrustar la foto de "${fila.nombre}" en el PDF:`, error);
-      }
-    }
-    pagina.drawText(fila.nombre, { x: anchoTexto, y, size: 12, font: fuentes.textoNegrita, color: COLORES_MARCA.ciruela });
-    pagina.drawText(
-      `${fila.detalle} — $${fila.precio.toLocaleString("es-CO")}${fila.nota ? ` — ${fila.nota}` : ""}`,
-      { x: anchoTexto, y: y - 18, size: 10, font: fuentes.texto, color: COLORES_MARCA.ciruela },
-    );
-    y -= ALTO_FILA_PDF;
+// Agrupa las filas de buscarCatalogo (una por VARIANTE) de vuelta en una
+// fila por PRODUCTO: el informe de tarjetas necesita mostrar en UNA sola
+// tarjeta todas las tallas/colores disponibles de un producto (como en el
+// diseño de referencia del dueño: "Camiseta Mariposa" con una sola tarjeta
+// y las 4 tallas S/M/L/XL como insignias), no una tarjeta separada por cada
+// combinacion de talla/color.
+export function agruparPorProducto(productos: ProductoEncontrado[]): ProductoAgrupado[] {
+  const porId = new Map<string, ProductoAgrupado>();
+  for (const p of productos) {
+    const actual = porId.get(p.productId) ?? {
+      productId: p.productId,
+      nombre: p.nombre,
+      categoria: p.categoria,
+      fotoUrl: null,
+      tallas: [],
+      colores: [],
+      precioMin: p.precio,
+      precioMax: p.precio,
+      stockTotal: 0,
+    };
+    if (!actual.fotoUrl && p.fotoUrl) actual.fotoUrl = p.fotoUrl;
+    if (p.talla && !actual.tallas.includes(p.talla)) actual.tallas.push(p.talla);
+    if (p.color && !actual.colores.includes(p.color)) actual.colores.push(p.color);
+    actual.precioMin = Math.min(actual.precioMin, p.precio);
+    actual.precioMax = Math.max(actual.precioMax, p.precio);
+    actual.stockTotal += p.stock;
+    porId.set(p.productId, actual);
   }
-
-  if (total !== undefined) {
-    pagina.drawText(`Total: $${total.toLocaleString("es-CO")}`, { x: MARGEN_LATERAL_PDF, y, size: 12, font: fuentes.textoNegrita, color: COLORES_MARCA.dorado });
-  }
-
-  dibujarPiePagina(pagina, { fuentes, anchoPagina: ANCHO_PAGINA_PDF });
-
-  return pdf.save();
+  return [...porId.values()];
 }
 
 export async function subirYFirmar(bytes: Uint8Array, nombreArchivo: string): Promise<string> {
@@ -369,42 +356,49 @@ export async function subirYFirmar(bytes: Uint8Array, nombreArchivo: string): Pr
   return data.signedUrl;
 }
 
-export async function generarCatalogoPdf(filtros?: FiltrosCatalogo): Promise<string> {
-  // No basta con comprobar que `filtros` sea un objeto: un llamador (como
-  // el caso "generar_catalogo_pdf" de handler.ts) puede mandar siempre
-  // {texto, talla, color} aunque el cliente no haya pedido ningun filtro,
-  // y ese objeto llega con sus tres campos en undefined. Hay que mirar si
-  // ALGUN campo tiene contenido real antes de decidir si se usa
-  // buscarCatalogo (que lanza si no recibe ningun filtro) o el catalogo
-  // completo.
-  const tieneFiltros = Boolean(filtros?.texto || filtros?.talla || filtros?.color);
-  const productos = tieneFiltros
-    ? await buscarCatalogo(filtros!)
-    : await (async () => {
-        const supabase = getSupabase();
-        const { data, error } = await supabase
-          .from("products")
-          .select("name, price, stock")
-          .eq("is_active", true)
-          .order("name");
-        if (error) {
-          throw new Error(`No se pudo consultar los productos para el catalogo: ${error.message}`);
-        }
-        return ((data ?? []) as Array<{ name: string; price: number; stock: number }>).map((p) => ({
-          productId: "", variantId: null, nombre: p.name, talla: null, color: null,
-          precio: p.price, stock: p.stock, imageId: null, fotoUrl: null,
-        }));
-      })();
-
-  const filas: FilaPdf[] = productos.map((p) => ({
+// Agrega los datos agrupados por producto hacia la forma que pide
+// generarPdfTarjetas (estadisticas del encabezado + una tarjeta por
+// producto + la foto destacada del encabezado, que es la primera foto real
+// de producto disponible -- no una imagen generica). Compartido por
+// generarCatalogoPdf aqui y por generarInformeProductosPdfFotos en
+// owner-actions.ts, para no duplicar este mapeo en los dos archivos.
+export function construirTarjetasProductos(productos: ProductoEncontrado[]): {
+  estadisticas: { valor: string; etiqueta: string }[];
+  tarjetas: TarjetaProducto[];
+  fotoHero: string | null;
+} {
+  const agrupados = agruparPorProducto(productos);
+  const categorias = new Set(agrupados.map((p) => p.categoria).filter((c): c is string => Boolean(c)));
+  const tallas = new Set(agrupados.flatMap((p) => p.tallas));
+  const estadisticas = [
+    { valor: String(agrupados.length), etiqueta: "PRODUCTOS" },
+    { valor: String(categorias.size), etiqueta: "CATEGORÍAS" },
+    { valor: [...tallas].sort().join(" - ") || "—", etiqueta: "TALLAS" },
+  ];
+  const tarjetas: TarjetaProducto[] = agrupados.map((p) => ({
     fotoUrl: p.fotoUrl,
     nombre: p.nombre,
-    detalle: [p.talla ? `talla ${p.talla}` : null, p.color ? `color ${p.color}` : null].filter(Boolean).join(", ") || "—",
-    precio: p.precio,
-    nota: `stock: ${p.stock}`,
+    pills: [
+      ...(p.tallas.length > 0 ? [{ etiqueta: "Tallas", valores: p.tallas }] : []),
+      ...(p.categoria ? [{ etiqueta: "Categoría", valores: [p.categoria] }] : []),
+    ],
+    precio: p.precioMin === p.precioMax ? p.precioMin : null,
+    nota: p.precioMin === p.precioMax
+      ? `stock: ${p.stockTotal}`
+      : `desde $${p.precioMin.toLocaleString("es-CO")} — stock: ${p.stockTotal}`,
   }));
+  const fotoHero = agrupados.find((p) => p.fotoUrl)?.fotoUrl ?? null;
+  return { estadisticas, tarjetas, fotoHero };
+}
 
-  const bytes = await generarPdfConFotos("Catalogo MeryLay Boutique", filas);
+export async function generarCatalogoPdf(filtros?: FiltrosCatalogo): Promise<string> {
+  // buscarCatalogoInterno nunca lanza por falta de filtros (a diferencia de
+  // buscarCatalogo): sin ningun filtro real, devuelve el catalogo COMPLETO
+  // de productos activos, ya con variantes/fotos/categoria -- lo que
+  // necesita la cuadricula de tarjetas.
+  const productos = await buscarCatalogoInterno(filtros ?? {});
+  const { estadisticas, tarjetas, fotoHero } = construirTarjetasProductos(productos);
+  const bytes = await generarPdfTarjetas("CATÁLOGO", "MeryLay Boutique — Inspiración Femenina", fotoHero, estadisticas, tarjetas);
   return subirYFirmar(bytes, "catalogo.pdf");
 }
 
@@ -424,13 +418,18 @@ export async function obtenerFotoPrincipal(productId: string, variantId: string 
 }
 
 export async function generarCotizacionPdf(items: ItemCarrito[]): Promise<string> {
-  const total = items.reduce((suma, item) => suma + item.unitPrice * item.qty, 0);
-  const filas: FilaPdf[] = await Promise.all(items.map(async (item) => ({
+  const tarjetas: TarjetaProducto[] = await Promise.all(items.map(async (item) => ({
     fotoUrl: await obtenerFotoPrincipal(item.productId, item.variantId),
     nombre: item.nameSnapshot,
-    detalle: `x${item.qty}`,
+    pills: [{ etiqueta: "Cantidad", valores: [`x${item.qty}`] }],
     precio: item.unitPrice * item.qty,
   })));
-  const bytes = await generarPdfConFotos("Cotizacion MeryLay Boutique", filas, total);
+  const total = items.reduce((suma, item) => suma + item.unitPrice * item.qty, 0);
+  const estadisticas = [
+    { valor: String(items.length), etiqueta: "PRODUCTOS" },
+    { valor: `$${total.toLocaleString("es-CO")}`, etiqueta: "TOTAL" },
+  ];
+  const fotoHero = tarjetas.find((t) => t.fotoUrl)?.fotoUrl ?? null;
+  const bytes = await generarPdfTarjetas("COTIZACIÓN", "MeryLay Boutique — Inspiración Femenina", fotoHero, estadisticas, tarjetas);
   return subirYFirmar(bytes, "cotizacion.pdf");
 }

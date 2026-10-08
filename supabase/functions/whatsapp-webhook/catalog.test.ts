@@ -19,6 +19,7 @@ vi.mock("./pdf-marca.ts", () => ({
   cargarLogoMarca: vi.fn(async () => null),
   dibujarEncabezado: vi.fn((_pagina: unknown, opts: { altoPagina: number }) => opts.altoPagina - 70),
   dibujarPiePagina: vi.fn(),
+  generarPdfTarjetas: vi.fn(async () => new Uint8Array([1])),
   COLORES_MARCA: {
     rosaFuerte: rgb(0xe9 / 255, 0x6a / 255, 0x9e / 255),
     dorado: rgb(0xd9 / 255, 0xa4 / 255, 0x41 / 255),
@@ -340,81 +341,118 @@ describe("obtenerProductoParaCarrito", () => {
   });
 });
 
-describe("generarPdfConFotos", () => {
-  it("dibuja una fila por producto, con foto cuando la descarga funciona", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(new Uint8Array([0xff, 0xd8, 0xff]), { status: 200 })));
-    const { generarPdfConFotos } = await import("./catalog.ts");
-
-    const bytes = await generarPdfConFotos("Informe de prueba", [
-      { fotoUrl: "https://x/foto.jpg", nombre: "Pijama Rosa", detalle: "talla M", precio: 89900, nota: "stock: 5" },
+describe("agruparPorProducto", () => {
+  it("agrupa varias filas (una por variante) del mismo producto en una sola, juntando tallas/colores distintos", async () => {
+    const { agruparPorProducto } = await import("./catalog.ts");
+    const resultado = agruparPorProducto([
+      { productId: "p1", variantId: "v1", nombre: "Camiseta Mariposa", talla: "S", color: "Blanco", precio: 40000, stock: 3, imageId: null, fotoUrl: "https://x/a.jpg", categoria: "Camisetas" },
+      { productId: "p1", variantId: "v2", nombre: "Camiseta Mariposa", talla: "M", color: "Blanco", precio: 40000, stock: 2, imageId: null, fotoUrl: null, categoria: "Camisetas" },
+      { productId: "p1", variantId: "v3", nombre: "Camiseta Mariposa", talla: "L", color: "Blanco", precio: 42000, stock: 1, imageId: null, fotoUrl: null, categoria: "Camisetas" },
     ]);
 
-    expect(bytes.byteLength).toBeGreaterThan(0);
-    vi.unstubAllGlobals();
+    expect(resultado).toHaveLength(1);
+    expect(resultado[0]).toMatchObject({
+      productId: "p1", nombre: "Camiseta Mariposa", categoria: "Camisetas",
+      fotoUrl: "https://x/a.jpg", tallas: ["S", "M", "L"], colores: ["Blanco"],
+      precioMin: 40000, precioMax: 42000, stockTotal: 6,
+    });
   });
 
-  it("si la descarga de una foto falla, esa fila se dibuja sin imagen (no aborta el PDF)", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("error", { status: 500 })));
-    const { generarPdfConFotos } = await import("./catalog.ts");
-
-    const bytes = await generarPdfConFotos("Informe de prueba", [
-      { fotoUrl: "https://x/rota.jpg", nombre: "Pijama Rosa", detalle: "talla M", precio: 89900 },
+  it("deja productos distintos en filas separadas", async () => {
+    const { agruparPorProducto } = await import("./catalog.ts");
+    const resultado = agruparPorProducto([
+      { productId: "p1", variantId: null, nombre: "Camiseta A", talla: null, color: null, precio: 40000, stock: 1, imageId: null, fotoUrl: null, categoria: "Camisetas" },
+      { productId: "p2", variantId: null, nombre: "Camiseta B", talla: null, color: null, precio: 42000, stock: 1, imageId: null, fotoUrl: null, categoria: "Camisetas" },
     ]);
 
-    expect(bytes.byteLength).toBeGreaterThan(0);
-    vi.unstubAllGlobals();
+    expect(resultado.map((p) => p.productId).sort()).toEqual(["p1", "p2"]);
   });
 
-  it("una fila sin fotoUrl no intenta descargar nada", async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-    const { generarPdfConFotos } = await import("./catalog.ts");
-
-    await generarPdfConFotos("Informe de prueba", [
-      { fotoUrl: null, nombre: "Pijama Rosa", detalle: "talla M", precio: 89900 },
+  it("usa la primera foto no nula entre las variantes del producto (el orden de llegada decide)", async () => {
+    const { agruparPorProducto } = await import("./catalog.ts");
+    const resultado = agruparPorProducto([
+      { productId: "p1", variantId: "v1", nombre: "Camiseta A", talla: "S", color: null, precio: 40000, stock: 1, imageId: null, fotoUrl: null, categoria: null },
+      { productId: "p1", variantId: "v2", nombre: "Camiseta A", talla: "M", color: null, precio: 40000, stock: 1, imageId: null, fotoUrl: "https://x/segunda.jpg", categoria: null },
     ]);
 
-    expect(fetchMock).not.toHaveBeenCalled();
-    vi.unstubAllGlobals();
+    expect(resultado[0].fotoUrl).toBe("https://x/segunda.jpg");
   });
 
-  it("con un total, agrega una fila extra con el gran total (y no revienta)", async () => {
-    const { generarPdfConFotos } = await import("./catalog.ts");
+  it("sin productos, devuelve un arreglo vacio", async () => {
+    const { agruparPorProducto } = await import("./catalog.ts");
+    expect(agruparPorProducto([])).toEqual([]);
+  });
+});
 
-    const conTotal = await generarPdfConFotos("Informe de prueba", [
-      { fotoUrl: null, nombre: "Pijama Rosa", detalle: "x2", precio: 100000 },
-    ], 150000);
-    const sinTotal = await generarPdfConFotos("Informe de prueba", [
-      { fotoUrl: null, nombre: "Pijama Rosa", detalle: "x2", precio: 100000 },
+describe("construirTarjetasProductos", () => {
+  it("cuenta productos/categorias distintas y lista las tallas ordenadas en las estadisticas", async () => {
+    const { construirTarjetasProductos } = await import("./catalog.ts");
+    const { estadisticas } = construirTarjetasProductos([
+      { productId: "p1", variantId: "v1", nombre: "Camiseta A", talla: "M", color: null, precio: 40000, stock: 1, imageId: null, fotoUrl: null, categoria: "Camisetas" },
+      { productId: "p1", variantId: "v2", nombre: "Camiseta A", talla: "S", color: null, precio: 40000, stock: 1, imageId: null, fotoUrl: null, categoria: "Camisetas" },
+      { productId: "p2", variantId: null, nombre: "Pijama Rosa", talla: null, color: null, precio: 89900, stock: 2, imageId: null, fotoUrl: null, categoria: "Pijamas" },
     ]);
 
-    expect(conTotal.byteLength).toBeGreaterThan(0);
-    // La pagina con total es mas alta (una fila extra), asi que el PDF
-    // resultante no deberia ser mas pequeño que el que no lo lleva.
-    expect(conTotal.byteLength).toBeGreaterThanOrEqual(sinTotal.byteLength);
+    expect(estadisticas).toEqual([
+      { valor: "2", etiqueta: "PRODUCTOS" },
+      { valor: "2", etiqueta: "CATEGORÍAS" },
+      { valor: "M - S", etiqueta: "TALLAS" },
+    ]);
   });
 
-  it("sin total, no dibuja ninguna fila de total (comportamiento igual al de antes)", async () => {
-    const { generarPdfConFotos } = await import("./catalog.ts");
-    const bytes = await generarPdfConFotos("Informe de prueba", [
-      { fotoUrl: null, nombre: "Pijama Rosa", detalle: "x2", precio: 100000 },
+  it("cada tarjeta lleva las insignias de Tallas y Categoría solo cuando hay dato real", async () => {
+    const { construirTarjetasProductos } = await import("./catalog.ts");
+    const { tarjetas } = construirTarjetasProductos([
+      { productId: "p1", variantId: "v1", nombre: "Camiseta A", talla: "M", color: null, precio: 40000, stock: 1, imageId: null, fotoUrl: "https://x/a.jpg", categoria: "Camisetas" },
+      { productId: "p2", variantId: null, nombre: "Producto suelto", talla: null, color: null, precio: 10000, stock: 1, imageId: null, fotoUrl: null, categoria: null },
     ]);
-    expect(bytes.byteLength).toBeGreaterThan(0);
+
+    expect(tarjetas).toEqual([
+      { fotoUrl: "https://x/a.jpg", nombre: "Camiseta A", pills: [{ etiqueta: "Tallas", valores: ["M"] }, { etiqueta: "Categoría", valores: ["Camisetas"] }], precio: 40000, nota: "stock: 1" },
+      { fotoUrl: null, nombre: "Producto suelto", pills: [], precio: 10000, nota: "stock: 1" },
+    ]);
+  });
+
+  it("si un producto tiene variantes con precios distintos, el precio queda null y la nota muestra 'desde'", async () => {
+    const { construirTarjetasProductos } = await import("./catalog.ts");
+    const { tarjetas } = construirTarjetasProductos([
+      { productId: "p1", variantId: "v1", nombre: "Camiseta A", talla: "M", color: null, precio: 40000, stock: 1, imageId: null, fotoUrl: null, categoria: null },
+      { productId: "p1", variantId: "v2", nombre: "Camiseta A", talla: "L", color: null, precio: 45000, stock: 1, imageId: null, fotoUrl: null, categoria: null },
+    ]);
+
+    expect(tarjetas[0].precio).toBeNull();
+    expect(tarjetas[0].nota).toBe("desde $40.000 — stock: 2");
+  });
+
+  it("la foto destacada (fotoHero) es la primera foto real entre todos los productos", async () => {
+    const { construirTarjetasProductos } = await import("./catalog.ts");
+    const { fotoHero } = construirTarjetasProductos([
+      { productId: "p1", variantId: null, nombre: "Sin foto", talla: null, color: null, precio: 1000, stock: 1, imageId: null, fotoUrl: null, categoria: null },
+      { productId: "p2", variantId: null, nombre: "Con foto", talla: null, color: null, precio: 1000, stock: 1, imageId: null, fotoUrl: "https://x/hero.jpg", categoria: null },
+    ]);
+
+    expect(fotoHero).toBe("https://x/hero.jpg");
+  });
+
+  it("sin ningun producto con foto, fotoHero es null", async () => {
+    const { construirTarjetasProductos } = await import("./catalog.ts");
+    const { fotoHero } = construirTarjetasProductos([
+      { productId: "p1", variantId: null, nombre: "Sin foto", talla: null, color: null, precio: 1000, stock: 1, imageId: null, fotoUrl: null, categoria: null },
+    ]);
+
+    expect(fotoHero).toBeNull();
   });
 });
 
 describe("generarCatalogoPdf", () => {
-  it("sin filtros, usa el catalogo completo de productos activos y sube el PDF firmado", async () => {
-    const order = vi.fn(async () => ({
-      data: [{ name: "Pijama Rosa", price: 89900, stock: 5, categories: null, product_variants: [], product_images: [] }],
-      error: null,
-    }));
+  it("sin filtros, usa el catalogo completo de productos activos (misma consulta que buscarCatalogo, sin el guard de filtros) y sube el PDF firmado", async () => {
+    const productos = [
+      { id: "p1", name: "Pijama Rosa", price: 89900, stock: 5, categories: { name: "Pijamas" }, product_variants: [], product_images: [] },
+    ];
+    const { supabase, select } = mockCatalogo(productos);
     const upload = vi.fn(async () => ({ error: null }));
     const createSignedUrl = vi.fn(async () => ({ data: { signedUrl: "https://x/catalogo-firmado.pdf" }, error: null }));
-    const supabase = {
-      from: vi.fn(() => ({ select: vi.fn(() => ({ eq: vi.fn(() => ({ order })) })) })),
-      storage: { from: vi.fn(() => ({ upload, createSignedUrl })) },
-    };
+    (supabase as unknown as { storage: unknown }).storage = { from: vi.fn(() => ({ upload, createSignedUrl })) };
     const { getSupabase } = await import("../_shared/db.ts");
     (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
 
@@ -422,27 +460,24 @@ describe("generarCatalogoPdf", () => {
     const url = await generarCatalogoPdf();
 
     expect(url).toBe("https://x/catalogo-firmado.pdf");
+    expect(select).toHaveBeenCalled();
     expect(upload).toHaveBeenCalled();
   });
 
-  it("con un objeto de filtros sin ningun campo realmente seteado, usa el catalogo completo (no llama a buscarCatalogo)", async () => {
+  it("con un objeto de filtros sin ningun campo realmente seteado, usa el catalogo completo igual que sin argumentos", async () => {
     // Este es exactamente el objeto que arma handler.ts para
     // "generar_catalogo_pdf" cuando el cliente no pide ningun filtro:
-    // {texto: undefined, talla: undefined, color: undefined}. Un objeto
-    // truthy, pero sin contenido real -- debe comportarse igual que
-    // llamar generarCatalogoPdf() sin argumentos, no lanzar el error de
-    // buscarCatalogo ("requiere al menos un filtro").
-    const order = vi.fn(async () => ({
-      data: [{ name: "Pijama Rosa", price: 89900, stock: 5, categories: null, product_variants: [], product_images: [] }],
-      error: null,
-    }));
-    const select = vi.fn(() => ({ eq: vi.fn(() => ({ order })) }));
+    // {texto: undefined, talla: undefined, color: undefined}. No debe
+    // lanzar el error de buscarCatalogo ("requiere al menos un filtro"),
+    // porque este informe pasa por buscarCatalogoInterno, no por
+    // buscarCatalogo.
+    const productos = [
+      { id: "p1", name: "Pijama Rosa", price: 89900, stock: 5, categories: { name: "Pijamas" }, product_variants: [], product_images: [] },
+    ];
+    const { supabase, select } = mockCatalogo(productos);
     const upload = vi.fn(async () => ({ error: null }));
     const createSignedUrl = vi.fn(async () => ({ data: { signedUrl: "https://x/catalogo-completo.pdf" }, error: null }));
-    const supabase = {
-      from: vi.fn(() => ({ select })),
-      storage: { from: vi.fn(() => ({ upload, createSignedUrl })) },
-    };
+    (supabase as unknown as { storage: unknown }).storage = { from: vi.fn(() => ({ upload, createSignedUrl })) };
     const { getSupabase } = await import("../_shared/db.ts");
     (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
 
@@ -450,17 +485,45 @@ describe("generarCatalogoPdf", () => {
     const url = await generarCatalogoPdf({ texto: undefined, talla: undefined, color: undefined });
 
     expect(url).toBe("https://x/catalogo-completo.pdf");
-    expect(order).toHaveBeenCalled();
+    expect(select).toHaveBeenCalled();
   });
 
-  it("con filtros, usa buscarCatalogo en vez del catalogo completo", async () => {
-    const query: Record<string, unknown> = {};
-    query.eq = vi.fn(() => query);
-    (query as { then: unknown }).then = (resolve: (v: { data: unknown[]; error: null }) => void) =>
-      resolve({ data: [{ id: "p1", name: "Camiseta Azul", price: 40000, stock: 2, categories: { name: "Camisetas" }, product_variants: [], product_images: [] }], error: null });
-    const select = vi.fn(() => query);
+  it("con filtros, los aplica a la misma consulta (talla usa product_variants!inner)", async () => {
+    const productos = [
+      { id: "p1", name: "Camiseta Azul", price: 40000, stock: 2, categories: { name: "Camisetas" }, product_variants: [{ id: "v1", talla: "M", color: null, price_override: null, stock: 2 }], product_images: [] },
+    ];
+    const { supabase, select } = mockCatalogo(productos);
     const upload = vi.fn(async () => ({ error: null }));
     const createSignedUrl = vi.fn(async () => ({ data: { signedUrl: "https://x/catalogo-filtrado.pdf" }, error: null }));
+    (supabase as unknown as { storage: unknown }).storage = { from: vi.fn(() => ({ upload, createSignedUrl })) };
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { generarCatalogoPdf } = await import("./catalog.ts");
+    const url = await generarCatalogoPdf({ talla: "M" });
+
+    expect(url).toBe("https://x/catalogo-filtrado.pdf");
+    expect(select).toHaveBeenCalledWith(expect.stringContaining("product_variants!inner"));
+  });
+
+  it("si la consulta de productos falla, buscarCatalogoInterno la trata como catalogo vacio (no lanza) -- sube un PDF de 0 tarjetas en vez de reventar", async () => {
+    // Comportamiento DISTINTO al de antes de este cambio: la version vieja
+    // de este informe tenia su propia consulta con un throw explicito en
+    // caso de error. Ahora reutiliza buscarCatalogoInterno (la misma
+    // consulta de buscarCatalogo), que ya es fail-soft por diseño (un
+    // error de Supabase se trata igual que "sin resultados", devolviendo
+    // [] en vez de lanzar) -- se documenta aqui para que el cambio sea
+    // explicito, no un olvido.
+    const resultado = { data: null, error: { message: "fallo de red" } };
+    const query: Record<string, unknown> = {};
+    const encadenable = vi.fn(() => query);
+    query.eq = encadenable;
+    query.ilike = encadenable;
+    query.gte = encadenable;
+    (query as { then: unknown }).then = (resolve: (v: typeof resultado) => void) => resolve(resultado);
+    const select = vi.fn(() => query);
+    const upload = vi.fn(async () => ({ error: null }));
+    const createSignedUrl = vi.fn(async () => ({ data: { signedUrl: "https://x/catalogo-vacio.pdf" }, error: null }));
     const supabase = {
       from: vi.fn(() => ({ select })),
       storage: { from: vi.fn(() => ({ upload, createSignedUrl })) },
@@ -469,25 +532,8 @@ describe("generarCatalogoPdf", () => {
     (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
 
     const { generarCatalogoPdf } = await import("./catalog.ts");
-    const url = await generarCatalogoPdf({ texto: "camiseta" });
-
-    expect(url).toBe("https://x/catalogo-filtrado.pdf");
-    expect(select).toHaveBeenCalled();
-  });
-
-  it("lanza un error descriptivo si la consulta de productos falla (sin filtros)", async () => {
-    const order = vi.fn(async () => ({ data: null, error: { message: "fallo de red" } }));
-    const upload = vi.fn(async () => ({ error: null }));
-    const supabase = {
-      from: vi.fn(() => ({ select: vi.fn(() => ({ eq: vi.fn(() => ({ order })) })) })),
-      storage: { from: vi.fn(() => ({ upload, createSignedUrl: vi.fn() })) },
-    };
-    const { getSupabase } = await import("../_shared/db.ts");
-    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
-
-    const { generarCatalogoPdf } = await import("./catalog.ts");
-    await expect(generarCatalogoPdf()).rejects.toThrow(/fallo de red/);
-    expect(upload).not.toHaveBeenCalled();
+    await expect(generarCatalogoPdf()).resolves.toBe("https://x/catalogo-vacio.pdf");
+    expect(upload).toHaveBeenCalled();
   });
 });
 
@@ -533,9 +579,12 @@ describe("generarCotizacionPdf", () => {
     vi.unstubAllGlobals();
   });
 
-  it("cuando product_images tiene una foto para el item, la resuelve e intenta incrustarla en el PDF", async () => {
-    const fetchMock = vi.fn(async () => new Response(new Uint8Array([0xff, 0xd8, 0xff]), { status: 200 }));
-    vi.stubGlobal("fetch", fetchMock);
+  it("cuando product_images tiene una foto para el item, la resuelve y se la pasa a generarPdfTarjetas en la tarjeta", async () => {
+    // La descarga/incrustacion real de la foto vive en pdf-marca.ts
+    // (mockeado a nivel de archivo), asi que aqui solo se verifica que
+    // obtenerFotoPrincipal resuelve la URL correcta y que llega intacta
+    // hasta la tarjeta -- no que fetch() se haya llamado.
+    const { generarPdfTarjetas } = await import("./pdf-marca.ts");
     const upload = vi.fn(async () => ({ error: null }));
     const createSignedUrl = vi.fn(async () => ({ data: { signedUrl: "https://x/firmado-foto.pdf" }, error: null }));
     const { select: selectImagenes } = mockProductImages({
@@ -555,8 +604,10 @@ describe("generarCotizacionPdf", () => {
     ]);
 
     expect(url).toBe("https://x/firmado-foto.pdf");
-    expect(fetchMock).toHaveBeenCalledWith("https://x/foto.jpg");
-    vi.unstubAllGlobals();
+    expect(generarPdfTarjetas).toHaveBeenCalledWith(
+      expect.any(String), expect.any(String), "https://x/foto.jpg", expect.any(Array),
+      expect.arrayContaining([expect.objectContaining({ fotoUrl: "https://x/foto.jpg" })]),
+    );
   });
 });
 

@@ -209,3 +209,187 @@ export async function generarPdfTabla(titulo: string, encabezados: string[], fil
 
   return pdf.save();
 }
+
+export interface EstadisticaTarjetas {
+  valor: string;
+  etiqueta: string;
+}
+
+export interface TarjetaProducto {
+  fotoUrl: string | null;
+  nombre: string;
+  pills: { etiqueta: string; valores: string[] }[];
+  precio: number | null;
+  nota?: string;
+}
+
+const ANCHO_PAGINA_TARJETAS = 780;
+const COLUMNAS_TARJETAS = 3;
+const MARGEN_TARJETAS = 24;
+const ESPACIO_TARJETAS = 16;
+const ALTO_FOTO_TARJETA = 150;
+const ALTO_HEADER_TARJETAS = 150;
+const ALTO_STATS_TARJETAS = 60;
+const ALTO_PIE_TARJETAS = 30;
+const ANCHO_TARJETA =
+  (ANCHO_PAGINA_TARJETAS - MARGEN_TARJETAS * 2 - ESPACIO_TARJETAS * (COLUMNAS_TARJETAS - 1)) / COLUMNAS_TARJETAS;
+
+// Mismo patron de descarga+incrustacion que generarPdfConFotos (catalog.ts),
+// duplicado aqui porque pdf-marca.ts no depende de catalog.ts (evitar el
+// import circular que ya se documento al mover generarPdfTabla).
+async function embedFotoDesdeUrl(pdf: PDFDocument, url: string): Promise<PDFImage | null> {
+  try {
+    const bytes = await fetch(url).then((r) => {
+      if (!r.ok) throw new Error(`descarga respondio ${r.status}`);
+      return r.arrayBuffer();
+    });
+    return url.toLowerCase().endsWith(".png") ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
+  } catch (error) {
+    console.error(`[pdf-marca] No se pudo incrustar la foto ${url}:`, error);
+    return null;
+  }
+}
+
+// Una insignia tipo "pill": rectangulo relleno rosaClaro ajustado al ancho
+// REAL del texto (widthOfTextAtSize, no una aproximacion) + relleno fijo.
+// Devuelve el ancho dibujado para que el llamador avance el cursor X.
+function dibujarPill(pagina: PDFPage, opts: { x: number; y: number; texto: string; fuente: PDFFont }): number {
+  const ancho = opts.fuente.widthOfTextAtSize(opts.texto, 9) + 16;
+  pagina.drawRectangle({ x: opts.x, y: opts.y, width: ancho, height: 18, color: COLORES_MARCA.rosaClaro });
+  pagina.drawText(opts.texto, { x: opts.x + 8, y: opts.y + 5, size: 9, font: opts.fuente, color: COLORES_MARCA.ciruela });
+  return ancho;
+}
+
+async function dibujarTarjetaProducto(
+  pdf: PDFDocument,
+  pagina: PDFPage,
+  tarjeta: TarjetaProducto,
+  opts: { x: number; yTop: number; ancho: number; altoTarjeta: number; fuentes: FuentesMarca },
+): Promise<void> {
+  const { x, yTop, ancho, altoTarjeta, fuentes } = opts;
+
+  const foto = tarjeta.fotoUrl ? await embedFotoDesdeUrl(pdf, tarjeta.fotoUrl) : null;
+  if (foto) {
+    pagina.drawImage(foto, { x, y: yTop - ALTO_FOTO_TARJETA, width: ancho, height: ALTO_FOTO_TARJETA });
+  } else {
+    pagina.drawRectangle({ x, y: yTop - ALTO_FOTO_TARJETA, width: ancho, height: ALTO_FOTO_TARJETA, color: COLORES_MARCA.rosaClaro });
+    const textoVacio = "Sin foto";
+    const anchoTexto = fuentes.texto.widthOfTextAtSize(textoVacio, 10);
+    pagina.drawText(textoVacio, { x: x + ancho / 2 - anchoTexto / 2, y: yTop - ALTO_FOTO_TARJETA / 2, size: 10, font: fuentes.texto, color: COLORES_MARCA.ciruela });
+  }
+
+  let y = yTop - ALTO_FOTO_TARJETA - 20;
+  pagina.drawText(tarjeta.nombre, { x: x + 10, y, size: 12, font: fuentes.textoNegrita, color: COLORES_MARCA.ciruela });
+  y -= 22;
+
+  for (const grupo of tarjeta.pills) {
+    const etiquetaTexto = `${grupo.etiqueta}:`;
+    pagina.drawText(etiquetaTexto, { x: x + 10, y: y + 5, size: 9, font: fuentes.textoNegrita, color: COLORES_MARCA.ciruela });
+    let xPill = x + 10 + fuentes.textoNegrita.widthOfTextAtSize(etiquetaTexto, 9) + 8;
+    for (const valor of grupo.valores) {
+      if (xPill > x + ancho - 20) break; // evita desbordar la tarjeta
+      const anchoPill = dibujarPill(pagina, { x: xPill, y, texto: valor, fuente: fuentes.texto });
+      xPill += anchoPill + 4;
+    }
+    y -= 24;
+  }
+
+  if (tarjeta.precio !== null) {
+    const textoPrecio = `$${tarjeta.precio.toLocaleString("es-CO")}`;
+    pagina.drawText(textoPrecio, { x: x + 10, y, size: 12, font: fuentes.textoNegrita, color: COLORES_MARCA.dorado });
+    if (tarjeta.nota) {
+      const anchoPrecio = fuentes.textoNegrita.widthOfTextAtSize(textoPrecio, 12);
+      pagina.drawText(tarjeta.nota, { x: x + 10 + anchoPrecio + 10, y, size: 9, font: fuentes.texto, color: COLORES_MARCA.ciruela });
+    }
+  } else if (tarjeta.nota) {
+    pagina.drawText(tarjeta.nota, { x: x + 10, y, size: 9, font: fuentes.texto, color: COLORES_MARCA.ciruela });
+  }
+
+  pagina.drawRectangle({ x, y: yTop - altoTarjeta, width: ancho, height: altoTarjeta, borderColor: COLORES_MARCA.dorado, borderWidth: 1 });
+}
+
+// Genera un PDF de marca con un encabezado grande (logo + titulo de dos
+// renglones + una foto destacada a la derecha -- la primera foto real de
+// producto disponible, no una imagen generica), una banda de estadisticas, y
+// una cuadricula de tarjetas de producto (foto + nombre + insignias + precio).
+// Usado por los informes con fotos (informe de productos del dueño, catalogo
+// de clientes, cotizacion) via sus propios llamadores en
+// catalog.ts/owner-actions.ts, que adaptan sus datos a TarjetaProducto[].
+// Version adaptada del diseño de referencia del dueño: colores planos (sin
+// degradados ni sombras, que pdf-lib no soporta de forma nativa) y sin la
+// insignia de "Calidad" (no existe ese dato en products hoy).
+export async function generarPdfTarjetas(
+  titulo: string,
+  subtitulo: string,
+  fotoHeroUrl: string | null,
+  estadisticas: EstadisticaTarjetas[],
+  tarjetas: TarjetaProducto[],
+): Promise<Uint8Array> {
+  const pdf = await PDFDocument.create();
+  const filas = Math.max(Math.ceil(tarjetas.length / COLUMNAS_TARJETAS), 1);
+  const maxPills = tarjetas.reduce((max, t) => Math.max(max, t.pills.length), 0);
+  const altoTarjeta = ALTO_FOTO_TARJETA + 20 + 22 + maxPills * 24 + 16;
+  const altoContenido = filas * altoTarjeta + (filas - 1) * ESPACIO_TARJETAS;
+  const altoPagina = ALTO_HEADER_TARJETAS + ALTO_STATS_TARJETAS + MARGEN_TARJETAS + altoContenido + MARGEN_TARJETAS + ALTO_PIE_TARJETAS;
+  const pagina = pdf.addPage([ANCHO_PAGINA_TARJETAS, altoPagina]);
+
+  pagina.drawRectangle({ x: 0, y: 0, width: ANCHO_PAGINA_TARJETAS, height: altoPagina, color: COLORES_MARCA.crema });
+
+  const [fuentes, logo] = await Promise.all([cargarFuentesMarca(pdf), cargarLogoMarca(pdf)]);
+
+  // --- Encabezado grande ---
+  const yHeaderTop = altoPagina;
+  pagina.drawRectangle({ x: 0, y: yHeaderTop - ALTO_HEADER_TARJETAS, width: ANCHO_PAGINA_TARJETAS, height: ALTO_HEADER_TARJETAS, color: COLORES_MARCA.rosaClaro });
+
+  let xTitulo = MARGEN_TARJETAS;
+  if (logo) {
+    const altoLogo = 50;
+    const anchoLogo = (logo.width / logo.height) * altoLogo;
+    pagina.drawImage(logo, { x: MARGEN_TARJETAS, y: yHeaderTop - ALTO_HEADER_TARJETAS / 2 - altoLogo / 2, width: anchoLogo, height: altoLogo });
+    xTitulo = MARGEN_TARJETAS + anchoLogo + 20;
+  }
+
+  pagina.drawText(titulo, { x: xTitulo, y: yHeaderTop - 60, size: 26, font: fuentes.titulo, color: COLORES_MARCA.rosaFuerte });
+  pagina.drawText(subtitulo, { x: xTitulo, y: yHeaderTop - 85, size: 11, font: fuentes.textoNegrita, color: COLORES_MARCA.ciruela });
+
+  const fotoHero = fotoHeroUrl ? await embedFotoDesdeUrl(pdf, fotoHeroUrl) : null;
+  if (fotoHero) {
+    const anchoHero = 180;
+    const xHero = ANCHO_PAGINA_TARJETAS - MARGEN_TARJETAS - anchoHero;
+    pagina.drawImage(fotoHero, { x: xHero, y: yHeaderTop - ALTO_HEADER_TARJETAS, width: anchoHero, height: ALTO_HEADER_TARJETAS });
+    pagina.drawRectangle({ x: xHero - 3, y: yHeaderTop - ALTO_HEADER_TARJETAS, width: 3, height: ALTO_HEADER_TARJETAS, color: COLORES_MARCA.dorado });
+  }
+
+  pagina.drawRectangle({ x: 0, y: yHeaderTop - ALTO_HEADER_TARJETAS - 2, width: ANCHO_PAGINA_TARJETAS, height: 2, color: COLORES_MARCA.dorado });
+
+  // --- Banda de estadisticas ---
+  const yStatsTop = yHeaderTop - ALTO_HEADER_TARJETAS;
+  pagina.drawRectangle({ x: 0, y: yStatsTop - ALTO_STATS_TARJETAS, width: ANCHO_PAGINA_TARJETAS, height: ALTO_STATS_TARJETAS, color: COLORES_MARCA.blanco });
+  if (estadisticas.length > 0) {
+    const anchoBloque = ANCHO_PAGINA_TARJETAS / estadisticas.length;
+    estadisticas.forEach((stat, i) => {
+      const xBloque = i * anchoBloque;
+      const centro = xBloque + anchoBloque / 2;
+      const anchoValor = fuentes.titulo.widthOfTextAtSize(stat.valor, 20);
+      pagina.drawText(stat.valor, { x: centro - anchoValor / 2, y: yStatsTop - 26, size: 20, font: fuentes.titulo, color: COLORES_MARCA.rosaFuerte });
+      const anchoEtiqueta = fuentes.texto.widthOfTextAtSize(stat.etiqueta, 9);
+      pagina.drawText(stat.etiqueta, { x: centro - anchoEtiqueta / 2, y: yStatsTop - 44, size: 9, font: fuentes.texto, color: COLORES_MARCA.ciruela });
+      if (i > 0) {
+        pagina.drawRectangle({ x: xBloque, y: yStatsTop - ALTO_STATS_TARJETAS + 10, width: 1, height: ALTO_STATS_TARJETAS - 20, color: COLORES_MARCA.dorado });
+      }
+    });
+  }
+
+  // --- Cuadricula de tarjetas ---
+  let yTarjetaTop = yStatsTop - ALTO_STATS_TARJETAS - MARGEN_TARJETAS;
+  for (let i = 0; i < tarjetas.length; i++) {
+    const columna = i % COLUMNAS_TARJETAS;
+    if (columna === 0 && i > 0) yTarjetaTop -= altoTarjeta + ESPACIO_TARJETAS;
+    const xTarjeta = MARGEN_TARJETAS + columna * (ANCHO_TARJETA + ESPACIO_TARJETAS);
+    await dibujarTarjetaProducto(pdf, pagina, tarjetas[i], { x: xTarjeta, yTop: yTarjetaTop, ancho: ANCHO_TARJETA, altoTarjeta, fuentes });
+  }
+
+  dibujarPiePagina(pagina, { fuentes, anchoPagina: ANCHO_PAGINA_TARJETAS });
+
+  return pdf.save();
+}
