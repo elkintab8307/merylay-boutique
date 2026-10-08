@@ -86,6 +86,50 @@ describe("buscarCatalogo", () => {
     }]);
   });
 
+  it("con texto en plural, encuentra productos cuyo nombre esta en singular (bug real: 'camisetas' no encontraba 'Camiseta...')", async () => {
+    const productos = [
+      { id: "p1", name: "Camiseta algodón licrado", price: 40000, stock: 5, categories: { name: "Camiseta algodón licrado" }, product_variants: [], product_images: [] },
+      { id: "p2", name: "Bata Dorada", price: 120000, stock: 2, categories: { name: "Batas" }, product_variants: [], product_images: [] },
+    ];
+    const { supabase } = mockCatalogo(productos);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { buscarCatalogo } = await import("./catalog.ts");
+    const resultado = await buscarCatalogo({ texto: "camisetas" });
+
+    expect(resultado).toHaveLength(1);
+    expect(resultado[0].nombre).toBe("Camiseta algodón licrado");
+  });
+
+  it("con texto en singular, sigue encontrando una categoria cuyo nombre esta en plural (ej. 'Pijamas')", async () => {
+    const productos = [
+      { id: "p1", name: "Pijama Rosa", price: 89900, stock: 5, categories: { name: "Pijamas" }, product_variants: [], product_images: [] },
+    ];
+    const { supabase } = mockCatalogo(productos);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { buscarCatalogo } = await import("./catalog.ts");
+    const resultado = await buscarCatalogo({ texto: "pijama" });
+
+    expect(resultado).toHaveLength(1);
+  });
+
+  it("con texto que no coincide ni en singular ni en plural, no devuelve nada (no se vuelve demasiado permisivo)", async () => {
+    const productos = [
+      { id: "p1", name: "Camiseta algodón licrado", price: 40000, stock: 5, categories: { name: "Camiseta algodón licrado" }, product_variants: [], product_images: [] },
+    ];
+    const { supabase } = mockCatalogo(productos);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { buscarCatalogo } = await import("./catalog.ts");
+    const resultado = await buscarCatalogo({ texto: "bolsos" });
+
+    expect(resultado).toHaveLength(0);
+  });
+
   it("devuelve como maximo 50 filas", async () => {
     const productos = Array.from({ length: 60 }, (_, i) => ({
       id: `p${i}`, name: `Camiseta ${i}`, price: 40000, stock: 1,
