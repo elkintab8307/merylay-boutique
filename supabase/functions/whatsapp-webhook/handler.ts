@@ -1,5 +1,5 @@
 import { getSupabase } from "../_shared/db.ts";
-import { enviarTexto, enviarImagenPorLink, enviarDocumentoPorLink, enviarBotonProducto } from "../_shared/meta.ts";
+import { enviarTexto, enviarImagenPorLink, enviarDocumentoPorLink, enviarBotonProducto, marcarLeidoYEscribiendo } from "../_shared/meta.ts";
 import { parsearMensajeEntrante } from "./adapters.ts";
 import { buscarOCrearCliente, normalizarTelefono, generarAccesoWeb } from "./customers.ts";
 import { obtenerOCrearSesion, guardarSesion, cargarHistorial } from "./sessions.ts";
@@ -352,6 +352,16 @@ export async function procesarMensajeEntrante(payload: unknown): Promise<void> {
   if (!entrante) return;
 
   const telefono = normalizarTelefono(entrante.from);
+
+  // Marca el mensaje como leido y activa el indicador de "escribiendo..." lo
+  // antes posible -- antes de transcribir audio o de llamar a OpenAI, que es
+  // justo la espera que el indicador debe cubrir. Es un efecto secundario de
+  // UX, nunca debe bloquear ni tumbar la respuesta real si la Graph API falla.
+  try {
+    await marcarLeidoYEscribiendo(entrante.messageId);
+  } catch (error) {
+    console.error(`[handler] No se pudo activar el indicador de escribiendo para ${entrante.messageId}:`, error);
+  }
 
   if (entrante.kind === "boton") {
     const esNuevo = await registrarMensaje(telefono, "inbound", `[boton] ${entrante.botonId}`, entrante.messageId);
