@@ -28,10 +28,13 @@ async function lanzarNavegador(): Promise<NavegadorMinimo> {
   if (process.env.VERCEL) {
     const chromium = (await import("@sparticuz/chromium")).default;
     const puppeteer = await import("puppeteer-core");
+    // "shell" (no `true`) y envolver los args con `defaultArgs` es el uso
+    // documentado por @sparticuz/chromium para Lambda/Vercel -- ver su
+    // README ("Usage"). `true` no esta probado contra este binario.
     return (await puppeteer.launch({
-      args: chromium.args,
+      args: puppeteer.defaultArgs({ args: chromium.args, headless: "shell" }),
       executablePath: await chromium.executablePath(),
-      headless: true,
+      headless: "shell",
     })) as unknown as NavegadorMinimo;
   }
   // Desarrollo local: `puppeteer` (no `puppeteer-core`) instala su propio
@@ -79,7 +82,11 @@ export async function POST(request: NextRequest) {
   }
 
   const tipo = (cuerpo as { tipo?: unknown } | null)?.tipo;
-  const logoUrl = process.env.SITE_URL ? `${process.env.SITE_URL}/brand/logo-principal.png` : null;
+  // El origen de la propia peticion (en vez de SITE_URL) evita perder el
+  // logo si SITE_URL no esta configurado en Vercel -- SITE_URL es un
+  // secreto de la Edge Function de Supabase, no una variable que este
+  // documentada para el lado de Next.js/Vercel.
+  const logoUrl = `${new URL(request.url).origin}/brand/logo-principal.png`;
 
   let html: string;
   if (tipo === "tabla") {

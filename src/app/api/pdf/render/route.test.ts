@@ -58,6 +58,22 @@ describe("POST /api/pdf/render", () => {
     expect(navegadorMock.close).toHaveBeenCalled();
   });
 
+  it("el logo se arma con el origen de la propia peticion, sin depender de SITE_URL", async () => {
+    vi.stubEnv("PDF_RENDER_SECRET", "secreto-real");
+    vi.stubEnv("SITE_URL", "");
+    const paginaMock = { setContent: vi.fn(async () => {}), evaluate: vi.fn(async () => 1000), pdf: vi.fn(async () => new Uint8Array([1])) };
+    const navegadorMock = { newPage: vi.fn(async () => paginaMock), close: vi.fn(async () => {}) };
+    vi.doMock("puppeteer", () => ({ default: { launch: vi.fn(async () => navegadorMock) } }));
+    const { POST } = await import("./route");
+
+    await POST(peticion({ tipo: "tabla", titulo: "x", encabezados: [], filas: [] }, { "x-pdf-render-secret": "secreto-real" }));
+
+    expect(paginaMock.setContent).toHaveBeenCalledWith(
+      expect.stringContaining("https://merylay.shop/brand/logo-principal.png"),
+      expect.anything(),
+    );
+  });
+
   it("con tipo 'tarjetas', renderiza usando plantillaTarjetas", async () => {
     vi.stubEnv("PDF_RENDER_SECRET", "secreto-real");
     const paginaMock = { setContent: vi.fn(async () => {}), evaluate: vi.fn(async () => 1000), pdf: vi.fn(async () => new Uint8Array([1])) };
@@ -71,6 +87,27 @@ describe("POST /api/pdf/render", () => {
 
     expect(respuesta.status).toBe(200);
     expect(paginaMock.setContent).toHaveBeenCalledWith(expect.stringContaining("INFORME"), expect.anything());
+  });
+
+  it("en Vercel, lanza puppeteer-core con @sparticuz/chromium usando el preset 'shell' recomendado por el paquete", async () => {
+    vi.stubEnv("PDF_RENDER_SECRET", "secreto-real");
+    vi.stubEnv("VERCEL", "1");
+    const paginaMock = { setContent: vi.fn(async () => {}), evaluate: vi.fn(async () => 1000), pdf: vi.fn(async () => new Uint8Array([1])) };
+    const navegadorMock = { newPage: vi.fn(async () => paginaMock), close: vi.fn(async () => {}) };
+    const launchMock = vi.fn(async () => navegadorMock);
+    const defaultArgsMock = vi.fn(() => ["--arg-por-defecto"]);
+    vi.doMock("puppeteer-core", () => ({ launch: launchMock, defaultArgs: defaultArgsMock }));
+    vi.doMock("@sparticuz/chromium", () => ({
+      default: { args: ["--chromium-arg"], executablePath: vi.fn(async () => "/tmp/chromium") },
+    }));
+    const { POST } = await import("./route");
+
+    await POST(peticion({ tipo: "tabla", titulo: "x", encabezados: [], filas: [] }, { "x-pdf-render-secret": "secreto-real" }));
+
+    expect(defaultArgsMock).toHaveBeenCalledWith(expect.objectContaining({ args: ["--chromium-arg"], headless: "shell" }));
+    expect(launchMock).toHaveBeenCalledWith(
+      expect.objectContaining({ args: ["--arg-por-defecto"], executablePath: "/tmp/chromium", headless: "shell" }),
+    );
   });
 
   it("si Puppeteer lanza, devuelve 500 y cierra el navegador si llego a abrirse", async () => {
