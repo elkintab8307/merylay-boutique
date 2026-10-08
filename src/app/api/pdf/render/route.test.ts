@@ -45,7 +45,7 @@ describe("POST /api/pdf/render", () => {
 
   it("con tipo 'tabla' y secreto correcto, renderiza y devuelve el PDF", async () => {
     vi.stubEnv("PDF_RENDER_SECRET", "secreto-real");
-    const paginaMock = { setContent: vi.fn(async () => {}), pdf: vi.fn(async () => new Uint8Array([1, 2, 3])) };
+    const paginaMock = { setContent: vi.fn(async () => {}), evaluate: vi.fn(async () => 1000), pdf: vi.fn(async () => new Uint8Array([1, 2, 3])) };
     const navegadorMock = { newPage: vi.fn(async () => paginaMock), close: vi.fn(async () => {}) };
     vi.doMock("puppeteer", () => ({ default: { launch: vi.fn(async () => navegadorMock) } }));
     const { POST } = await import("./route");
@@ -60,7 +60,7 @@ describe("POST /api/pdf/render", () => {
 
   it("con tipo 'tarjetas', renderiza usando plantillaTarjetas", async () => {
     vi.stubEnv("PDF_RENDER_SECRET", "secreto-real");
-    const paginaMock = { setContent: vi.fn(async () => {}), pdf: vi.fn(async () => new Uint8Array([1])) };
+    const paginaMock = { setContent: vi.fn(async () => {}), evaluate: vi.fn(async () => 1000), pdf: vi.fn(async () => new Uint8Array([1])) };
     const navegadorMock = { newPage: vi.fn(async () => paginaMock), close: vi.fn(async () => {}) };
     vi.doMock("puppeteer", () => ({ default: { launch: vi.fn(async () => navegadorMock) } }));
     const { POST } = await import("./route");

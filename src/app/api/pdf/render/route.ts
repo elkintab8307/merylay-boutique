@@ -16,7 +16,8 @@ type CuerpoTarjetas = { tipo: "tarjetas" } & Omit<DatosTarjetas, "logoUrl">;
 // desarrollo); ambos satisfacen esta forma en tiempo de ejecucion.
 interface PaginaMinima {
   setContent(html: string, opts: { waitUntil: string }): Promise<void>;
-  pdf(opts: { printBackground: boolean; width: string }): Promise<Uint8Array>;
+  pdf(opts: { printBackground: boolean; width: string; height: string }): Promise<Uint8Array>;
+  evaluate<T>(fn: () => T): Promise<T>;
 }
 interface NavegadorMinimo {
   newPage(): Promise<PaginaMinima>;
@@ -45,7 +46,12 @@ async function renderizarHtmlAPdf(html: string): Promise<Uint8Array> {
   try {
     const pagina = await navegador.newPage();
     await pagina.setContent(html, { waitUntil: "networkidle0" });
-    return pagina.pdf({ printBackground: true, width: "1040px" });
+    // Sin `height`, Puppeteer usa el alto de pagina por defecto (Letter) y
+    // deja un hueco en blanco enorme debajo del contenido real -- medido en
+    // la verificacion visual manual de este plan (Task 7, Step 6). Se mide
+    // el alto real del documento renderizado y se usa como alto del PDF.
+    const altura = await pagina.evaluate(() => document.documentElement.scrollHeight);
+    return pagina.pdf({ printBackground: true, width: "1040px", height: `${altura}px` });
   } finally {
     await navegador.close();
   }
