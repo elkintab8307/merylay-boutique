@@ -449,3 +449,70 @@ export async function informeCreditos(dias: number, conPdf: boolean): Promise<Re
 
   return { texto, fotos: [], documentos: [{ link, filename: "informe-creditos-merylay.pdf" }] };
 }
+
+export async function informeAbonos(dias: number, conPdf: boolean): Promise<RespuestaLectura> {
+  const supabase = getSupabase();
+  const desde = new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data, error } = await supabase
+    .from("credit_payments")
+    .select("id, sale_id, amount, payment_method, created_at")
+    .gte("created_at", desde);
+  if (error) throw new Error(`No se pudieron consultar los abonos: ${error.message}`);
+
+  const abonos = (data ?? []) as { id: string; sale_id: string; amount: number; payment_method: string; created_at: string }[];
+  if (abonos.length === 0) {
+    return { texto: `No hubo abonos registrados en los últimos ${dias} día(s).`, fotos: [], documentos: [] };
+  }
+
+  const idsVenta = [...new Set(abonos.map((a) => a.sale_id))];
+  const { data: ventasData, error: errorVentas } = await supabase
+    .from("pos_sales")
+    .select("id, sale_number, customer_id")
+    .in("id", idsVenta);
+  if (errorVentas) throw new Error(`No se pudieron consultar las ventas de los abonos: ${errorVentas.message}`);
+  const ventas = (ventasData ?? []) as { id: string; sale_number: string; customer_id: string | null }[];
+  const ventaPorId = new Map(ventas.map((v) => [v.id, v]));
+
+  const idsCliente = [...new Set(ventas.map((v) => v.customer_id).filter((id): id is string => Boolean(id)))];
+  const nombrePorCliente = await nombresClientesPos(idsCliente);
+
+  const totalAbonado = abonos.reduce((suma, a) => suma + Number(a.amount), 0);
+
+  // A diferencia de los otros informes, aqui el texto SI lista cada abono
+  // individual (no solo el total): es la pregunta literal que motivo este
+  // informe ("que cliente hizo abonos hoy"), y con "dias" cortos (ej. 1)
+  // en la practica siempre son pocos -- mismo tope de 10 que el resto.
+  const TOPE_ABONOS_TEXTO = 10;
+  const ordenados = [...abonos].sort((a, b) => (a.created_at > b.created_at ? -1 : 1));
+  const nombreClienteDeAbono = (a: { sale_id: string }) => {
+    const venta = ventaPorId.get(a.sale_id);
+    return venta?.customer_id ? (nombrePorCliente.get(venta.customer_id) ?? "Cliente") : "Cliente";
+  };
+  const detalle = ordenados.slice(0, TOPE_ABONOS_TEXTO)
+    .map((a) => `${new Date(a.created_at).toLocaleDateString("es-CO", { timeZone: "America/Bogota" })} — ${nombreClienteDeAbono(a)}: ${formatoMoneda(Number(a.amount))}`)
+    .join("\n");
+  const notaTruncado = abonos.length > TOPE_ABONOS_TEXTO ? `\n… y ${abonos.length - TOPE_ABONOS_TEXTO} abono(s) más.` : "";
+
+  const texto = `Abonos de los últimos ${dias} día(s): ${formatoMoneda(totalAbonado)} en ${abonos.length} abono(s).\n${detalle}${notaTruncado}`;
+
+  if (!conPdf) {
+    return { texto, fotos: [], documentos: [] };
+  }
+
+  const filasTabla = ordenados.slice(0, TOPE_FILAS_PDF_DETALLE).map((a) => {
+    const venta = ventaPorId.get(a.sale_id);
+    return [
+      new Date(a.created_at).toLocaleDateString("es-CO", { timeZone: "America/Bogota" }),
+      nombreClienteDeAbono(a),
+      formatoMoneda(Number(a.amount)),
+      a.payment_method,
+      venta?.sale_number ?? "—",
+    ];
+  });
+
+  const bytes = await generarPdfTabla(`Abonos — últimos ${dias} día(s)`, ["Fecha", "Cliente", "Monto", "Método", "Venta"], filasTabla);
+  const link = await subirYFirmar(bytes, "informe-abonos.pdf");
+
+  return { texto, fotos: [], documentos: [{ link, filename: "informe-abonos-merylay.pdf" }] };
+}

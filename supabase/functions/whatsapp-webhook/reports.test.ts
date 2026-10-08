@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../_shared/db.ts", () => ({ getSupabase: vi.fn() }));
 vi.mock("./catalog.ts", () => ({ subirYFirmar: vi.fn(async () => "https://x/informe-firmado.pdf") }));
@@ -742,5 +742,86 @@ describe("informeCreditos", () => {
     const [, , filas] = llamadas[llamadas.length - 1] as [string, string[], string[][]];
     expect(filas[0][0]).toBe("7/10/2026");
     expect(filas[0][0]).not.toBe("8/10/2026");
+  });
+});
+
+describe("informeAbonos", () => {
+  // A diferencia del resto del archivo, este describe SI limpia los mocks
+  // antes de cada prueba: el mock de generarPdfTabla acumula llamadas de
+  // TODOS los describe blocks anteriores (no hay un beforeEach a nivel de
+  // archivo), y con esto nuestras pruebas pueden usar mock.calls[0] en vez
+  // de tener que indexar a la ultima llamada como hizo informeCreditos.
+  beforeEach(() => vi.clearAllMocks());
+
+  it("desglosa el total abonado y lista cada abono con su cliente (a diferencia de otros informes, el texto SI lista cada uno)", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      credit_payments: [{
+        data: [
+          { id: "pago-1", sale_id: "venta-1", amount: 50000, payment_method: "efectivo", created_at: "2026-10-05T15:00:00Z" },
+        ],
+        error: null,
+      }],
+      pos_sales: [{ data: [{ id: "venta-1", sale_number: "POS-1", customer_id: "cli-1" }], error: null }],
+      pos_customers: [{ data: [{ id: "cli-1", profile_id: null, nombre: "Ana López" }], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { informeAbonos } = await import("./reports.ts");
+    const resultado = await informeAbonos(1, false);
+
+    expect(resultado.texto).toContain("$50.000 en 1 abono(s)");
+    expect(resultado.texto).toContain("Ana López");
+    expect(resultado.texto).toContain("$50.000");
+  });
+
+  it("sin abonos en el periodo, responde un mensaje claro", async () => {
+    const supabase = mockSupabaseDesdeTablas({ credit_payments: [{ data: [], error: null }] });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { informeAbonos } = await import("./reports.ts");
+    const resultado = await informeAbonos(1, false);
+
+    expect(resultado.texto).toContain("No hubo abonos registrados");
+  });
+
+  it("con mas de 10 abonos, el texto corta en 10 y avisa cuantos mas hay", async () => {
+    const abonos = Array.from({ length: 12 }, (_, i) => ({
+      id: `pago-${i}`, sale_id: `venta-${i}`, amount: 10000, payment_method: "efectivo", created_at: `2026-10-0${(i % 9) + 1}T15:00:00Z`,
+    }));
+    const supabase = mockSupabaseDesdeTablas({
+      credit_payments: [{ data: abonos, error: null }],
+      pos_sales: [{ data: abonos.map((a) => ({ id: a.sale_id, sale_number: "POS-X", customer_id: null })), error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { informeAbonos } = await import("./reports.ts");
+    const resultado = await informeAbonos(9, false);
+
+    expect(resultado.texto).toContain("y 2 abono(s) más");
+  });
+
+  it("con conPdf=true, cada fila liga el abono a su venta (sale_number)", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      credit_payments: [{
+        data: [{ id: "pago-1", sale_id: "venta-1", amount: 50000, payment_method: "nequi", created_at: "2026-10-05T15:00:00Z" }],
+        error: null,
+      }],
+      pos_sales: [{ data: [{ id: "venta-1", sale_number: "POS-7", customer_id: null }], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+    const { generarPdfTabla } = await import("./pdf-marca.ts");
+
+    const { informeAbonos } = await import("./reports.ts");
+    await informeAbonos(1, true);
+
+    expect(generarPdfTabla).toHaveBeenCalledWith(
+      expect.any(String),
+      ["Fecha", "Cliente", "Monto", "Método", "Venta"],
+      [["5/10/2026", "Cliente", "$50.000", "nequi", "POS-7"]],
+    );
   });
 });
