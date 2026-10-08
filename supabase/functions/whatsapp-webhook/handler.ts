@@ -1,11 +1,12 @@
 import { getSupabase } from "../_shared/db.ts";
-import { enviarTexto, enviarImagenPorLink, enviarDocumentoPorLink, enviarBotonProducto } from "../_shared/meta.ts";
+import { enviarTexto, enviarImagenPorLink, enviarDocumentoPorLink, enviarBotonProducto, marcarLeidoYEscribiendo } from "../_shared/meta.ts";
 import { parsearMensajeEntrante } from "./adapters.ts";
 import { buscarOCrearCliente, normalizarTelefono, generarAccesoWeb } from "./customers.ts";
 import { obtenerOCrearSesion, guardarSesion, cargarHistorial } from "./sessions.ts";
 import { decidirAccion } from "./agent.ts";
 import * as ownerActions from "./owner-actions.ts";
 import { ACCIONES_ESCRITURA } from "./owner-actions.ts";
+import { informeVentas, productosMasVendidos, informeClientes, historialCliente, informeGastos, informeCreditos, informeAbonos } from "./reports.ts";
 import * as catalog from "./catalog.ts";
 import { crearPedidoWompiDesdeCarrito } from "./orders.ts";
 import { transcribirAudio } from "./voice.ts";
@@ -81,41 +82,92 @@ async function ejecutarAccionEscritura(accion: string, params: Record<string, un
   }
 }
 
+// El modelo controla `dias`/`limite` por params, y puede mandar valores que
+// corrompen el reporte en vez de simplemente estar ausentes: un `limite` sin
+// tope produce un texto de mas de 4096 caracteres (rechazado por la Graph
+// API de WhatsApp), un `limite` <= 0 corrompe el .slice() del reporte, y un
+// `dias` no numerico hace que new Date(NaN).toISOString() lance un
+// RangeError crudo en vez de un mensaje amable. Estos helpers normalizan
+// ambos valores ANTES de pasarlos a reports.ts.
+function diasValidos(valor: unknown, porDefecto: number): number {
+  const n = Math.floor(Number(valor));
+  return Number.isFinite(n) && n >= 1 ? n : porDefecto;
+}
+
+function limiteValido(valor: unknown, porDefecto: number, tope: number): number {
+  const n = Math.floor(Number(valor));
+  const base = Number.isFinite(n) && n >= 1 ? n : porDefecto;
+  return Math.min(base, tope);
+}
+
+// A diferencia de diasValidos/limiteValido, agregadoDesdeDias es un filtro
+// OPCIONAL sin default razonable: ausente significa "no filtrar por fecha",
+// no "usar N dias". Un valor presente pero corrupto (NaN, <1, no numerico)
+// se trata igual que ausente -- se ignora -- en vez de corromper el filtro
+// de fecha en catalog.ts o rechazar toda la solicitud.
+function agregadoDesdeDiasValido(valor: unknown): number | undefined {
+  if (valor === undefined || valor === null) return undefined;
+  const n = Math.floor(Number(valor));
+  return Number.isFinite(n) && n >= 1 ? n : undefined;
+}
+
 async function ejecutarAccionLectura(accion: string, params: Record<string, unknown>): Promise<ownerActions.RespuestaLectura> {
   switch (accion) {
-    case "consultar_ventas":
-      return { texto: await ownerActions.consultarVentas((params.dias as number) ?? 1), fotos: [], documentos: [] };
+    case "informe_ventas": {
+      const dias = diasValidos(params.dias, 1);
+      const resultado = await informeVentas(dias, Boolean(params.conPdf));
+      return resultado;
+    }
+    case "productos_mas_vendidos": {
+      const dias = diasValidos(params.dias, 30);
+      const limite = limiteValido(params.limite, 10, 10);
+      return productosMasVendidos(dias, limite, Boolean(params.conPdf));
+    }
+    case "informe_clientes": {
+      const dias = diasValidos(params.dias, 30);
+      const limite = limiteValido(params.limite, 10, 10);
+      return informeClientes(dias, limite, Boolean(params.conPdf));
+    }
+    case "historial_cliente":
+      return historialCliente(params.nombreOTelefono as string);
+    case "informe_gastos": {
+      const dias = diasValidos(params.dias, 30);
+      return informeGastos(dias, Boolean(params.conPdf));
+    }
     case "consultar_stock_bajo":
       return { texto: await ownerActions.consultarStockBajo((params.umbral as number) ?? 5), fotos: [], documentos: [] };
     case "buscar_cliente":
       return { texto: await ownerActions.buscarCliente(params.consulta as string), fotos: [], documentos: [] };
     case "consultar_pedido":
       return { texto: await ownerActions.consultarPedido(params.numeroOId as string), fotos: [], documentos: [] };
-    case "buscar_inventario": {
+    case "consultar_productos": {
       const filtros = {
         texto: params.texto as string | undefined,
         talla: params.talla as string | undefined,
         color: params.color as string | undefined,
+        agregadoDesdeDias: agregadoDesdeDiasValido(params.agregadoDesdeDias),
       };
-      // buscarCatalogo exige al menos un filtro y lanza si no lo recibe; el
-      // modelo a veces manda esta accion sin ninguno (ej. confundio "informe
-      // de ventas" con esta busqueda de productos). Preguntar en vez de
-      // dejar que la excepcion caiga al mensaje generico de error.
-      if (!filtros.texto && !filtros.talla && !filtros.color) {
-        return { texto: "¿Qué producto o categoría quieres que busque? Dime el nombre, la talla o el color.", fotos: [], documentos: [] };
+      if (!filtros.texto && !filtros.talla && !filtros.color && !filtros.agregadoDesdeDias) {
+        return { texto: "¿Qué producto o categoría quieres que busque? Dime el nombre, la talla, el color, o desde cuándo se agregó.", fotos: [], documentos: [] };
       }
-      return ownerActions.buscarInventario(filtros, Boolean(params.conFotos));
+      const formatosValidos = ["conteo", "lista", "pdf_fotos", "pdf_tabla"];
+      const formato = formatosValidos.includes(params.formato as string)
+        ? (params.formato as "conteo" | "lista" | "pdf_fotos" | "pdf_tabla")
+        : "conteo";
+      return ownerActions.consultarProductos(filtros, formato, Boolean(params.conFotos));
     }
-    case "generar_informe_pdf": {
-      const filtros = {
-        texto: params.texto as string | undefined,
-        talla: params.talla as string | undefined,
-        color: params.color as string | undefined,
-      };
-      if (!filtros.texto && !filtros.talla && !filtros.color) {
-        return { texto: "¿Sobre qué producto o categoría quieres el informe? Dime un nombre, talla o color para buscar.", fotos: [], documentos: [] };
-      }
-      return ownerActions.generarInformePdf(filtros);
+    case "informe_creditos": {
+      // Sin periodo mencionado, "cuantos creditos hay" debe ver TODOS los
+      // creditos reales del negocio, no solo los ultimos 30 dias (bug real:
+      // una venta a credito de hace mas de 30 dias con saldo pendiente real
+      // quedaba excluida en silencio). ~10 anios cubre toda la historia del
+      // negocio sin tener que redefinir la semantica de informeCreditos.
+      const dias = diasValidos(params.dias, 3650);
+      return informeCreditos(dias, Boolean(params.conPdf));
+    }
+    case "informe_abonos": {
+      const dias = diasValidos(params.dias, 1);
+      return informeAbonos(dias, Boolean(params.conPdf));
     }
     default:
       return { texto: "No reconozco esa consulta todavia.", fotos: [], documentos: [] };
@@ -314,6 +366,16 @@ export async function procesarMensajeEntrante(payload: unknown): Promise<void> {
   if (!entrante) return;
 
   const telefono = normalizarTelefono(entrante.from);
+
+  // Marca el mensaje como leido y activa el indicador de "escribiendo..." lo
+  // antes posible -- antes de transcribir audio o de llamar a OpenAI, que es
+  // justo la espera que el indicador debe cubrir. Es un efecto secundario de
+  // UX, nunca debe bloquear ni tumbar la respuesta real si la Graph API falla.
+  try {
+    await marcarLeidoYEscribiendo(entrante.messageId);
+  } catch (error) {
+    console.error(`[handler] No se pudo activar el indicador de escribiendo para ${entrante.messageId}:`, error);
+  }
 
   if (entrante.kind === "boton") {
     const esNuevo = await registrarMensaje(telefono, "inbound", `[boton] ${entrante.botonId}`, entrante.messageId);

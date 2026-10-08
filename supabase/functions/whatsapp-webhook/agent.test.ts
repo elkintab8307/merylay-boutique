@@ -125,13 +125,22 @@ describe("decidirAccion", () => {
 
     const cuerpo = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
     const prompt = cuerpo.messages[0].content as string;
-    for (const clave of ["dias", "umbral", "consulta", "numeroOId", "idOSku", "nuevoPrecio", "nuevoStock", "numeroPedido", "nuevoEstado", "activo"]) {
+    for (const clave of ["dias", "umbral", "consulta", "numeroOId", "idOSku", "nuevoPrecio", "nuevoStock", "numeroPedido", "nuevoEstado", "activo", "conPdf", "limite", "nombreOTelefono", "agregadoDesdeDias", "formato"]) {
       expect(prompt).toContain(clave);
     }
-    expect(prompt).toContain("buscar_inventario");
-    expect(prompt).toContain("generar_informe_pdf");
+    expect(prompt).toContain("consultar_productos");
+    expect(prompt).toContain("informe_creditos");
+    expect(prompt).toContain("informe_abonos");
+    expect(prompt).not.toContain("buscar_inventario:");
+    expect(prompt).not.toContain("generar_informe_pdf:");
     expect(prompt).toContain("conFotos");
     expect(prompt).not.toContain("consultar_producto:");
+    expect(prompt).toContain("informe_ventas");
+    expect(prompt).toContain("productos_mas_vendidos");
+    expect(prompt).toContain("informe_clientes");
+    expect(prompt).toContain("historial_cliente");
+    expect(prompt).toContain("informe_gastos");
+    expect(prompt).not.toContain("consultar_ventas:");
   });
 
   it("el prompt del dueño instruye responder de forma cordial y ejecutar lo que se le pide", async () => {

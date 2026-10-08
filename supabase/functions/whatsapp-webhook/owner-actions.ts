@@ -1,7 +1,8 @@
 import { getSupabase } from "../_shared/db.ts";
-import { buscarCatalogo, generarPdfConFotos, subirYFirmar, TOPE_BUSCAR_CATALOGO, type FiltrosCatalogo, type FilaPdf } from "./catalog.ts";
+import { buscarCatalogo, construirTarjetasProductos, subirYFirmar, TOPE_BUSCAR_CATALOGO, type FiltrosCatalogo } from "./catalog.ts";
+import { generarPdfTabla, generarPdfTarjetas } from "./pdf-render.ts";
 
-const formatoMoneda = (valor: number) => `$${valor.toLocaleString("es-CO")}`;
+export const formatoMoneda = (valor: number) => `$${valor.toLocaleString("es-CO")}`;
 
 // Los valores interpolados en un filtro .or() de PostgREST vienen, en
 // ultima instancia, de un mensaje de WhatsApp interpretado por un LLM
@@ -13,7 +14,7 @@ const formatoMoneda = (valor: number) => `$${valor.toLocaleString("es-CO")}`;
 // comas que contenga. Dentro del literal se escapa primero la barra
 // invertida y DESPUES las comillas: al reves, un valor con \ y " a la
 // vez desincronizaria el escape.
-function escaparValorFiltro(valor: string): string {
+export function escaparValorFiltro(valor: string): string {
   return `"${valor.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
@@ -33,32 +34,7 @@ const noEncontreProducto = (idOSku: string) => `No encontré ningún producto co
 
 // Mismo criterio que los informes (migracion 018_informes.sql): un pedido
 // enviado o entregado ya fue pagado, tambien cuenta como venta.
-const ESTADOS_PEDIDO_VENDIDO = ["pagado", "enviado", "entregado"];
-
-// Suma las dos fuentes de ventas del negocio: pedidos de tienda/WhatsApp
-// (orders) y ventas presenciales (pos_sales, que no tienen estado: se
-// insertan ya completadas). Si alguna consulta falla se lanza en vez de
-// reportar un total incompleto como si fuera el real.
-export async function consultarVentas(dias: number): Promise<string> {
-  const supabase = getSupabase();
-  const desde = new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString();
-
-  const [pedidos, ventasPos] = await Promise.all([
-    supabase.from("orders").select("total").gte("created_at", desde).in("status", ESTADOS_PEDIDO_VENDIDO),
-    supabase.from("pos_sales").select("total").gte("created_at", desde),
-  ]);
-  if (pedidos.error) throw new Error(`No se pudieron consultar los pedidos: ${pedidos.error.message}`);
-  if (ventasPos.error) throw new Error(`No se pudieron consultar las ventas POS: ${ventasPos.error.message}`);
-
-  const filasPedidos = (pedidos.data ?? []) as { total: number }[];
-  const filasPos = (ventasPos.data ?? []) as { total: number }[];
-  const totalPedidos = filasPedidos.reduce((suma, o) => suma + Number(o.total), 0);
-  const totalPos = filasPos.reduce((suma, v) => suma + Number(v.total), 0);
-
-  return `Ventas de los ultimos ${dias} dias: ${formatoMoneda(totalPedidos + totalPos)} ` +
-    `(tienda/WhatsApp: ${formatoMoneda(totalPedidos)} en ${filasPedidos.length} pedidos pagados; ` +
-    `POS: ${formatoMoneda(totalPos)} en ${filasPos.length} ventas).`;
-}
+export const ESTADOS_PEDIDO_VENDIDO = ["pagado", "enviado", "entregado"];
 
 export async function consultarStockBajo(umbral: number): Promise<string> {
   const supabase = getSupabase();
@@ -113,60 +89,78 @@ function caption(p: { nombre: string; talla: string | null; color: string | null
   return `${p.nombre}${detalle ? ` (${detalle})` : ""} — ${formatoMoneda(p.precio)}, stock ${p.stock}`;
 }
 
-// conFotos distingue una pregunta de cantidad/stock ("cuantas hay", "que
-// stock hay de X") -- que solo necesita el conteo en texto -- de un pedido
-// explicito de ver imagenes ("muestrame", "mandame fotos de"). El modelo
-// decide cual es segun la frase del dueño (ver el prompt en agent.ts).
-export async function buscarInventario(filtros: FiltrosCatalogo, conFotos: boolean): Promise<RespuestaLectura> {
+export type FormatoConsultaProductos = "conteo" | "lista" | "pdf_fotos" | "pdf_tabla";
+
+const TOPE_LISTA_TEXTO = 10;
+
+function detalleVarianteTexto(p: { talla: string | null; color: string | null }): string {
+  const detalle = [p.talla ? `talla ${p.talla}` : null, p.color ? `color ${p.color}` : null].filter(Boolean).join(", ");
+  return detalle ? ` (${detalle})` : "";
+}
+
+export async function consultarProductos(
+  filtros: FiltrosCatalogo,
+  formato: FormatoConsultaProductos,
+  conFotos: boolean,
+): Promise<RespuestaLectura> {
   const productos = await buscarCatalogo(filtros);
   if (productos.length === 0) {
     return { texto: `No encontré ningún producto que coincida con esa búsqueda.`, fotos: [], documentos: [] };
   }
 
-  // buscarCatalogo devuelve una fila por VARIANTE (un producto con 3
-  // talla/color produce 3 filas), asi que productos.length sobreestima el
-  // numero de productos distintos -- se cuenta por productId unico.
+  if (formato === "pdf_fotos") {
+    return generarInformeProductosPdfFotos(productos);
+  }
+  if (formato === "pdf_tabla") {
+    return generarInformeProductosPdfTabla(productos);
+  }
+
   const productosUnicos = new Set(productos.map((p) => p.productId)).size;
   const totalUnidades = productos.reduce((suma, p) => suma + p.stock, 0);
   // buscarCatalogo tiene un tope interno (TOPE_BUSCAR_CATALOGO filas); si lo
   // alcanzamos exactamente, puede haber mas coincidencias reales de las que
-  // se ven -- se avisa con "o mas" en el conteo de productos.
-  // "X o más" sonaba confuso pegado al numero (un dueño real pregunto que
-  // significaba) -- "al menos X... alcance el limite de busqueda" separa
-  // la cifra real de la advertencia de que podria haber mas.
+  // se ven.
   const alcanzoElTope = productos.length === TOPE_BUSCAR_CATALOGO;
   const prefijoConteo = alcanzoElTope ? "al menos " : "";
   const avisoTope = alcanzoElTope ? " (alcancé el límite de búsqueda; podría haber más)" : "";
-  const truncadoFotos = conFotos && productos.length > TOPE_FOTOS_EN_VIVO
-    ? ` (mostrando ${TOPE_FOTOS_EN_VIVO} fotos; pide el informe en PDF para ver el resto)`
-    : "";
-  const texto = `Encontré ${prefijoConteo}${productosUnicos} producto(s) con ${totalUnidades} unidad(es) en stock en total${avisoTope}${truncadoFotos}.`;
 
   const fotos = conFotos
     ? productos.slice(0, TOPE_FOTOS_EN_VIVO).filter((p) => p.fotoUrl).map((p) => ({ url: p.fotoUrl as string, caption: caption(p) }))
     : [];
 
+  if (formato === "lista") {
+    const lineas = productos.slice(0, TOPE_LISTA_TEXTO).map((p) => `${p.nombre}${detalleVarianteTexto(p)} — ${formatoMoneda(p.precio)}, stock ${p.stock}`);
+    const notaTruncada = productos.length > TOPE_LISTA_TEXTO ? `\n… y ${productos.length - TOPE_LISTA_TEXTO} producto(s) más. Pide el informe en PDF para ver todos.` : "";
+    const texto = `Encontré ${prefijoConteo}${productosUnicos} producto(s)${avisoTope}:\n${lineas.join("\n")}${notaTruncada}`;
+    return { texto, fotos, documentos: [] };
+  }
+
+  // formato === "conteo" (default)
+  const truncadoFotos = conFotos && productos.length > TOPE_FOTOS_EN_VIVO
+    ? ` (mostrando ${TOPE_FOTOS_EN_VIVO} fotos; pide el informe en PDF para ver el resto)`
+    : "";
+  const texto = `Encontré ${prefijoConteo}${productosUnicos} producto(s) con ${totalUnidades} unidad(es) en stock en total${avisoTope}${truncadoFotos}.`;
   return { texto, fotos, documentos: [] };
 }
 
-export async function generarInformePdf(filtros: FiltrosCatalogo): Promise<RespuestaLectura> {
-  const productos = await buscarCatalogo(filtros);
-  if (productos.length === 0) {
-    return { texto: `No encontré ningún producto que coincida con esa búsqueda.`, fotos: [], documentos: [] };
-  }
-
-  const filas: FilaPdf[] = productos.map((p) => ({
-    fotoUrl: p.fotoUrl,
-    nombre: p.nombre,
-    detalle: [p.talla ? `talla ${p.talla}` : null, p.color ? `color ${p.color}` : null].filter(Boolean).join(", ") || "—",
-    precio: p.precio,
-    nota: `stock: ${p.stock}`,
-  }));
-
-  const bytes = await generarPdfConFotos("Informe de inventario — MeryLay Boutique", filas);
+async function generarInformeProductosPdfFotos(productos: Awaited<ReturnType<typeof buscarCatalogo>>): Promise<RespuestaLectura> {
+  const { estadisticas, tarjetas, fotoHero } = construirTarjetasProductos(productos);
+  const bytes = await generarPdfTarjetas("INFORME DE PRODUCTOS", "CATÁLOGO MERYLAY BOUTIQUE", fotoHero, estadisticas, tarjetas);
   const link = await subirYFirmar(bytes, "informe.pdf");
-
   return { texto: "Aquí tienes el informe 📋", fotos: [], documentos: [{ link, filename: "informe-merylay.pdf" }] };
+}
+
+async function generarInformeProductosPdfTabla(productos: Awaited<ReturnType<typeof buscarCatalogo>>): Promise<RespuestaLectura> {
+  const filasTabla = productos.map((p) => [
+    p.nombre,
+    [p.talla, p.color].filter(Boolean).join(" / ") || "—",
+    p.categoria ?? "—",
+    formatoMoneda(p.precio),
+    String(p.stock),
+  ]);
+  const bytes = await generarPdfTabla("Informe de productos — MeryLay Boutique", ["Producto", "Talla/Color", "Categoría", "Precio", "Stock"], filasTabla);
+  const link = await subirYFirmar(bytes, "informe-productos.pdf");
+  return { texto: "Aquí tienes el informe 📋", fotos: [], documentos: [{ link, filename: "informe-productos-merylay.pdf" }] };
 }
 
 export async function actualizarPrecioProducto(idOSku: string, nuevoPrecio: number): Promise<string> {
