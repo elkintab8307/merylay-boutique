@@ -1,33 +1,47 @@
-import { PDFDocument, StandardFonts } from "pdf-lib";
+import { PDFDocument } from "pdf-lib";
 import { getSupabase } from "../_shared/db.ts";
 import { subirYFirmar } from "./catalog.ts";
+import { COLORES_MARCA, cargarFuentesMarca, cargarLogoMarca, dibujarEncabezado, dibujarPiePagina } from "./pdf-marca.ts";
 import { ESTADOS_PEDIDO_VENDIDO, escaparValorFiltro, formatoMoneda, type RespuestaLectura } from "./owner-actions.ts";
 
 const TOPE_FILAS_PDF_DETALLE = 200;
 
+const ANCHO_PAGINA = 780; // horizontal (landscape) -- mas ancho que alto
+const ALTO_FILA = 20;
+const MARGEN_LATERAL = 24;
+const ALTO_PIE = 30;
+
 async function generarPdfTabla(titulo: string, encabezados: string[], filas: string[][]): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
-  const altoFila = 20;
-  const anchoPagina = 550;
-  const pagina = pdf.addPage([anchoPagina, 120 + (filas.length + 1) * altoFila]);
-  const fuente = await pdf.embedFont(StandardFonts.Helvetica);
-  const fuenteTitulo = await pdf.embedFont(StandardFonts.HelveticaBold);
-  let y = pagina.getHeight() - 40;
-  pagina.drawText(titulo, { x: 20, y, size: 16, font: fuenteTitulo });
-  y -= 30;
+  const altoContenido = (filas.length + 1) * ALTO_FILA;
+  const altoPagina = 140 + altoContenido + ALTO_PIE;
+  const pagina = pdf.addPage([ANCHO_PAGINA, altoPagina]);
 
-  const anchoColumna = (anchoPagina - 40) / encabezados.length;
+  const [fuentes, logo] = await Promise.all([cargarFuentesMarca(pdf), cargarLogoMarca(pdf)]);
+  let y = dibujarEncabezado(pagina, { titulo, fuentes, logo, anchoPagina: ANCHO_PAGINA, altoPagina });
+
+  const anchoColumna = (ANCHO_PAGINA - MARGEN_LATERAL * 2) / encabezados.length;
+
+  // Banda de color para la fila de encabezados de columna, texto en blanco.
+  pagina.drawRectangle({ x: 0, y: y - 4, width: ANCHO_PAGINA, height: ALTO_FILA + 4, color: COLORES_MARCA.rosaFuerte });
   encabezados.forEach((encabezado, i) => {
-    pagina.drawText(encabezado, { x: 20 + i * anchoColumna, y, size: 10, font: fuenteTitulo });
+    pagina.drawText(encabezado, { x: MARGEN_LATERAL + i * anchoColumna, y, size: 10, font: fuentes.textoNegrita, color: COLORES_MARCA.blanco });
   });
-  y -= altoFila;
+  y -= ALTO_FILA;
 
-  for (const fila of filas) {
+  filas.forEach((fila, indiceFila) => {
+    // Bandas alternadas (blanco / rosa claro) para que las filas se lean
+    // mas facil en una tabla ancha horizontal.
+    if (indiceFila % 2 === 1) {
+      pagina.drawRectangle({ x: 0, y: y - 4, width: ANCHO_PAGINA, height: ALTO_FILA, color: COLORES_MARCA.rosaClaro });
+    }
     fila.forEach((valor, i) => {
-      pagina.drawText(valor, { x: 20 + i * anchoColumna, y, size: 9, font: fuente });
+      pagina.drawText(valor, { x: MARGEN_LATERAL + i * anchoColumna, y, size: 9, font: fuentes.texto, color: COLORES_MARCA.ciruela });
     });
-    y -= altoFila;
-  }
+    y -= ALTO_FILA;
+  });
+
+  dibujarPiePagina(pagina, { fuentes, anchoPagina: ANCHO_PAGINA });
 
   return pdf.save();
 }

@@ -1,5 +1,6 @@
-import { PDFDocument, StandardFonts } from "pdf-lib";
+import { PDFDocument } from "pdf-lib";
 import { getSupabase } from "../_shared/db.ts";
+import { COLORES_MARCA, cargarFuentesMarca, cargarLogoMarca, dibujarEncabezado, dibujarPiePagina } from "./pdf-marca.ts";
 import type { ItemCarrito } from "../_shared/types.ts";
 
 // Una fila por "unidad pedible": cada variante de un producto con
@@ -231,18 +232,26 @@ export interface FilaPdf {
 }
 
 const ALTO_FILA_PDF = 70;
+const ANCHO_PAGINA_PDF = 780; // horizontal (landscape) -- mas ancho que alto
+const MARGEN_LATERAL_PDF = 24;
+const ALTO_PIE_PDF = 30;
 
 export async function generarPdfConFotos(titulo: string, filas: FilaPdf[], total?: number): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   const alturaExtra = total !== undefined ? ALTO_FILA_PDF : 0;
-  const pagina = pdf.addPage([450, 140 + filas.length * ALTO_FILA_PDF + alturaExtra]);
-  const fuente = await pdf.embedFont(StandardFonts.Helvetica);
-  let y = pagina.getHeight() - 40;
-  pagina.drawText(titulo, { x: 20, y, size: 16, font: fuente });
-  y -= 35;
+  const altoPagina = 140 + filas.length * ALTO_FILA_PDF + alturaExtra + ALTO_PIE_PDF;
+  const pagina = pdf.addPage([ANCHO_PAGINA_PDF, altoPagina]);
 
-  for (const fila of filas) {
-    let anchoTexto = 20;
+  const [fuentes, logo] = await Promise.all([cargarFuentesMarca(pdf), cargarLogoMarca(pdf)]);
+  let y = dibujarEncabezado(pagina, { titulo, fuentes, logo, anchoPagina: ANCHO_PAGINA_PDF, altoPagina });
+
+  for (let indiceFila = 0; indiceFila < filas.length; indiceFila++) {
+    const fila = filas[indiceFila];
+    if (indiceFila % 2 === 1) {
+      pagina.drawRectangle({ x: 0, y: y - ALTO_FILA_PDF + 18, width: ANCHO_PAGINA_PDF, height: ALTO_FILA_PDF, color: COLORES_MARCA.rosaClaro });
+    }
+
+    let anchoTexto = MARGEN_LATERAL_PDF;
     if (fila.fotoUrl) {
       try {
         const bytes = await fetch(fila.fotoUrl).then((r) => {
@@ -252,25 +261,27 @@ export async function generarPdfConFotos(titulo: string, filas: FilaPdf[], total
         const imagen = fila.fotoUrl.toLowerCase().endsWith(".png")
           ? await pdf.embedPng(bytes)
           : await pdf.embedJpg(bytes);
-        const alto = 50;
+        const alto = 55;
         const ancho = (imagen.width / imagen.height) * alto;
-        pagina.drawImage(imagen, { x: 20, y: y - alto + 10, width: ancho, height: alto });
-        anchoTexto = 20 + ancho + 15;
+        pagina.drawImage(imagen, { x: MARGEN_LATERAL_PDF, y: y - alto + 12, width: ancho, height: alto });
+        anchoTexto = MARGEN_LATERAL_PDF + ancho + 18;
       } catch (error) {
         console.error(`[catalog] No se pudo incrustar la foto de "${fila.nombre}" en el PDF:`, error);
       }
     }
-    pagina.drawText(fila.nombre, { x: anchoTexto, y, size: 12, font: fuente });
+    pagina.drawText(fila.nombre, { x: anchoTexto, y, size: 12, font: fuentes.textoNegrita, color: COLORES_MARCA.ciruela });
     pagina.drawText(
       `${fila.detalle} — $${fila.precio.toLocaleString("es-CO")}${fila.nota ? ` — ${fila.nota}` : ""}`,
-      { x: anchoTexto, y: y - 18, size: 10, font: fuente },
+      { x: anchoTexto, y: y - 18, size: 10, font: fuentes.texto, color: COLORES_MARCA.ciruela },
     );
     y -= ALTO_FILA_PDF;
   }
 
   if (total !== undefined) {
-    pagina.drawText(`Total: $${total.toLocaleString("es-CO")}`, { x: 20, y, size: 12, font: fuente });
+    pagina.drawText(`Total: $${total.toLocaleString("es-CO")}`, { x: MARGEN_LATERAL_PDF, y, size: 12, font: fuentes.textoNegrita, color: COLORES_MARCA.dorado });
   }
+
+  dibujarPiePagina(pagina, { fuentes, anchoPagina: ANCHO_PAGINA_PDF });
 
   return pdf.save();
 }

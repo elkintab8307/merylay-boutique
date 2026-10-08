@@ -1,6 +1,33 @@
 import { describe, expect, it, vi } from "vitest";
+import { rgb, StandardFonts } from "pdf-lib";
 
 vi.mock("../_shared/db.ts", () => ({ getSupabase: vi.fn() }));
+
+// pdf-marca.ts descarga fuentes/logo por red -- se mockea por completo para
+// que los tests de PDF de este archivo (que SI usan pdf-lib real para el
+// resto del dibujo) no dependan de internet. Las fuentes que devuelve el
+// mock son fuentes ESTANDAR reales incrustadas en el pdf de la prueba (no
+// strings ni objetos falsos): pdf-lib real necesita un PDFFont real para
+// poder dibujar texto. Su logica de descarga/cache/fallback real ya esta
+// cubierta en pdf-marca.test.ts.
+vi.mock("./pdf-marca.ts", () => ({
+  cargarFuentesMarca: vi.fn(async (pdf: { embedFont: (f: string) => Promise<unknown> }) => {
+    const texto = await pdf.embedFont(StandardFonts.Helvetica);
+    const textoNegrita = await pdf.embedFont(StandardFonts.HelveticaBold);
+    return { texto, textoNegrita, titulo: textoNegrita };
+  }),
+  cargarLogoMarca: vi.fn(async () => null),
+  dibujarEncabezado: vi.fn((_pagina: unknown, opts: { altoPagina: number }) => opts.altoPagina - 70),
+  dibujarPiePagina: vi.fn(),
+  COLORES_MARCA: {
+    rosaFuerte: rgb(0xe9 / 255, 0x6a / 255, 0x9e / 255),
+    dorado: rgb(0xd9 / 255, 0xa4 / 255, 0x41 / 255),
+    rosaClaro: rgb(0xf8 / 255, 0xd4 / 255, 0xdd / 255),
+    ciruela: rgb(0x6e / 255, 0x2a / 255, 0x44 / 255),
+    crema: rgb(0xff / 255, 0xf8 / 255, 0xf4 / 255),
+    blanco: rgb(1, 1, 1),
+  },
+}));
 
 function mockCatalogo(productos: unknown[]) {
   const resultado = { data: productos, error: null };
