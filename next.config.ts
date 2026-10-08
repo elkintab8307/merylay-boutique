@@ -29,6 +29,15 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "20mb",
     },
   },
+  // El tracer de archivos de Next (@vercel/nft) no sigue el symlink de pnpm
+  // hacia el binario comprimido de Chromium (@sparticuz/chromium/bin/*.br),
+  // asi que la funcion serverless de /api/pdf/render se desplegaba sin ese
+  // binario ("input directory .../bin does not exist" en runtime, visto en
+  // el smoke test de Vercel del 2026-10-08). Se fuerza su inclusion
+  // explicita -- ver https://github.com/Sparticuz/chromium#bundler-configuration.
+  outputFileTracingIncludes: {
+    "/api/pdf/render": ["./node_modules/@sparticuz/chromium/bin/**", "./node_modules/.pnpm/@sparticuz+chromium@*/node_modules/@sparticuz/chromium/bin/**"],
+  },
 };
 
 export default nextConfig;
