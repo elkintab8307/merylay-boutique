@@ -120,12 +120,17 @@ describe("POST /api/pdf/render", () => {
     // chromium.args TRAE --disable-print-preview por defecto -- eso
     // desactiva el subsistema del que depende Page.printToPDF. Tambien
     // trae --headless='shell' metido a la fuerza, chocando con el
-    // headless:true que le pasamos a Puppeteer. Y trae --single-process +
-    // --no-zygote -- Chrome en single-process es inestable para
-    // printToPDF especificamente (necesita un proceso aparte para el
-    // compositor de PDF). Los 4 se filtran antes de lanzar.
+    // headless:true que le pasamos a Puppeteer. Ambos se filtran.
+    // --single-process/--no-zygote se probaron tambien (otro candidato
+    // razonable) pero SIN ellos Chrome ni siquiera arranca en el sandbox
+    // de Vercel (cuelgue hasta el timeout en vez de un crash limpio) --
+    // se quedan puestos a proposito, no se filtran.
     expect(launchMock).toHaveBeenCalledWith(
-      expect.objectContaining({ args: ["--chromium-arg"], executablePath: "/tmp/chromium", headless: true }),
+      expect.objectContaining({
+        args: ["--chromium-arg", "--single-process", "--no-zygote"],
+        executablePath: "/tmp/chromium",
+        headless: true,
+      }),
     );
   });
 
