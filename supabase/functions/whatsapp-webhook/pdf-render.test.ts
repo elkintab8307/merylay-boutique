@@ -382,6 +382,54 @@ describe("generarPdfTabla", () => {
 
     expect(bytes.length).toBeGreaterThan(0);
   });
+
+  it("sin opts.bannerArchivo, usa el encabezado de texto/logo de siempre (sin pedir ningun banner)", async () => {
+    vi.doUnmock("pdf-lib");
+    const fetchMock = vi.fn(async () => {
+      throw new Error("sin red en este test");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { generarPdfTabla } = await import("./pdf-render.ts");
+
+    await generarPdfTabla("Informe de ventas — últimos 7 día(s)", ["Fecha"], [["2026-10-08"]]);
+
+    const llamadasABanner = fetchMock.mock.calls.filter(([url]) => typeof url === "string" && url.includes("-banner."));
+    expect(llamadasABanner).toHaveLength(0);
+  });
+
+  it("con opts.bannerArchivo, pide ese banner especifico y lo dibuja a todo el ancho de la pagina", async () => {
+    vi.doUnmock("pdf-lib");
+    const fetchMock = vi.fn(async () => {
+      throw new Error("sin red en este test");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { generarPdfTabla } = await import("./pdf-render.ts");
+
+    const bytes = await generarPdfTabla(
+      "Informe de ventas — últimos 7 día(s)",
+      ["Fecha"],
+      [["2026-10-08"]],
+      { bannerArchivo: "informe-ventas-banner.jpg" },
+    );
+
+    expect(bytes.length).toBeGreaterThan(0);
+    expect(fetchMock).toHaveBeenCalledWith("https://merylay.shop/brand/informe-ventas-banner.jpg");
+  });
+
+  it("si el banner pedido no carga, cae al encabezado de texto/logo en vez de fallar", async () => {
+    vi.doUnmock("pdf-lib");
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("no encontrado", { status: 404 })));
+    const { generarPdfTabla } = await import("./pdf-render.ts");
+
+    const bytes = await generarPdfTabla(
+      "Informe de ventas — últimos 7 día(s)",
+      ["Fecha"],
+      [["2026-10-08"]],
+      { bannerArchivo: "informe-ventas-banner.jpg" },
+    );
+
+    expect(bytes.length).toBeGreaterThan(0);
+  });
 });
 
 describe("generarPdfTarjetas", () => {

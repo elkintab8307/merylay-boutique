@@ -60,7 +60,7 @@ export async function informeVentas(dias: number, conPdf: boolean): Promise<Resp
     formatoMoneda(f.total),
   ]);
 
-  const bytes = await generarPdfTabla(`Informe de ventas — últimos ${dias} día(s)`, ["Fecha", "Canal", "Método", "Total"], filasTabla);
+  const bytes = await generarPdfTabla(`Informe de ventas — últimos ${dias} día(s)`, ["Fecha", "Canal", "Método", "Total"], filasTabla, { bannerArchivo: "informe-ventas-banner.jpg" });
   const link = await subirYFirmar(bytes, "informe-ventas.pdf");
 
   return { texto, fotos: [], documentos: [{ link, filename: "informe-ventas-merylay.pdf" }] };
@@ -195,7 +195,7 @@ export async function informeClientes(dias: number, limite: number, conPdf: bool
   }
 
   const filasTabla = ranking.slice(0, TOPE_FILAS_PDF_RANKING).map((c) => [c.nombre, formatoMoneda(c.total), String(c.compras)]);
-  const bytes = await generarPdfTabla(`Mejores clientes — últimos ${dias} día(s)`, ["Cliente", "Total gastado", "Compras"], filasTabla);
+  const bytes = await generarPdfTabla(`Mejores clientes — últimos ${dias} día(s)`, ["Cliente", "Total gastado", "Compras"], filasTabla, { bannerArchivo: "informe-clientes-banner.jpg" });
   const link = await subirYFirmar(bytes, "informe-clientes.pdf");
 
   return { texto, fotos: [], documentos: [{ link, filename: "informe-clientes-merylay.pdf" }] };
@@ -444,7 +444,7 @@ export async function informeCreditos(dias: number, conPdf: boolean): Promise<Re
       formatoMoneda(Math.max(0, saldoPorVenta.get(v.id) ?? 0)),
     ]);
 
-  const bytes = await generarPdfTabla(`Ventas a crédito — últimos ${dias} día(s)`, ["Fecha", "Cliente", "Productos", "Total", "Saldo pendiente"], filasTabla);
+  const bytes = await generarPdfTabla(`Ventas a crédito — últimos ${dias} día(s)`, ["Fecha", "Cliente", "Productos", "Total", "Saldo pendiente"], filasTabla, { bannerArchivo: "informe-creditos-banner.jpg" });
   const link = await subirYFirmar(bytes, "informe-creditos.pdf");
 
   return { texto, fotos: [], documentos: [{ link, filename: "informe-creditos-merylay.pdf" }] };

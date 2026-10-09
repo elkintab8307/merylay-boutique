@@ -329,6 +329,7 @@ const ALTO_FILA_TABLA = 20;
 const MARGEN_LATERAL_TABLA = 24;
 const ALTO_PIE_TABLA = 30;
 const RELLENO_CELDA_TABLA = 8; // margen entre columnas para que clipTexto no toque la siguiente
+const ALTO_CAPTION_TABLA = 32;
 
 // Genera un PDF de marca con una tabla simple (encabezados de columna +
 // filas de texto, bandas alternadas). Cada celda se recorta con clipTexto()
@@ -337,14 +338,47 @@ const RELLENO_CELDA_TABLA = 8; // margen entre columnas para que clipTexto no to
 // negocio: solo recibe texto ya formateado -- usado por los informes de
 // negocio (reports.ts) y por el informe de productos sin fotos
 // (owner-actions.ts).
-export async function generarPdfTabla(titulo: string, encabezados: string[], filas: string[][]): Promise<Uint8Array> {
+//
+// Con `opts.bannerArchivo`, el encabezado de texto/logo se reemplaza por un
+// banner de marca (uno distinto por tipo de informe, ej.
+// "informe-ventas-banner.jpg") a todo el ancho de la pagina, con el
+// `titulo` real (el dato que SI cambia por informe, ej. el rango de dias)
+// en una franja fina debajo -- el banner es una imagen estatica y no puede
+// llevar ese texto. Sin `opts` (o si el banner no carga), el comportamiento
+// es EXACTAMENTE el de antes: el encabezado de texto/logo via
+// dibujarEncabezado.
+export async function generarPdfTabla(
+  titulo: string,
+  encabezados: string[],
+  filas: string[][],
+  opts?: { bannerArchivo?: string },
+): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   const altoContenido = (filas.length + 1) * ALTO_FILA_TABLA;
-  const altoPagina = 140 + altoContenido + ALTO_PIE_TABLA;
+
+  const [fuentes, logo, banner] = await Promise.all([
+    cargarFuentesMarca(pdf),
+    cargarLogoMarca(pdf),
+    opts?.bannerArchivo ? cargarBanner(pdf, opts.bannerArchivo) : Promise.resolve(null),
+  ]);
+  const altoBanner = banner ? (ANCHO_PAGINA_TABLA * banner.height) / banner.width : 0;
+  const altoEncabezado = banner ? altoBanner + ALTO_CAPTION_TABLA + MARGEN : 140;
+
+  const altoPagina = altoEncabezado + altoContenido + ALTO_PIE_TABLA;
   const pagina = pdf.addPage([ANCHO_PAGINA_TABLA, altoPagina]);
 
-  const [fuentes, logo] = await Promise.all([cargarFuentesMarca(pdf), cargarLogoMarca(pdf)]);
-  let y = dibujarEncabezado(pagina, { titulo, fuentes, logo, anchoPagina: ANCHO_PAGINA_TABLA, altoPagina });
+  let y: number;
+  if (banner) {
+    pagina.drawImage(banner, { x: 0, y: altoPagina - altoBanner, width: ANCHO_PAGINA_TABLA, height: altoBanner });
+    const yCaptionTop = altoPagina - altoBanner;
+    pagina.drawRectangle({ x: 0, y: yCaptionTop - ALTO_CAPTION_TABLA, width: ANCHO_PAGINA_TABLA, height: ALTO_CAPTION_TABLA, color: COLORES_MARCA.rosaClaro });
+    const tituloRecortado = clipTexto(titulo, ANCHO_PAGINA_TABLA - MARGEN_LATERAL_TABLA * 2, fuentes.textoNegrita, 13);
+    pagina.drawText(tituloRecortado, { x: MARGEN_LATERAL_TABLA, y: yCaptionTop - ALTO_CAPTION_TABLA / 2 - 4, size: 13, font: fuentes.textoNegrita, color: COLORES_MARCA.ciruela });
+    pagina.drawRectangle({ x: 0, y: yCaptionTop - ALTO_CAPTION_TABLA - 2, width: ANCHO_PAGINA_TABLA, height: 2, color: COLORES_MARCA.dorado });
+    y = yCaptionTop - ALTO_CAPTION_TABLA - MARGEN;
+  } else {
+    y = dibujarEncabezado(pagina, { titulo, fuentes, logo, anchoPagina: ANCHO_PAGINA_TABLA, altoPagina });
+  }
 
   const anchoColumna = (ANCHO_PAGINA_TABLA - MARGEN_LATERAL_TABLA * 2) / Math.max(encabezados.length, 1);
   const anchoMaxCelda = anchoColumna - RELLENO_CELDA_TABLA;

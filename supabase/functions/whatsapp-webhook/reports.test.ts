@@ -104,6 +104,26 @@ describe("informeVentas", () => {
     expect(resultado.documentos).toEqual([{ link: "https://x/informe-firmado.pdf", filename: "informe-ventas-merylay.pdf" }]);
   });
 
+  it("con conPdf=true, usa el banner de informe de ventas", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      orders: [{ data: [{ total: 100000, channel: "web", payment_method: "wompi", created_at: "2026-10-05T10:00:00Z" }], error: null }],
+      pos_sales: [{ data: [], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+    const { generarPdfTabla } = await import("./pdf-render.ts");
+
+    const { informeVentas } = await import("./reports.ts");
+    await informeVentas(7, true);
+
+    expect(generarPdfTabla).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Array),
+      expect.any(Array),
+      { bannerArchivo: "informe-ventas-banner.jpg" },
+    );
+  });
+
   it("con conPdf=true, la fila del PDF usa la fecha de Bogota, no la de UTC, para una venta tarde en la noche", async () => {
     // 2026-10-08T01:30:00Z son las 8:30pm del 7 de octubre en Bogota
     // (UTC-5). Si la fila del PDF usara la zona horaria de la sesion (UTC,
@@ -331,6 +351,28 @@ describe("informeClientes", () => {
 
     expect(subirYFirmar).toHaveBeenCalled();
     expect(resultado.documentos).toHaveLength(1);
+  });
+
+  it("con conPdf=true, usa el banner de informe de clientes", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      orders: [{ data: [{ user_id: "profile-1", total: 100000 }], error: null }],
+      pos_sales: [{ data: [], error: null }],
+      pos_customers: [{ data: [], error: null }],
+      profiles: [{ data: [{ id: "profile-1", full_name: "Juan Pérez", username: "juan" }], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+    const { generarPdfTabla } = await import("./pdf-render.ts");
+
+    const { informeClientes } = await import("./reports.ts");
+    await informeClientes(30, 10, true);
+
+    expect(generarPdfTabla).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Array),
+      expect.any(Array),
+      { bannerArchivo: "informe-clientes-banner.jpg" },
+    );
   });
 });
 
@@ -686,6 +728,7 @@ describe("informeCreditos", () => {
       expect.any(String),
       ["Fecha", "Cliente", "Productos", "Total", "Saldo pendiente"],
       [["5/10/2026", "Juan Pérez", "Pijama Rosa, Bata Dorada", "$200.000", "$150.000"]],
+      { bannerArchivo: "informe-creditos-banner.jpg" },
     );
   });
 
@@ -709,6 +752,7 @@ describe("informeCreditos", () => {
       expect.any(String),
       expect.any(Array),
       [["5/10/2026", "Cliente", "—", "$50.000", "$0"]],
+      { bannerArchivo: "informe-creditos-banner.jpg" },
     );
   });
 
