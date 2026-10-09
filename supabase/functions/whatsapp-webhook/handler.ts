@@ -100,6 +100,17 @@ function limiteValido(valor: unknown, porDefecto: number, tope: number): number 
   return Math.min(base, tope);
 }
 
+// A diferencia de Boolean(params.conPdf) (que trata "el modelo no mando
+// nada" igual que "el modelo mando false"), esto distingue ambos casos:
+// solo un `false` EXPLICITO desactiva el PDF. Usado por informes donde el
+// texto por si solo es casi inutil (un total/conteo, sin cliente/foto/
+// detalle) -- bug real: el dueño pedia el informe de creditos sin decir
+// "pdf" literalmente, el modelo no mandaba conPdf, y Boolean(undefined)
+// lo apagaba en silencio.
+function conPdfPorDefecto(valor: unknown, porDefecto: boolean): boolean {
+  return typeof valor === "boolean" ? valor : porDefecto;
+}
+
 // A diferencia de diasValidos/limiteValido, agregadoDesdeDias es un filtro
 // OPCIONAL sin default razonable: ausente significa "no filtrar por fecha",
 // no "usar N dias". Un valor presente pero corrupto (NaN, <1, no numerico)
@@ -170,10 +181,14 @@ async function ejecutarAccionLectura(accion: string, params: Record<string, unkn
       // quedaba excluida en silencio). ~10 anios cubre toda la historia del
       // negocio sin tener que redefinir la semantica de informeCreditos.
       const dias = diasValidos(params.dias, 3650);
-      return informeCreditos(dias, Boolean(params.conPdf));
+      // El texto de informeCreditos es solo un total/conteo -- cliente,
+      // foto, fecha, abono y saldo SOLO existen en el PDF. conPdf por
+      // defecto true: lo que de verdad pidio el dueño (ver el bug real en
+      // el comentario de conPdfPorDefecto) rara vez es el total a secas.
+      return informeCreditos(dias, conPdfPorDefecto(params.conPdf, true));
     }
     case "informe_creditos_pendientes":
-      return informeCreditosPendientes(Boolean(params.conPdf));
+      return informeCreditosPendientes(conPdfPorDefecto(params.conPdf, true));
     case "informe_abonos": {
       const dias = diasValidos(params.dias, 1);
       return informeAbonos(dias, Boolean(params.conPdf));

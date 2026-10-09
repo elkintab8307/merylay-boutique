@@ -527,7 +527,7 @@ describe("acciones de lectura del dueño con fotos/documentos", () => {
     const { procesarMensajeEntrante } = await import("./handler.ts");
     await procesarMensajeEntrante({});
 
-    expect(mocks.informeCreditos).toHaveBeenCalledWith(3650, false);
+    expect(mocks.informeCreditos).toHaveBeenCalledWith(3650, true);
   });
 
   it("informe_creditos_pendientes llama a reports.informeCreditosPendientes con conPdf, sin ningun filtro de dias", async () => {
@@ -540,6 +540,39 @@ describe("acciones de lectura del dueño con fotos/documentos", () => {
 
     expect(mocks.informeCreditosPendientes).toHaveBeenCalledWith(true);
     expect(clienteMocks.enviarDocumentoPorLink).toHaveBeenCalledWith("573215879805", "https://x/cp.pdf", "creditos-pendientes-merylay.pdf");
+  });
+
+  it("informe_creditos sin 'conPdf' en los params manda el PDF por defecto (bug real: el dueño pedia el informe de creditos y no se lo mandaba porque el modelo no dijo conPdf explicito -- el texto solo trae un total, nunca cliente/foto/abono/saldo)", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.6g", from: "573215879805", texto: "dame el informe de creditos" });
+    mocks.decidirAccion.mockResolvedValue({ action: "informe_creditos", params: {}, response_message: "" });
+    mocks.informeCreditos.mockResolvedValue({ texto: "Ventas a crédito: $500.000", fotos: [], documentos: [] });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.informeCreditos).toHaveBeenCalledWith(3650, true);
+  });
+
+  it("informe_creditos con conPdf:false explicito, lo respeta (el dueño pidio solo el resumen)", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.6h", from: "573215879805", texto: "dame solo el total de creditos, sin pdf" });
+    mocks.decidirAccion.mockResolvedValue({ action: "informe_creditos", params: { conPdf: false }, response_message: "" });
+    mocks.informeCreditos.mockResolvedValue({ texto: "Ventas a crédito: $500.000", fotos: [], documentos: [] });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.informeCreditos).toHaveBeenCalledWith(3650, false);
+  });
+
+  it("informe_creditos_pendientes sin 'conPdf' en los params manda el PDF por defecto", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.6i", from: "573215879805", texto: "informe de clientas con credito" });
+    mocks.decidirAccion.mockResolvedValue({ action: "informe_creditos_pendientes", params: {}, response_message: "" });
+    mocks.informeCreditosPendientes.mockResolvedValue({ texto: "María — $100.000", fotos: [], documentos: [] });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.informeCreditosPendientes).toHaveBeenCalledWith(true);
   });
 
   it("informe_abonos llama a reports.informeAbonos con dias y conPdf (default dias=1 si el modelo no lo manda)", async () => {
