@@ -1,6 +1,6 @@
 import { getSupabase } from "../_shared/db.ts";
-import { buscarCatalogo, construirTarjetasProductos, subirYFirmar, TOPE_BUSCAR_CATALOGO, type FiltrosCatalogo } from "./catalog.ts";
-import { generarPdfTabla, generarPdfTarjetas } from "./pdf-render.ts";
+import { buscarCatalogo, generarDocumentosProductosPorCategoria, subirYFirmar, TOPE_BUSCAR_CATALOGO, type FiltrosCatalogo } from "./catalog.ts";
+import { generarPdfTabla } from "./pdf-render.ts";
 
 export const formatoMoneda = (valor: number) => `$${valor.toLocaleString("es-CO")}`;
 
@@ -144,10 +144,12 @@ export async function consultarProductos(
 }
 
 async function generarInformeProductosPdfFotos(productos: Awaited<ReturnType<typeof buscarCatalogo>>): Promise<RespuestaLectura> {
-  const { estadisticas, tarjetas, fotoHero } = construirTarjetasProductos(productos);
-  const bytes = await generarPdfTarjetas("INFORME DE PRODUCTOS", "CATÁLOGO MERYLAY BOUTIQUE", fotoHero, estadisticas, tarjetas);
-  const link = await subirYFirmar(bytes, "informe.pdf");
-  return { texto: "Aquí tienes el informe 📋", fotos: [], documentos: [{ link, filename: "informe-merylay.pdf" }] };
+  const documentos = await generarDocumentosProductosPorCategoria(productos, {
+    titulo: "INFORME DE PRODUCTOS",
+    subtitulo: "CATÁLOGO MERYLAY BOUTIQUE",
+    nombreArchivoBase: "informe-merylay",
+  });
+  return { texto: "Aquí tienes el informe 📋", fotos: [], documentos };
 }
 
 async function generarInformeProductosPdfTabla(productos: Awaited<ReturnType<typeof buscarCatalogo>>): Promise<RespuestaLectura> {

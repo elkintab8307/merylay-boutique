@@ -294,14 +294,14 @@ async function ejecutarAccionCliente(
     }
 
     case "generar_catalogo_pdf": {
-      const link = await catalog.generarCatalogoPdf({
+      const documentos = await catalog.generarCatalogoPdf({
         texto: params.texto as string | undefined,
         talla: params.talla as string | undefined,
         color: params.color as string | undefined,
       });
       return {
         texto: "Aquí tienes nuestro catálogo 💕",
-        documentos: [{ link, filename: "catalogo-merylay.pdf" }],
+        documentos,
         botones: [],
       };
     }

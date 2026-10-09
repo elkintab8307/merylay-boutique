@@ -409,15 +409,69 @@ export function construirTarjetasProductos(productos: ProductoEncontrado[]): {
   return { estadisticas, tarjetas, fotoHero };
 }
 
-export async function generarCatalogoPdf(filtros?: FiltrosCatalogo): Promise<string> {
+// Pasa un nombre de categoria a un slug seguro para nombre de archivo
+// (sin tildes/espacios/mayusculas). Nunca devuelve vacio -- un nombre de
+// categoria que se reduce a nada (solo simbolos) cae a "producto" en vez de
+// dejar un nombre de archivo vacio o con solo guiones.
+function slug(texto: string): string {
+  const limpio = texto
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return limpio || "producto";
+}
+
+const SIN_CATEGORIA = "Sin categoría";
+
+// Genera un PDF de tarjetas por cada categoria distinta entre `productos`
+// (o uno solo si todos comparten la misma, o si no hay ninguno). Un pedido
+// que cruza varias categorias (ej. "camisetas tela fria" son 3 categorias
+// distintas en el catalogo real) producia un unico PDF de decenas de
+// tarjetas mezclando estilos, dificil de leer -- y concentraba todo el
+// costo de CPU de las fotos en una sola llamada (ver
+// TOPE_FOTOS_REALES_TARJETAS en pdf-render.ts). Separar por categoria
+// resuelve ambas cosas: el dueño/cliente recibe varios documentos mas
+// cortos en vez de uno gigante. Compartido por generarCatalogoPdf aqui y
+// por generarInformeProductosPdfFotos en owner-actions.ts.
+export async function generarDocumentosProductosPorCategoria(
+  productos: ProductoEncontrado[],
+  opts: { titulo: string; subtitulo: string; nombreArchivoBase: string },
+): Promise<{ link: string; filename: string }[]> {
+  const categorias = [...new Set(productos.map((p) => p.categoria ?? SIN_CATEGORIA))];
+
+  if (categorias.length <= 1) {
+    const { estadisticas, tarjetas, fotoHero } = construirTarjetasProductos(productos);
+    const bytes = await generarPdfTarjetas(opts.titulo, opts.subtitulo, fotoHero, estadisticas, tarjetas);
+    const filename = `${opts.nombreArchivoBase}.pdf`;
+    const link = await subirYFirmar(bytes, filename);
+    return [{ link, filename }];
+  }
+
+  const documentos: { link: string; filename: string }[] = [];
+  for (const categoria of categorias) {
+    const productosCategoria = productos.filter((p) => (p.categoria ?? SIN_CATEGORIA) === categoria);
+    const { estadisticas, tarjetas, fotoHero } = construirTarjetasProductos(productosCategoria);
+    const bytes = await generarPdfTarjetas(opts.titulo, `${opts.subtitulo} — ${categoria}`, fotoHero, estadisticas, tarjetas);
+    const filename = `${opts.nombreArchivoBase}-${slug(categoria)}.pdf`;
+    const link = await subirYFirmar(bytes, filename);
+    documentos.push({ link, filename });
+  }
+  return documentos;
+}
+
+export async function generarCatalogoPdf(filtros?: FiltrosCatalogo): Promise<{ link: string; filename: string }[]> {
   // buscarCatalogoInterno nunca lanza por falta de filtros (a diferencia de
   // buscarCatalogo): sin ningun filtro real, devuelve el catalogo COMPLETO
   // de productos activos, ya con variantes/fotos/categoria -- lo que
   // necesita la cuadricula de tarjetas.
   const productos = await buscarCatalogoInterno(filtros ?? {});
-  const { estadisticas, tarjetas, fotoHero } = construirTarjetasProductos(productos);
-  const bytes = await generarPdfTarjetas("CATÁLOGO", "MeryLay Boutique — Inspiración Femenina", fotoHero, estadisticas, tarjetas);
-  return subirYFirmar(bytes, "catalogo.pdf");
+  return generarDocumentosProductosPorCategoria(productos, {
+    titulo: "CATÁLOGO",
+    subtitulo: "MeryLay Boutique — Inspiración Femenina",
+    nombreArchivoBase: "catalogo",
+  });
 }
 
 // Resuelve la foto principal de un producto/variante con una consulta

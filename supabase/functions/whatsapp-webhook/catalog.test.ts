@@ -500,6 +500,80 @@ describe("construirTarjetasProductos", () => {
   });
 });
 
+describe("generarDocumentosProductosPorCategoria", () => {
+  function mockStorage(signedUrls: string[]) {
+    let i = 0;
+    const upload = vi.fn(async () => ({ error: null }));
+    const createSignedUrl = vi.fn(async () => ({ data: { signedUrl: signedUrls[i++] }, error: null }));
+    const supabase = { storage: { from: vi.fn(() => ({ upload, createSignedUrl })) } };
+    return { supabase, upload, createSignedUrl };
+  }
+
+  it("con una sola categoria entre todos los productos, genera un unico PDF (comportamiento sin cambios)", async () => {
+    const { supabase } = mockStorage(["https://x/doc-1.pdf"]);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+    const { generarPdfTarjetas } = await import("./pdf-render.ts");
+    (generarPdfTarjetas as ReturnType<typeof vi.fn>).mockClear();
+
+    const { generarDocumentosProductosPorCategoria } = await import("./catalog.ts");
+    const productos = [
+      { productId: "p1", variantId: null, nombre: "Camiseta A", talla: "M", color: null, precio: 40000, stock: 1, imageId: null, fotoUrl: null, categoria: "Camisetas" },
+      { productId: "p2", variantId: null, nombre: "Camiseta B", talla: "L", color: null, precio: 40000, stock: 1, imageId: null, fotoUrl: null, categoria: "Camisetas" },
+    ];
+
+    const documentos = await generarDocumentosProductosPorCategoria(productos, { titulo: "INFORME", subtitulo: "SUB", nombreArchivoBase: "informe" });
+
+    expect(documentos).toEqual([{ link: "https://x/doc-1.pdf", filename: "informe.pdf" }]);
+    expect(generarPdfTarjetas).toHaveBeenCalledTimes(1);
+    expect(generarPdfTarjetas).toHaveBeenCalledWith("INFORME", "SUB", null, expect.anything(), expect.anything());
+  });
+
+  it("con varias categorias, genera un PDF POR categoria -- cada uno con su nombre en el subtitulo y en el archivo (pedido real del dueño: separar informes que cruzan varias categorias)", async () => {
+    const { supabase } = mockStorage(["https://x/doc-1.pdf", "https://x/doc-2.pdf"]);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+    const { generarPdfTarjetas } = await import("./pdf-render.ts");
+    (generarPdfTarjetas as ReturnType<typeof vi.fn>).mockClear();
+
+    const { generarDocumentosProductosPorCategoria } = await import("./catalog.ts");
+    const productos = [
+      { productId: "p1", variantId: null, nombre: "Camiseta Tela Fria", talla: "M", color: null, precio: 35000, stock: 1, imageId: null, fotoUrl: null, categoria: "Camiseta tela Fria semiajustadas" },
+      { productId: "p2", variantId: null, nombre: "Camiseta Tela Fria manga doblada", talla: "L", color: null, precio: 35000, stock: 1, imageId: null, fotoUrl: null, categoria: "Camiseta tela Fria manga doblada" },
+    ];
+
+    const documentos = await generarDocumentosProductosPorCategoria(productos, { titulo: "INFORME DE PRODUCTOS", subtitulo: "CATÁLOGO MERYLAY BOUTIQUE", nombreArchivoBase: "informe" });
+
+    expect(documentos).toHaveLength(2);
+    expect(generarPdfTarjetas).toHaveBeenCalledTimes(2);
+    expect(generarPdfTarjetas).toHaveBeenCalledWith("INFORME DE PRODUCTOS", "CATÁLOGO MERYLAY BOUTIQUE — Camiseta tela Fria semiajustadas", null, expect.anything(), expect.anything());
+    expect(generarPdfTarjetas).toHaveBeenCalledWith("INFORME DE PRODUCTOS", "CATÁLOGO MERYLAY BOUTIQUE — Camiseta tela Fria manga doblada", null, expect.anything(), expect.anything());
+    expect(documentos.map((d) => d.filename)).toEqual([
+      "informe-camiseta-tela-fria-semiajustadas.pdf",
+      "informe-camiseta-tela-fria-manga-doblada.pdf",
+    ]);
+  });
+
+  it("agrupa los productos sin categoria bajo 'Sin categoría' como su propio grupo", async () => {
+    const { supabase } = mockStorage(["https://x/doc-1.pdf", "https://x/doc-2.pdf"]);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+    const { generarPdfTarjetas } = await import("./pdf-render.ts");
+    (generarPdfTarjetas as ReturnType<typeof vi.fn>).mockClear();
+
+    const { generarDocumentosProductosPorCategoria } = await import("./catalog.ts");
+    const productos = [
+      { productId: "p1", variantId: null, nombre: "Con categoria", talla: null, color: null, precio: 1000, stock: 1, imageId: null, fotoUrl: null, categoria: "Camisetas" },
+      { productId: "p2", variantId: null, nombre: "Sin categoria", talla: null, color: null, precio: 1000, stock: 1, imageId: null, fotoUrl: null, categoria: null },
+    ];
+
+    const documentos = await generarDocumentosProductosPorCategoria(productos, { titulo: "T", subtitulo: "S", nombreArchivoBase: "base" });
+
+    expect(documentos).toHaveLength(2);
+    expect(generarPdfTarjetas).toHaveBeenCalledWith("T", "S — Sin categoría", null, expect.anything(), expect.anything());
+  });
+});
+
 describe("generarCatalogoPdf", () => {
   it("sin filtros, usa el catalogo completo de productos activos (misma consulta que buscarCatalogo, sin el guard de filtros) y sube el PDF firmado", async () => {
     const productos = [
@@ -513,9 +587,9 @@ describe("generarCatalogoPdf", () => {
     (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
 
     const { generarCatalogoPdf } = await import("./catalog.ts");
-    const url = await generarCatalogoPdf();
+    const documentos = await generarCatalogoPdf();
 
-    expect(url).toBe("https://x/catalogo-firmado.pdf");
+    expect(documentos).toEqual([{ link: "https://x/catalogo-firmado.pdf", filename: "catalogo.pdf" }]);
     expect(select).toHaveBeenCalled();
     expect(upload).toHaveBeenCalled();
   });
@@ -538,9 +612,9 @@ describe("generarCatalogoPdf", () => {
     (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
 
     const { generarCatalogoPdf } = await import("./catalog.ts");
-    const url = await generarCatalogoPdf({ texto: undefined, talla: undefined, color: undefined });
+    const documentos = await generarCatalogoPdf({ texto: undefined, talla: undefined, color: undefined });
 
-    expect(url).toBe("https://x/catalogo-completo.pdf");
+    expect(documentos).toEqual([{ link: "https://x/catalogo-completo.pdf", filename: "catalogo.pdf" }]);
     expect(select).toHaveBeenCalled();
   });
 
@@ -556,9 +630,9 @@ describe("generarCatalogoPdf", () => {
     (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
 
     const { generarCatalogoPdf } = await import("./catalog.ts");
-    const url = await generarCatalogoPdf({ talla: "M" });
+    const documentos = await generarCatalogoPdf({ talla: "M" });
 
-    expect(url).toBe("https://x/catalogo-filtrado.pdf");
+    expect(documentos).toEqual([{ link: "https://x/catalogo-filtrado.pdf", filename: "catalogo.pdf" }]);
     expect(select).toHaveBeenCalledWith(expect.stringContaining("product_variants!inner"));
   });
 
@@ -588,7 +662,7 @@ describe("generarCatalogoPdf", () => {
     (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
 
     const { generarCatalogoPdf } = await import("./catalog.ts");
-    await expect(generarCatalogoPdf()).resolves.toBe("https://x/catalogo-vacio.pdf");
+    await expect(generarCatalogoPdf()).resolves.toEqual([{ link: "https://x/catalogo-vacio.pdf", filename: "catalogo.pdf" }]);
     expect(upload).toHaveBeenCalled();
   });
 });

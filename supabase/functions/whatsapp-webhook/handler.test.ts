@@ -349,12 +349,27 @@ describe("ejecutarAccionCliente via procesarMensajeEntrante", () => {
   it("manda el catalogo como documento ademas del texto", async () => {
     mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.11", from: "573009998888", texto: "mandame el catalogo" });
     mocks.decidirAccion.mockResolvedValue({ action: "generar_catalogo_pdf", params: {}, response_message: "" });
-    clienteMocks.generarCatalogoPdf.mockResolvedValue("https://x/catalogo-firmado.pdf");
+    clienteMocks.generarCatalogoPdf.mockResolvedValue([{ link: "https://x/catalogo-firmado.pdf", filename: "catalogo-merylay.pdf" }]);
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
     await procesarMensajeEntrante({});
 
     expect(clienteMocks.enviarDocumentoPorLink).toHaveBeenCalledWith("573009998888", "https://x/catalogo-firmado.pdf", "catalogo-merylay.pdf");
+  });
+
+  it("si el catalogo cruza varias categorias y llegan varios documentos, manda cada uno por separado (bug real: un solo PDF con todo mezclado era dificil de leer y topaba el presupuesto de CPU de la Edge Function)", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.11b", from: "573009998888", texto: "mandame el catalogo de camisetas tela fria" });
+    mocks.decidirAccion.mockResolvedValue({ action: "generar_catalogo_pdf", params: { texto: "tela fria" }, response_message: "" });
+    clienteMocks.generarCatalogoPdf.mockResolvedValue([
+      { link: "https://x/catalogo-semiajustadas.pdf", filename: "catalogo-semiajustadas.pdf" },
+      { link: "https://x/catalogo-manga-doblada.pdf", filename: "catalogo-manga-doblada.pdf" },
+    ]);
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(clienteMocks.enviarDocumentoPorLink).toHaveBeenCalledWith("573009998888", "https://x/catalogo-semiajustadas.pdf", "catalogo-semiajustadas.pdf");
+    expect(clienteMocks.enviarDocumentoPorLink).toHaveBeenCalledWith("573009998888", "https://x/catalogo-manga-doblada.pdf", "catalogo-manga-doblada.pdf");
   });
 
   it("confirma el pedido con el carrito de la sesion y responde con el link de pago", async () => {
@@ -695,7 +710,7 @@ describe("generar_catalogo_pdf con filtros", () => {
   it("pasa consulta/talla/color a generarCatalogoPdf", async () => {
     mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.5", from: "573001234567", texto: "catalogo de camisetas en talla M" });
     mocks.decidirAccion.mockResolvedValue({ action: "generar_catalogo_pdf", params: { texto: "camiseta", talla: "M" }, response_message: "" });
-    clienteMocks.generarCatalogoPdf.mockResolvedValue("https://x/catalogo.pdf");
+    clienteMocks.generarCatalogoPdf.mockResolvedValue([{ link: "https://x/catalogo.pdf", filename: "catalogo.pdf" }]);
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
     await procesarMensajeEntrante({});

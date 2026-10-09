@@ -219,50 +219,25 @@ describe("consultarProductos", () => {
     expect(resultado.texto).toContain("y 3 producto(s) más");
   });
 
-  it("formato 'pdf_fotos': genera un PDF de tarjetas (agrupado por producto) via generarPdfTarjetas, con la categoria como insignia", async () => {
+  it("formato 'pdf_fotos': genera los documentos via generarDocumentosProductosPorCategoria, con el titulo/subtitulo/nombre de archivo del informe del dueño", async () => {
     vi.resetModules();
-    const generarPdfTarjetas = vi.fn(async () => new Uint8Array([1]));
-    // agruparPorProducto real es pura logica de datos (sin I/O); se
-    // reimplementa aqui en miniatura porque ./catalog.ts se mockea por
-    // completo para este test (mismo patron que el resto del archivo) --
-    // con PRODUCTOS_BASE (2 productos, sin variantes duplicadas) el
-    // resultado es identico al de la funcion real.
+    const generarDocumentosProductosPorCategoria = vi.fn(async () => [
+      { link: "https://x/informe-firmado.pdf", filename: "informe-merylay.pdf" },
+    ]);
     vi.doMock("./catalog.ts", () => ({
       buscarCatalogo: vi.fn(async () => PRODUCTOS_BASE),
-      construirTarjetasProductos: vi.fn((productos: typeof PRODUCTOS_BASE) => ({
-        estadisticas: [{ valor: String(productos.length), etiqueta: "PRODUCTOS" }],
-        tarjetas: productos.map((p) => ({
-          fotoUrl: p.fotoUrl,
-          nombre: p.nombre,
-          pills: [
-            ...(p.talla ? [{ etiqueta: "Tallas", valores: [p.talla] }] : []),
-            ...(p.categoria ? [{ etiqueta: "Categoría", valores: [p.categoria] }] : []),
-          ],
-          precio: p.precio,
-          nota: `stock: ${p.stock}`,
-        })),
-        fotoHero: productos.find((p) => p.fotoUrl)?.fotoUrl ?? null,
-      })),
-      subirYFirmar: vi.fn(async () => "https://x/informe-firmado.pdf"),
+      generarDocumentosProductosPorCategoria,
       TOPE_BUSCAR_CATALOGO: 50,
     }));
-    vi.doMock("./pdf-render.ts", () => ({ generarPdfTarjetas }));
 
     const { consultarProductos } = await import("./owner-actions.ts");
     const resultado = await consultarProductos({ texto: "camiseta" }, "pdf_fotos", false);
 
-    expect(generarPdfTarjetas).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.any(String),
-      "https://x/a.jpg", // fotoHero: primera foto real entre PRODUCTOS_BASE
-      expect.any(Array),
-      expect.arrayContaining([
-        expect.objectContaining({
-          nombre: "Camiseta A",
-          pills: expect.arrayContaining([{ etiqueta: "Categoría", valores: ["Camisetas"] }]),
-        }),
-      ]),
-    );
+    expect(generarDocumentosProductosPorCategoria).toHaveBeenCalledWith(PRODUCTOS_BASE, {
+      titulo: "INFORME DE PRODUCTOS",
+      subtitulo: "CATÁLOGO MERYLAY BOUTIQUE",
+      nombreArchivoBase: "informe-merylay",
+    });
     expect(resultado.documentos).toEqual([{ link: "https://x/informe-firmado.pdf", filename: "informe-merylay.pdf" }]);
   });
 
