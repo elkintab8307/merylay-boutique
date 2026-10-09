@@ -277,6 +277,52 @@ describe("cargarLogoMarca", () => {
   });
 });
 
+describe("cargarBannerInforme", () => {
+  it("descarga e incrusta el banner desde SITE_URL/brand/informe-productos-banner.png", async () => {
+    const fetchMock = vi.fn(async () => new Response(new Uint8Array([9, 9, 9]), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { cargarBannerInforme } = await import("./pdf-render.ts");
+    const pdf = crearPdfMock();
+
+    const banner = await cargarBannerInforme(pdf as never);
+
+    expect(fetchMock).toHaveBeenCalledWith("https://merylay.shop/brand/informe-productos-banner.png");
+    expect(banner).not.toBeNull();
+  });
+
+  it("sin SITE_URL configurado, no intenta descargar nada y devuelve null", async () => {
+    vi.stubGlobal("Deno", { env: { get: vi.fn(() => undefined) } });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { cargarBannerInforme } = await import("./pdf-render.ts");
+    const pdf = crearPdfMock();
+
+    const banner = await cargarBannerInforme(pdf as never);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(banner).toBeNull();
+  });
+
+  it("si la descarga del banner falla, devuelve null sin lanzar", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("no encontrado", { status: 404 })));
+    const { cargarBannerInforme } = await import("./pdf-render.ts");
+    const pdf = crearPdfMock();
+
+    await expect(cargarBannerInforme(pdf as never)).resolves.toBeNull();
+  });
+
+  it("cachea el banner entre llamadas (una sola descarga para varios PDFs)", async () => {
+    const fetchMock = vi.fn(async () => new Response(new Uint8Array([9, 9, 9]), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { cargarBannerInforme } = await import("./pdf-render.ts");
+
+    await cargarBannerInforme(crearPdfMock() as never);
+    await cargarBannerInforme(crearPdfMock() as never);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("dibujarEncabezado", () => {
   function crearPaginaMock() {
     return { drawText: vi.fn(), drawImage: vi.fn(), drawRectangle: vi.fn() };
@@ -348,7 +394,6 @@ describe("generarPdfTarjetas", () => {
     const bytes = await generarPdfTarjetas(
       "CATÁLOGO",
       "MeryLay Boutique — Inspiración Femenina",
-      null,
       [{ valor: "1", etiqueta: "PRODUCTOS" }],
       [
         {
@@ -371,7 +416,7 @@ describe("generarPdfTarjetas", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { generarPdfTarjetas } = await import("./pdf-render.ts");
 
-    await generarPdfTarjetas("CATÁLOGO", "SUB", null, [], [
+    await generarPdfTarjetas("CATÁLOGO", "SUB", [], [
       {
         fotoUrl: "https://umnyolwszwvavwcxzyfy.supabase.co/storage/v1/object/public/product-images/abc/def.png",
         nombre: "Producto",
@@ -404,7 +449,7 @@ describe("generarPdfTarjetas", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { generarPdfTarjetas } = await import("./pdf-render.ts");
 
-    const bytes = await generarPdfTarjetas("CATÁLOGO", "SUB", null, [], [
+    const bytes = await generarPdfTarjetas("CATÁLOGO", "SUB", [], [
       {
         fotoUrl: "https://umnyolwszwvavwcxzyfy.supabase.co/storage/v1/object/public/product-images/abc/def.png",
         nombre: "Producto",
@@ -414,10 +459,11 @@ describe("generarPdfTarjetas", () => {
     ]);
 
     expect(bytes.length).toBeGreaterThan(0);
-    // 3 fuentes + 1 logo (SITE_URL esta configurado en el beforeEach global)
-    // + 2 intentos de la foto (redimensionada, que falla, y el reintento
-    // con la original, que si funciona).
-    expect(fetchMock).toHaveBeenCalledTimes(3 + 1 + 2);
+    // 3 fuentes + 1 logo + 1 banner (SITE_URL esta configurado en el
+    // beforeEach global; el banner tambien falla aqui y cae al
+    // encabezado de respaldo) + 2 intentos de la foto (redimensionada,
+    // que falla, y el reintento con la original, que si funciona).
+    expect(fetchMock).toHaveBeenCalledTimes(3 + 1 + 1 + 2);
   });
 
   it("limita cuantas fotos reales intenta incrustar, sin importar cuantas tarjetas haya (evita CPU Time exceeded en Supabase con catalogos grandes; mas alla del tope la tarjeta se dibuja sin foto)", async () => {
@@ -435,7 +481,7 @@ describe("generarPdfTarjetas", () => {
       precio: 1000,
     }));
 
-    const bytes = await generarPdfTarjetas("CATÁLOGO", "SUB", null, [], tarjetas);
+    const bytes = await generarPdfTarjetas("CATÁLOGO", "SUB", [], tarjetas);
 
     expect(bytes.length).toBeGreaterThan(0);
     const llamadasAFotos = fetchMock.mock.calls.filter(([url]) => typeof url === "string" && url.includes("/foto-")).length;

@@ -480,24 +480,6 @@ describe("construirTarjetasProductos", () => {
     expect(tarjetas[0].pills).toEqual([{ etiqueta: "Talla", valores: ["M"] }, { etiqueta: "Color", valores: ["Rosa"] }]);
   });
 
-  it("la foto destacada (fotoHero) es la primera foto real entre todos los productos", async () => {
-    const { construirTarjetasProductos } = await import("./catalog.ts");
-    const { fotoHero } = construirTarjetasProductos([
-      { productId: "p1", variantId: null, nombre: "Sin foto", talla: null, color: null, precio: 1000, stock: 1, imageId: null, fotoUrl: null, categoria: null },
-      { productId: "p2", variantId: null, nombre: "Con foto", talla: null, color: null, precio: 1000, stock: 1, imageId: null, fotoUrl: "https://x/hero.jpg", categoria: null },
-    ]);
-
-    expect(fotoHero).toBe("https://x/hero.jpg");
-  });
-
-  it("sin ningun producto con foto, fotoHero es null", async () => {
-    const { construirTarjetasProductos } = await import("./catalog.ts");
-    const { fotoHero } = construirTarjetasProductos([
-      { productId: "p1", variantId: null, nombre: "Sin foto", talla: null, color: null, precio: 1000, stock: 1, imageId: null, fotoUrl: null, categoria: null },
-    ]);
-
-    expect(fotoHero).toBeNull();
-  });
 });
 
 describe("generarDocumentosProductosPorCategoria", () => {
@@ -526,7 +508,7 @@ describe("generarDocumentosProductosPorCategoria", () => {
 
     expect(documentos).toEqual([{ link: "https://x/doc-1.pdf", filename: "informe.pdf" }]);
     expect(generarPdfTarjetas).toHaveBeenCalledTimes(1);
-    expect(generarPdfTarjetas).toHaveBeenCalledWith("INFORME", "SUB", null, expect.anything(), expect.anything());
+    expect(generarPdfTarjetas).toHaveBeenCalledWith("INFORME", "SUB", expect.anything(), expect.anything());
   });
 
   it("con varias categorias, genera un PDF POR categoria -- cada uno con su nombre en el subtitulo y en el archivo (pedido real del dueño: separar informes que cruzan varias categorias)", async () => {
@@ -546,8 +528,8 @@ describe("generarDocumentosProductosPorCategoria", () => {
 
     expect(documentos).toHaveLength(2);
     expect(generarPdfTarjetas).toHaveBeenCalledTimes(2);
-    expect(generarPdfTarjetas).toHaveBeenCalledWith("INFORME DE PRODUCTOS", "CATÁLOGO MERYLAY BOUTIQUE — Camiseta tela Fria semiajustadas", null, expect.anything(), expect.anything());
-    expect(generarPdfTarjetas).toHaveBeenCalledWith("INFORME DE PRODUCTOS", "CATÁLOGO MERYLAY BOUTIQUE — Camiseta tela Fria manga doblada", null, expect.anything(), expect.anything());
+    expect(generarPdfTarjetas).toHaveBeenCalledWith("INFORME DE PRODUCTOS", "CATÁLOGO MERYLAY BOUTIQUE — Camiseta tela Fria semiajustadas", expect.anything(), expect.anything());
+    expect(generarPdfTarjetas).toHaveBeenCalledWith("INFORME DE PRODUCTOS", "CATÁLOGO MERYLAY BOUTIQUE — Camiseta tela Fria manga doblada", expect.anything(), expect.anything());
     expect(documentos.map((d) => d.filename)).toEqual([
       "informe-camiseta-tela-fria-semiajustadas.pdf",
       "informe-camiseta-tela-fria-manga-doblada.pdf",
@@ -570,7 +552,7 @@ describe("generarDocumentosProductosPorCategoria", () => {
     const documentos = await generarDocumentosProductosPorCategoria(productos, { titulo: "T", subtitulo: "S", nombreArchivoBase: "base" });
 
     expect(documentos).toHaveLength(2);
-    expect(generarPdfTarjetas).toHaveBeenCalledWith("T", "S — Sin categoría", null, expect.anything(), expect.anything());
+    expect(generarPdfTarjetas).toHaveBeenCalledWith("T", "S — Sin categoría", expect.anything(), expect.anything());
   });
 });
 
@@ -735,7 +717,7 @@ describe("generarCotizacionPdf", () => {
 
     expect(url).toBe("https://x/firmado-foto.pdf");
     expect(generarPdfTarjetas).toHaveBeenCalledWith(
-      expect.any(String), expect.any(String), "https://x/foto.jpg", expect.any(Array),
+      expect.any(String), expect.any(String), expect.any(Array),
       expect.arrayContaining([expect.objectContaining({ fotoUrl: "https://x/foto.jpg" })]),
     );
   });

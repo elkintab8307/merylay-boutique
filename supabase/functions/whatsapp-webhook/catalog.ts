@@ -384,7 +384,6 @@ export async function subirYFirmar(bytes: Uint8Array, nombreArchivo: string): Pr
 export function construirTarjetasProductos(productos: ProductoEncontrado[]): {
   estadisticas: { valor: string; etiqueta: string }[];
   tarjetas: TarjetaProducto[];
-  fotoHero: string | null;
 } {
   const agrupados = agruparPorProducto(productos);
   const categorias = new Set(agrupados.map((p) => p.categoria).filter((c): c is string => Boolean(c)));
@@ -405,8 +404,7 @@ export function construirTarjetasProductos(productos: ProductoEncontrado[]): {
     precio: p.precio,
     nota: `stock: ${p.stock}`,
   }));
-  const fotoHero = productos.find((p) => p.fotoUrl)?.fotoUrl ?? null;
-  return { estadisticas, tarjetas, fotoHero };
+  return { estadisticas, tarjetas };
 }
 
 // Pasa un nombre de categoria a un slug seguro para nombre de archivo
@@ -442,8 +440,8 @@ export async function generarDocumentosProductosPorCategoria(
   const categorias = [...new Set(productos.map((p) => p.categoria ?? SIN_CATEGORIA))];
 
   if (categorias.length <= 1) {
-    const { estadisticas, tarjetas, fotoHero } = construirTarjetasProductos(productos);
-    const bytes = await generarPdfTarjetas(opts.titulo, opts.subtitulo, fotoHero, estadisticas, tarjetas);
+    const { estadisticas, tarjetas } = construirTarjetasProductos(productos);
+    const bytes = await generarPdfTarjetas(opts.titulo, opts.subtitulo, estadisticas, tarjetas);
     const filename = `${opts.nombreArchivoBase}.pdf`;
     const link = await subirYFirmar(bytes, filename);
     return [{ link, filename }];
@@ -452,8 +450,8 @@ export async function generarDocumentosProductosPorCategoria(
   const documentos: { link: string; filename: string }[] = [];
   for (const categoria of categorias) {
     const productosCategoria = productos.filter((p) => (p.categoria ?? SIN_CATEGORIA) === categoria);
-    const { estadisticas, tarjetas, fotoHero } = construirTarjetasProductos(productosCategoria);
-    const bytes = await generarPdfTarjetas(opts.titulo, `${opts.subtitulo} — ${categoria}`, fotoHero, estadisticas, tarjetas);
+    const { estadisticas, tarjetas } = construirTarjetasProductos(productosCategoria);
+    const bytes = await generarPdfTarjetas(opts.titulo, `${opts.subtitulo} — ${categoria}`, estadisticas, tarjetas);
     const filename = `${opts.nombreArchivoBase}-${slug(categoria)}.pdf`;
     const link = await subirYFirmar(bytes, filename);
     documentos.push({ link, filename });
@@ -501,7 +499,6 @@ export async function generarCotizacionPdf(items: ItemCarrito[]): Promise<string
     { valor: String(items.length), etiqueta: "PRODUCTOS" },
     { valor: `$${total.toLocaleString("es-CO")}`, etiqueta: "TOTAL" },
   ];
-  const fotoHero = tarjetas.find((t) => t.fotoUrl)?.fotoUrl ?? null;
-  const bytes = await generarPdfTarjetas("COTIZACIÓN", "MeryLay Boutique — Inspiración Femenina", fotoHero, estadisticas, tarjetas);
+  const bytes = await generarPdfTarjetas("COTIZACIÓN", "MeryLay Boutique — Inspiración Femenina", estadisticas, tarjetas);
   return subirYFirmar(bytes, "cotizacion.pdf");
 }

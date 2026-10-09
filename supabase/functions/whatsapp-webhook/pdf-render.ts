@@ -102,6 +102,34 @@ export function ajustarImagenContenida(
   return { ancho, alto, x: (anchoMax - ancho) / 2, y: (altoMax - alto) / 2 };
 }
 
+// Path SVG de un rectangulo de esquinas redondeadas, con (0,0) en la
+// esquina superior izquierda (convencion SVG: Y crece hacia abajo).
+// page.drawSvgPath() voltea el eje Y internamente, asi que dibujarlo con
+// `x`/`y` = la esquina superior izquierda real en coordenadas de pdf-lib
+// produce el rectangulo esperado, creciendo hacia abajo/derecha desde ahi.
+function pathRectanguloRedondeado(ancho: number, alto: number, radio: number): string {
+  const r = Math.max(0, Math.min(radio, ancho / 2, alto / 2));
+  return `M ${r} 0 L ${ancho - r} 0 Q ${ancho} 0 ${ancho} ${r} L ${ancho} ${alto - r} Q ${ancho} ${alto} ${ancho - r} ${alto} L ${r} ${alto} Q 0 ${alto} 0 ${alto - r} L 0 ${r} Q 0 0 ${r} 0 Z`;
+}
+
+// Path SVG de un corazon (viewBox 24x24), usado para la insignia decorativa
+// en la esquina de cada foto de producto.
+const PATH_CORAZON = "M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z";
+
+// Insignia decorativa de corazon en la esquina superior derecha de una
+// foto de producto (circulo translucido + corazon encima), como en el
+// diseño de referencia del dueño.
+function dibujarCorazonDecorativo(pagina: PDFPage, opts: { x: number; y: number }): void {
+  const { x, y } = opts;
+  pagina.drawEllipse({ x, y, xScale: 11, yScale: 11, color: COLORES_MARCA.blanco, opacity: 0.55 });
+  pagina.drawSvgPath(PATH_CORAZON, {
+    x: x - 7,
+    y: y + 7,
+    scale: 0.58,
+    color: COLORES_MARCA.rosaFuerte,
+  });
+}
+
 const URL_MONTSERRAT_REGULAR = "https://cdn.jsdelivr.net/fontsource/fonts/montserrat@latest/latin-400-normal.ttf";
 const URL_MONTSERRAT_BOLD = "https://cdn.jsdelivr.net/fontsource/fonts/montserrat@latest/latin-700-normal.ttf";
 const URL_PLAYFAIR_BOLD = "https://cdn.jsdelivr.net/fontsource/fonts/playfair-display@latest/latin-700-normal.ttf";
@@ -116,6 +144,7 @@ let cacheMontserratRegular: Uint8Array | null | undefined;
 let cacheMontserratBold: Uint8Array | null | undefined;
 let cachePlayfairBold: Uint8Array | null | undefined;
 let cacheLogo: Uint8Array | null | undefined;
+let cacheBannerInforme: Uint8Array | null | undefined;
 
 async function descargarBytes(url: string, descripcion: string): Promise<Uint8Array | null> {
   try {
@@ -187,11 +216,34 @@ export async function cargarLogoMarca(pdf: PDFDocument): Promise<PDFImage | null
   }
 }
 
+// Incrusta el banner de encabezado de "Informe de productos" (logo + titulo
+// + foto de marca, ya compuestos en un solo PNG por diseño) en ESTE
+// documento, o null si no hay SITE_URL configurado o la descarga falla --
+// en ambos casos el llamador debe caer al encabezado de texto/logo anterior
+// en vez de fallar.
+export async function cargarBannerInforme(pdf: PDFDocument): Promise<PDFImage | null> {
+  if (cacheBannerInforme === undefined) {
+    const base = Deno.env.get("SITE_URL");
+    const url = base ? `${base}/brand/informe-productos-banner.png` : null;
+    cacheBannerInforme = url ? await descargarBytes(url, "el banner de informes de productos") : null;
+  }
+  if (!cacheBannerInforme) {
+    return null;
+  }
+  try {
+    return await pdf.embedPng(cacheBannerInforme);
+  } catch (error) {
+    console.error("[pdf-render] El banner descargado no es un PNG valido, se omite:", error);
+    return null;
+  }
+}
+
 export function resetCachePdfMarcaParaTests(): void {
   cacheMontserratRegular = undefined;
   cacheMontserratBold = undefined;
   cachePlayfairBold = undefined;
   cacheLogo = undefined;
+  cacheBannerInforme = undefined;
 }
 
 const ALTO_ENCABEZADO = 70;
@@ -327,7 +379,10 @@ const TOPE_FOTOS_REALES_TARJETAS = 30;
 const MARGEN_TARJETAS = 24;
 const ESPACIO_TARJETAS = 16;
 const ALTO_FOTO_TARJETA = 150;
+// Alto del encabezado cuando el banner no se pudo cargar (respaldo de
+// texto/logo); con banner, el alto real sale de su propia proporcion.
 const ALTO_HEADER_TARJETAS = 150;
+const ALTO_CAPTION_TARJETAS = 32;
 const ALTO_STATS_TARJETAS = 60;
 const ALTO_PIE_TARJETAS = 30;
 const LINEAS_NOMBRE_TARJETA = 2;
@@ -394,12 +449,21 @@ async function embedFotoDesdeUrl(pdf: PDFDocument, url: string): Promise<PDFImag
   }
 }
 
-// Una insignia tipo "pill": rectangulo relleno rosaClaro ajustado al ancho
-// REAL del texto (widthOfTextAtSize, no una aproximacion) + relleno fijo.
-// Devuelve el ancho dibujado para que el llamador avance el cursor X.
+const ALTO_PILL = 18;
+const RADIO_PILL = ALTO_PILL / 2;
+
+// Una insignia tipo "pill" de verdad: extremos semicirculares (dos
+// drawEllipse) + un rectangulo central, ajustada al ancho REAL del texto
+// (widthOfTextAtSize, no una aproximacion). Antes era un rectangulo de
+// esquina recta -- drawRectangle no tiene esquinas redondeadas nativas en
+// pdf-lib. Devuelve el ancho dibujado para que el llamador avance el
+// cursor X.
 function dibujarPill(pagina: PDFPage, opts: { x: number; y: number; texto: string; fuente: PDFFont }): number {
-  const ancho = opts.fuente.widthOfTextAtSize(opts.texto, 9) + 16;
-  pagina.drawRectangle({ x: opts.x, y: opts.y, width: ancho, height: 18, color: COLORES_MARCA.rosaClaro });
+  const ancho = Math.max(opts.fuente.widthOfTextAtSize(opts.texto, 9) + 16, ALTO_PILL);
+  const yCentro = opts.y + ALTO_PILL / 2;
+  pagina.drawEllipse({ x: opts.x + RADIO_PILL, y: yCentro, xScale: RADIO_PILL, yScale: RADIO_PILL, color: COLORES_MARCA.rosaClaro });
+  pagina.drawEllipse({ x: opts.x + ancho - RADIO_PILL, y: yCentro, xScale: RADIO_PILL, yScale: RADIO_PILL, color: COLORES_MARCA.rosaClaro });
+  pagina.drawRectangle({ x: opts.x + RADIO_PILL, y: opts.y, width: ancho - ALTO_PILL, height: ALTO_PILL, color: COLORES_MARCA.rosaClaro });
   pagina.drawText(opts.texto, { x: opts.x + 8, y: opts.y + 5, size: 9, font: opts.fuente, color: COLORES_MARCA.ciruela });
   return ancho;
 }
@@ -423,6 +487,7 @@ async function dibujarTarjetaProducto(
     const anchoTexto = fuentes.texto.widthOfTextAtSize(textoVacio, 10);
     pagina.drawText(textoVacio, { x: x + ancho / 2 - anchoTexto / 2, y: yTop - ALTO_FOTO_TARJETA / 2, size: 10, font: fuentes.texto, color: COLORES_MARCA.ciruela });
   }
+  dibujarCorazonDecorativo(pagina, { x: x + ancho - 22, y: yTop - 22 });
 
   let y = yTop - ALTO_FOTO_TARJETA - 20;
   const anchoMaxNombre = ancho - 20;
@@ -458,23 +523,21 @@ async function dibujarTarjetaProducto(
     pagina.drawText(textoNota, { x: x + 10, y, size: 9, font: fuentes.texto, color: COLORES_MARCA.ciruela });
   }
 
-  pagina.drawRectangle({ x, y: yTop - altoTarjeta, width: ancho, height: altoTarjeta, borderColor: COLORES_MARCA.dorado, borderWidth: 1 });
+  pagina.drawSvgPath(pathRectanguloRedondeado(ancho, altoTarjeta, 10), { x, y: yTop, borderColor: COLORES_MARCA.dorado, borderWidth: 1 });
 }
 
-// Genera un PDF de marca con un encabezado grande (logo + titulo de dos
-// renglones + una foto destacada a la derecha -- la primera foto real de
-// producto disponible, no una imagen generica), una banda de estadisticas, y
-// una cuadricula de tarjetas de producto (foto + nombre + insignias + precio).
+// Genera un PDF de marca con un encabezado grande (el banner de "Informe de
+// productos": logo + titulo + foto de marca, compuestos en una sola imagen
+// por diseño -- ver cargarBannerInforme), una franja con el subtitulo real
+// del documento (el unico dato que SI cambia por informe, ej. la categoria
+// cuando se separa por categoria), una banda de estadisticas, y una
+// cuadricula de tarjetas de producto (foto + nombre + insignias + precio).
 // Usado por los informes con fotos (informe de productos del dueño, catalogo
 // de clientes, cotizacion) via sus propios llamadores en
 // catalog.ts/owner-actions.ts, que adaptan sus datos a TarjetaProducto[].
-// Version adaptada del diseño de referencia del dueño: colores planos (sin
-// degradados ni sombras, que pdf-lib no soporta de forma nativa) y sin la
-// insignia de "Calidad" (no existe ese dato en products hoy).
 export async function generarPdfTarjetas(
   titulo: string,
   subtitulo: string,
-  fotoHeroUrl: string | null,
   estadisticas: EstadisticaTarjetas[],
   tarjetas: TarjetaProducto[],
 ): Promise<Uint8Array> {
@@ -483,46 +546,45 @@ export async function generarPdfTarjetas(
   const maxPills = tarjetas.reduce((max, t) => Math.max(max, t.pills.length), 0);
   const altoTarjeta = ALTO_FOTO_TARJETA + ALTO_BLOQUE_NOMBRE_TARJETA + maxPills * 24 + 16;
   const altoContenido = filas * altoTarjeta + (filas - 1) * ESPACIO_TARJETAS;
-  const altoPagina = ALTO_HEADER_TARJETAS + ALTO_STATS_TARJETAS + MARGEN_TARJETAS + altoContenido + MARGEN_TARJETAS + ALTO_PIE_TARJETAS;
+
+  const [fuentes, logo, banner] = await Promise.all([cargarFuentesMarca(pdf), cargarLogoMarca(pdf), cargarBannerInforme(pdf)]);
+  // El banner ya trae su propio logo/titulo/foto incrustados en el diseño
+  // -- se dibuja a todo el ancho de la pagina, respetando su proporcion
+  // real (nunca estirado). Si no se pudo cargar (SITE_URL sin configurar,
+  // CDN caido), se cae al encabezado de texto/logo anterior en vez de
+  // dejar la pagina sin encabezado.
+  const altoBanner = banner ? (ANCHO_PAGINA_TARJETAS * banner.height) / banner.width : ALTO_HEADER_TARJETAS;
+
+  const altoPagina = altoBanner + ALTO_CAPTION_TARJETAS + ALTO_STATS_TARJETAS + MARGEN_TARJETAS + altoContenido + MARGEN_TARJETAS + ALTO_PIE_TARJETAS;
   const pagina = pdf.addPage([ANCHO_PAGINA_TARJETAS, altoPagina]);
 
   pagina.drawRectangle({ x: 0, y: 0, width: ANCHO_PAGINA_TARJETAS, height: altoPagina, color: COLORES_MARCA.crema });
 
-  const [fuentes, logo] = await Promise.all([cargarFuentesMarca(pdf), cargarLogoMarca(pdf)]);
-
-  // --- Encabezado grande ---
+  // --- Encabezado: banner, o el titulo/logo de texto como respaldo ---
   const yHeaderTop = altoPagina;
-  pagina.drawRectangle({ x: 0, y: yHeaderTop - ALTO_HEADER_TARJETAS, width: ANCHO_PAGINA_TARJETAS, height: ALTO_HEADER_TARJETAS, color: COLORES_MARCA.rosaClaro });
-
-  let xTitulo = MARGEN_TARJETAS;
-  if (logo) {
-    const altoLogo = 50;
-    const anchoLogo = (logo.width / logo.height) * altoLogo;
-    pagina.drawImage(logo, { x: MARGEN_TARJETAS, y: yHeaderTop - ALTO_HEADER_TARJETAS / 2 - altoLogo / 2, width: anchoLogo, height: altoLogo });
-    xTitulo = MARGEN_TARJETAS + anchoLogo + 20;
+  if (banner) {
+    pagina.drawImage(banner, { x: 0, y: yHeaderTop - altoBanner, width: ANCHO_PAGINA_TARJETAS, height: altoBanner });
+  } else {
+    pagina.drawRectangle({ x: 0, y: yHeaderTop - altoBanner, width: ANCHO_PAGINA_TARJETAS, height: altoBanner, color: COLORES_MARCA.rosaClaro });
+    let xTitulo = MARGEN_TARJETAS;
+    if (logo) {
+      const altoLogo = 50;
+      const anchoLogo = (logo.width / logo.height) * altoLogo;
+      pagina.drawImage(logo, { x: MARGEN_TARJETAS, y: yHeaderTop - altoBanner / 2 - altoLogo / 2, width: anchoLogo, height: altoLogo });
+      xTitulo = MARGEN_TARJETAS + anchoLogo + 20;
+    }
+    pagina.drawText(titulo, { x: xTitulo, y: yHeaderTop - altoBanner / 2 + 5, size: 26, font: fuentes.titulo, color: COLORES_MARCA.rosaFuerte });
   }
 
-  pagina.drawText(titulo, { x: xTitulo, y: yHeaderTop - 60, size: 26, font: fuentes.titulo, color: COLORES_MARCA.rosaFuerte });
-  pagina.drawText(subtitulo, { x: xTitulo, y: yHeaderTop - 85, size: 11, font: fuentes.textoNegrita, color: COLORES_MARCA.ciruela });
-
-  const fotoHero = fotoHeroUrl ? await embedFotoDesdeUrl(pdf, fotoHeroUrl) : null;
-  if (fotoHero) {
-    const anchoHero = 180;
-    const xHero = ANCHO_PAGINA_TARJETAS - MARGEN_TARJETAS - anchoHero;
-    const areaHero = ajustarImagenContenida(fotoHero.width, fotoHero.height, anchoHero, ALTO_HEADER_TARJETAS);
-    pagina.drawImage(fotoHero, {
-      x: xHero + areaHero.x,
-      y: yHeaderTop - ALTO_HEADER_TARJETAS + areaHero.y,
-      width: areaHero.ancho,
-      height: areaHero.alto,
-    });
-    pagina.drawRectangle({ x: xHero - 3, y: yHeaderTop - ALTO_HEADER_TARJETAS, width: 3, height: ALTO_HEADER_TARJETAS, color: COLORES_MARCA.dorado });
-  }
-
-  pagina.drawRectangle({ x: 0, y: yHeaderTop - ALTO_HEADER_TARJETAS - 2, width: ANCHO_PAGINA_TARJETAS, height: 2, color: COLORES_MARCA.dorado });
+  // --- Franja de subtitulo (el dato real y variable del documento) ---
+  const yCaptionTop = yHeaderTop - altoBanner;
+  pagina.drawRectangle({ x: 0, y: yCaptionTop - ALTO_CAPTION_TARJETAS, width: ANCHO_PAGINA_TARJETAS, height: ALTO_CAPTION_TARJETAS, color: COLORES_MARCA.rosaClaro });
+  const subtituloRecortado = clipTexto(subtitulo, ANCHO_PAGINA_TARJETAS - MARGEN_TARJETAS * 2, fuentes.textoNegrita, 12);
+  pagina.drawText(subtituloRecortado, { x: MARGEN_TARJETAS, y: yCaptionTop - ALTO_CAPTION_TARJETAS / 2 - 4, size: 12, font: fuentes.textoNegrita, color: COLORES_MARCA.ciruela });
+  pagina.drawRectangle({ x: 0, y: yCaptionTop - ALTO_CAPTION_TARJETAS - 2, width: ANCHO_PAGINA_TARJETAS, height: 2, color: COLORES_MARCA.dorado });
 
   // --- Banda de estadisticas ---
-  const yStatsTop = yHeaderTop - ALTO_HEADER_TARJETAS;
+  const yStatsTop = yCaptionTop - ALTO_CAPTION_TARJETAS;
   pagina.drawRectangle({ x: 0, y: yStatsTop - ALTO_STATS_TARJETAS, width: ANCHO_PAGINA_TARJETAS, height: ALTO_STATS_TARJETAS, color: COLORES_MARCA.blanco });
   if (estadisticas.length > 0) {
     const anchoBloque = ANCHO_PAGINA_TARJETAS / estadisticas.length;
