@@ -144,7 +144,7 @@ let cacheMontserratRegular: Uint8Array | null | undefined;
 let cacheMontserratBold: Uint8Array | null | undefined;
 let cachePlayfairBold: Uint8Array | null | undefined;
 let cacheLogo: Uint8Array | null | undefined;
-let cacheBannerInforme: Uint8Array | null | undefined;
+const cacheBanners = new Map<string, Uint8Array | null>();
 
 async function descargarBytes(url: string, descripcion: string): Promise<Uint8Array | null> {
   try {
@@ -216,26 +216,45 @@ export async function cargarLogoMarca(pdf: PDFDocument): Promise<PDFImage | null
   }
 }
 
-// Incrusta el banner de encabezado de "Informe de productos" (logo + titulo
-// + foto de marca, ya compuestos en un solo PNG por diseño) en ESTE
-// documento, o null si no hay SITE_URL configurado o la descarga falla --
-// en ambos casos el llamador debe caer al encabezado de texto/logo anterior
-// en vez de fallar.
-export async function cargarBannerInforme(pdf: PDFDocument): Promise<PDFImage | null> {
-  if (cacheBannerInforme === undefined) {
+// Incrusta un banner de encabezado (logo + titulo + foto de marca, ya
+// compuestos en una sola imagen por diseño, una distinta por tipo de
+// informe -- ej. "informe-ventas-banner.jpg") en ESTE documento, o null si
+// no hay SITE_URL configurado o la descarga falla -- en ambos casos el
+// llamador debe caer al encabezado de texto/logo anterior en vez de
+// fallar. Cada archivo se cachea por separado (varios informes, cada uno
+// con su propio banner, pueden generarse en la misma instancia tibia de la
+// Edge Function).
+//
+// JPEG, no PNG: un PNG de foto real de ~2000px sin comprimir cuesta CPU
+// real de decodificar+reincrustar, y al dibujarse en CADA PDF (no solo
+// cuando hay fotos de producto, como las de urlFotoRedimensionada) agotaba
+// el presupuesto de CPU de la Edge Function en la primerisima linea del
+// documento ("CPU Time exceeded" visto en produccion, el dueño se quedaba
+// sin respuesta del bot en CUALQUIER informe de productos). Los banners se
+// preprocesan una sola vez (ancho 1200px, JPEG calidad 82 -- ver el commit)
+// antes de subirse a /public/brand/, bajando ~30x el peso.
+export async function cargarBanner(pdf: PDFDocument, archivo: string): Promise<PDFImage | null> {
+  if (!cacheBanners.has(archivo)) {
     const base = Deno.env.get("SITE_URL");
-    const url = base ? `${base}/brand/informe-productos-banner.png` : null;
-    cacheBannerInforme = url ? await descargarBytes(url, "el banner de informes de productos") : null;
+    const url = base ? `${base}/brand/${archivo}` : null;
+    cacheBanners.set(archivo, url ? await descargarBytes(url, `el banner ${archivo}`) : null);
   }
-  if (!cacheBannerInforme) {
+  const bytes = cacheBanners.get(archivo);
+  if (!bytes) {
     return null;
   }
   try {
-    return await pdf.embedPng(cacheBannerInforme);
+    return archivo.toLowerCase().endsWith(".png") ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
   } catch (error) {
-    console.error("[pdf-render] El banner descargado no es un PNG valido, se omite:", error);
+    console.error(`[pdf-render] El banner ${archivo} descargado no es una imagen valida, se omite:`, error);
     return null;
   }
+}
+
+const ARCHIVO_BANNER_PRODUCTOS = "informe-productos-banner.jpg";
+
+export async function cargarBannerInforme(pdf: PDFDocument): Promise<PDFImage | null> {
+  return cargarBanner(pdf, ARCHIVO_BANNER_PRODUCTOS);
 }
 
 export function resetCachePdfMarcaParaTests(): void {
@@ -243,7 +262,7 @@ export function resetCachePdfMarcaParaTests(): void {
   cacheMontserratBold = undefined;
   cachePlayfairBold = undefined;
   cacheLogo = undefined;
-  cacheBannerInforme = undefined;
+  cacheBanners.clear();
 }
 
 const ALTO_ENCABEZADO = 70;

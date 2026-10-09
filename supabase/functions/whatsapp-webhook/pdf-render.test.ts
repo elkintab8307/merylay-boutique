@@ -24,6 +24,7 @@ function crearPdfMock() {
       return { __fontArg: arg };
     }),
     embedPng: vi.fn(async (bytes: Uint8Array) => ({ __pngBytes: bytes, width: 200, height: 100 })),
+    embedJpg: vi.fn(async (bytes: Uint8Array) => ({ __jpgBytes: bytes, width: 200, height: 100 })),
   };
 }
 
@@ -278,7 +279,7 @@ describe("cargarLogoMarca", () => {
 });
 
 describe("cargarBannerInforme", () => {
-  it("descarga e incrusta el banner desde SITE_URL/brand/informe-productos-banner.png", async () => {
+  it("descarga e incrusta el banner desde SITE_URL/brand/informe-productos-banner.jpg", async () => {
     const fetchMock = vi.fn(async () => new Response(new Uint8Array([9, 9, 9]), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     const { cargarBannerInforme } = await import("./pdf-render.ts");
@@ -286,7 +287,7 @@ describe("cargarBannerInforme", () => {
 
     const banner = await cargarBannerInforme(pdf as never);
 
-    expect(fetchMock).toHaveBeenCalledWith("https://merylay.shop/brand/informe-productos-banner.png");
+    expect(fetchMock).toHaveBeenCalledWith("https://merylay.shop/brand/informe-productos-banner.jpg");
     expect(banner).not.toBeNull();
   });
 
