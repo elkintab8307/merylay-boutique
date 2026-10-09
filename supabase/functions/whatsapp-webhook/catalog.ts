@@ -49,6 +49,7 @@ export interface FiltrosCatalogo {
   talla?: string;
   color?: string;
   agregadoDesdeDias?: number;
+  soloConStock?: boolean;
 }
 
 export const TOPE_BUSCAR_CATALOGO = 50;
@@ -153,7 +154,14 @@ async function buscarCatalogoInterno(filtros: FiltrosCatalogo): Promise<Producto
     ? expandido.filter((p) => tallaCoincideExacta(p.talla, filtros.talla!))
     : expandido;
 
-  return porTalla.slice(0, TOPE_BUSCAR_CATALOGO);
+  // Se filtra por el stock de cada FILA (talla/color ya expandido), no por
+  // el stock del producto base: un producto con una talla agotada y otra
+  // disponible debe conservar solo la disponible, no desaparecer entero ni
+  // quedarse entero (bug real: el dueño pedia "solo con stock" y el filtro
+  // no existia, asi que seguian saliendo productos/variantes con stock 0).
+  const conStock = filtros.soloConStock ? porTalla.filter((p) => p.stock > 0) : porTalla;
+
+  return conStock.slice(0, TOPE_BUSCAR_CATALOGO);
 }
 
 // Coincidencia EXACTA de talla (no substring): "L" no debe encontrar "XL"

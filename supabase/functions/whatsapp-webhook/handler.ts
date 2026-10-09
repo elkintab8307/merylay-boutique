@@ -146,6 +146,7 @@ async function ejecutarAccionLectura(accion: string, params: Record<string, unkn
         talla: params.talla as string | undefined,
         color: params.color as string | undefined,
         agregadoDesdeDias: agregadoDesdeDiasValido(params.agregadoDesdeDias),
+        soloConStock: Boolean(params.soloConStock),
       };
       if (!filtros.texto && !filtros.talla && !filtros.color && !filtros.agregadoDesdeDias) {
         return { texto: "¿Qué producto o categoría quieres que busque? Dime el nombre, la talla, el color, o desde cuándo se agregó.", fotos: [], documentos: [] };

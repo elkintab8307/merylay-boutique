@@ -243,6 +243,58 @@ describe("buscarCatalogo", () => {
 
     expect(resultado).toHaveLength(50);
   });
+
+  it("con soloConStock, excluye productos sin variantes con stock 0 (bug real: el dueño pedia 'solo con stock' y seguian saliendo productos agotados)", async () => {
+    const productos = [
+      { id: "p1", name: "Camiseta A", price: 35000, stock: 0, categories: null, product_variants: [], product_images: [] },
+      { id: "p2", name: "Camiseta B", price: 35000, stock: 3, categories: null, product_variants: [], product_images: [] },
+    ];
+    const { supabase } = mockCatalogo(productos);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { buscarCatalogo } = await import("./catalog.ts");
+    const resultado = await buscarCatalogo({ texto: "camiseta", soloConStock: true });
+
+    expect(resultado).toHaveLength(1);
+    expect(resultado[0].productId).toBe("p2");
+  });
+
+  it("con soloConStock, filtra por VARIANTE (talla/color): conserva las que tienen stock y descarta las de stock 0 del mismo producto", async () => {
+    const productos = [
+      {
+        id: "p1", name: "Camiseta A", price: 35000, stock: 5, categories: null,
+        product_variants: [
+          { id: "v1", talla: "S", color: null, price_override: null, stock: 0 },
+          { id: "v2", talla: "M", color: null, price_override: null, stock: 2 },
+        ],
+        product_images: [],
+      },
+    ];
+    const { supabase } = mockCatalogo(productos);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { buscarCatalogo } = await import("./catalog.ts");
+    const resultado = await buscarCatalogo({ texto: "camiseta", soloConStock: true });
+
+    expect(resultado).toHaveLength(1);
+    expect(resultado[0].variantId).toBe("v2");
+  });
+
+  it("sin soloConStock, sigue incluyendo productos con stock 0 (no cambia el comportamiento por defecto)", async () => {
+    const productos = [
+      { id: "p1", name: "Camiseta A", price: 35000, stock: 0, categories: null, product_variants: [], product_images: [] },
+    ];
+    const { supabase } = mockCatalogo(productos);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { buscarCatalogo } = await import("./catalog.ts");
+    const resultado = await buscarCatalogo({ texto: "camiseta" });
+
+    expect(resultado).toHaveLength(1);
+  });
 });
 
 describe("obtenerProductoParaCarrito", () => {

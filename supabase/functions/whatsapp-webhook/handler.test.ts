@@ -435,8 +435,27 @@ describe("acciones de lectura del dueño con fotos/documentos", () => {
     await procesarMensajeEntrante({});
 
     expect(mocks.consultarProductos).toHaveBeenCalledWith(
-      { texto: "camisetas", talla: "M", color: undefined, agregadoDesdeDias: 2 },
+      { texto: "camisetas", talla: "M", color: undefined, agregadoDesdeDias: 2, soloConStock: false },
       "lista",
+      false,
+    );
+  });
+
+  it("consultar_productos: con soloConStock, lo pasa a owner-actions (bug real: el dueño pedia 'solo con stock' y no habia forma de filtrarlo)", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.6z", from: "573215879805", texto: "camisetas tela fria que tengan stock" });
+    mocks.decidirAccion.mockResolvedValue({
+      action: "consultar_productos",
+      params: { texto: "camisetas tela fria", soloConStock: true, formato: "pdf_fotos" },
+      response_message: "",
+    });
+    mocks.consultarProductos.mockResolvedValue({ texto: "Encontré...", fotos: [], documentos: [] });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.consultarProductos).toHaveBeenCalledWith(
+      expect.objectContaining({ soloConStock: true }),
+      "pdf_fotos",
       false,
     );
   });
@@ -465,7 +484,7 @@ describe("acciones de lectura del dueño con fotos/documentos", () => {
     await procesarMensajeEntrante({});
 
     expect(mocks.consultarProductos).toHaveBeenCalledWith(
-      { texto: "camisetas", talla: undefined, color: undefined, agregadoDesdeDias: undefined },
+      { texto: "camisetas", talla: undefined, color: undefined, agregadoDesdeDias: undefined, soloConStock: false },
       "conteo",
       false,
     );
