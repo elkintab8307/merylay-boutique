@@ -457,6 +457,33 @@ describe("generarPdfTarjetas", () => {
     expect(bytes.length).toBeGreaterThan(0);
   });
 
+  it("sin opts.bannerArchivo, pide el banner de informes de productos (comportamiento sin cambios)", async () => {
+    vi.doUnmock("pdf-lib");
+    const fetchMock = vi.fn(async () => {
+      throw new Error("sin red en este test");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { generarPdfTarjetas } = await import("./pdf-render.ts");
+
+    await generarPdfTarjetas("CATÁLOGO", "SUB", [], []);
+
+    expect(fetchMock).toHaveBeenCalledWith("https://merylay.shop/brand/informe-productos-banner.jpg");
+  });
+
+  it("con opts.bannerArchivo, pide ese banner especifico en vez del de productos", async () => {
+    vi.doUnmock("pdf-lib");
+    const fetchMock = vi.fn(async () => {
+      throw new Error("sin red en este test");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { generarPdfTarjetas } = await import("./pdf-render.ts");
+
+    await generarPdfTarjetas("INFORME DE CRÉDITOS", "SUB", [], [], { bannerArchivo: "informe-creditos-banner.jpg" });
+
+    expect(fetchMock).toHaveBeenCalledWith("https://merylay.shop/brand/informe-creditos-banner.jpg");
+    expect(fetchMock).not.toHaveBeenCalledWith("https://merylay.shop/brand/informe-productos-banner.jpg");
+  });
+
   it("pide la version redimensionada de la foto (endpoint de transformacion de Supabase Storage), no el original pesado", async () => {
     vi.doUnmock("pdf-lib");
     const fetchMock = vi.fn(async () => {

@@ -6,7 +6,7 @@ import { obtenerOCrearSesion, guardarSesion, cargarHistorial } from "./sessions.
 import { decidirAccion } from "./agent.ts";
 import * as ownerActions from "./owner-actions.ts";
 import { ACCIONES_ESCRITURA } from "./owner-actions.ts";
-import { informeVentas, productosMasVendidos, informeClientes, historialCliente, informeGastos, informeCreditos, informeAbonos } from "./reports.ts";
+import { informeVentas, productosMasVendidos, informeClientes, historialCliente, informeGastos, informeCreditos, informeCreditosPendientes, informeAbonos } from "./reports.ts";
 import * as catalog from "./catalog.ts";
 import { crearPedidoWompiDesdeCarrito } from "./orders.ts";
 import { transcribirAudio } from "./voice.ts";
@@ -172,6 +172,8 @@ async function ejecutarAccionLectura(accion: string, params: Record<string, unkn
       const dias = diasValidos(params.dias, 3650);
       return informeCreditos(dias, Boolean(params.conPdf));
     }
+    case "informe_creditos_pendientes":
+      return informeCreditosPendientes(Boolean(params.conPdf));
     case "informe_abonos": {
       const dias = diasValidos(params.dias, 1);
       return informeAbonos(dias, Boolean(params.conPdf));

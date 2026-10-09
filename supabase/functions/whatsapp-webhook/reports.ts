@@ -1,7 +1,18 @@
 import { getSupabase } from "../_shared/db.ts";
-import { subirYFirmar } from "./catalog.ts";
-import { generarPdfTabla } from "./pdf-render.ts";
+import { obtenerFotoPrincipal, subirYFirmar } from "./catalog.ts";
+import { generarPdfTabla, generarPdfTarjetas, type TarjetaProducto } from "./pdf-render.ts";
 import { ESTADOS_PEDIDO_VENDIDO, escaparValorFiltro, formatoMoneda, type RespuestaLectura } from "./owner-actions.ts";
+
+// Incrusta la foto PRINCIPAL de cada producto (una consulta por id, no por
+// fila/venta) -- varias ventas/items pueden repetir el mismo producto, y no
+// tiene sentido pedir su foto mas de una vez. Compartido por los informes
+// de este archivo que muestran tarjetas de producto (creditos, productos
+// mas vendidos): "cualquier informe que implique un producto debe mostrar
+// foto en el PDF" es un requisito real del dueño, no solo de catalog.ts.
+async function fotosPorProducto(idsProductos: string[]): Promise<Map<string, string | null>> {
+  const entradas = await Promise.all(idsProductos.map(async (id) => [id, await obtenerFotoPrincipal(id, null)] as const));
+  return new Map(entradas);
+}
 
 const TOPE_FILAS_PDF_DETALLE = 200;
 
@@ -108,7 +119,7 @@ export async function productosMasVendidos(dias: number, limite: number, conPdf:
   const nombrePorId = new Map(((productos ?? []) as { id: string; name: string }[]).map((p) => [p.id, p.name]));
 
   const ranking = idsProductos
-    .map((id) => ({ nombre: nombrePorId.get(id) ?? "(producto eliminado)", ...acumulado.get(id)! }))
+    .map((id) => ({ id, nombre: nombrePorId.get(id) ?? "(producto eliminado)", ...acumulado.get(id)! }))
     .sort((a, b) => b.qty - a.qty);
 
   const textoTabla = ranking.slice(0, limite).map((p, i) => `${i + 1}. ${p.nombre} — ${p.qty} unidad(es), ${formatoMoneda(p.ingresos)}`).join("\n");
@@ -118,8 +129,23 @@ export async function productosMasVendidos(dias: number, limite: number, conPdf:
     return { texto, fotos: [], documentos: [] };
   }
 
-  const filasTabla = ranking.slice(0, TOPE_FILAS_PDF_RANKING).map((p) => [p.nombre, String(p.qty), formatoMoneda(p.ingresos)]);
-  const bytes = await generarPdfTabla(`Productos más vendidos — últimos ${dias} día(s)`, ["Producto", "Unidades", "Ingresos"], filasTabla);
+  // "Cualquier informe que implique un producto debe mostrar foto en el
+  // PDF" -- pedido real del dueño, aplica tambien al ranking de ventas.
+  const top = ranking.slice(0, TOPE_FILAS_PDF_RANKING);
+  const fotosPorId = await fotosPorProducto(top.map((p) => p.id));
+  const tarjetas: TarjetaProducto[] = top.map((p) => ({
+    fotoUrl: fotosPorId.get(p.id) ?? null,
+    nombre: p.nombre,
+    pills: [{ etiqueta: "Unidades", valores: [String(p.qty)] }],
+    precio: null,
+    nota: `Ingresos: ${formatoMoneda(p.ingresos)}`,
+  }));
+  const estadisticas = [
+    { valor: String(ranking.length), etiqueta: "PRODUCTOS" },
+    { valor: String(ranking.reduce((suma, p) => suma + p.qty, 0)), etiqueta: "UNIDADES VENDIDAS" },
+    { valor: formatoMoneda(ranking.reduce((suma, p) => suma + p.ingresos, 0)), etiqueta: "INGRESOS" },
+  ];
+  const bytes = await generarPdfTarjetas(`PRODUCTOS MÁS VENDIDOS`, `Últimos ${dias} día(s)`, estadisticas, tarjetas);
   const link = await subirYFirmar(bytes, "productos-mas-vendidos.pdf");
 
   return { texto, fotos: [], documentos: [{ link, filename: "productos-mas-vendidos-merylay.pdf" }] };
@@ -420,34 +446,134 @@ export async function informeCreditos(dias: number, conPdf: boolean): Promise<Re
   const filasItems = (items ?? []) as { sale_id: string; product_id: string | null }[];
 
   const idsProductos = [...new Set(filasItems.map((i) => i.product_id).filter((id): id is string => Boolean(id)))];
-  const { data: productosData, error: errorProductos } = idsProductos.length > 0
-    ? await supabase.from("products").select("id, name").in("id", idsProductos)
-    : { data: [] as { id: string; name: string }[], error: null };
-  if (errorProductos) throw new Error(`No se pudieron consultar los nombres de productos: ${errorProductos.message}`);
-  const nombrePorProducto = new Map(((productosData ?? []) as { id: string; name: string }[]).map((p) => [p.id, p.name]));
+  const [productosResultado, fotosPorId] = await Promise.all([
+    idsProductos.length > 0
+      ? supabase.from("products").select("id, name").in("id", idsProductos)
+      : Promise.resolve({ data: [] as { id: string; name: string }[], error: null }),
+    fotosPorProducto(idsProductos),
+  ]);
+  if (productosResultado.error) throw new Error(`No se pudieron consultar los nombres de productos: ${productosResultado.error.message}`);
+  const nombrePorProducto = new Map(((productosResultado.data ?? []) as { id: string; name: string }[]).map((p) => [p.id, p.name]));
 
-  const productosPorVenta = new Map<string, string[]>();
+  const itemsPorVenta = new Map<string, { sale_id: string; product_id: string | null }[]>();
   for (const it of filasItems) {
-    const lista = productosPorVenta.get(it.sale_id) ?? [];
-    lista.push(it.product_id ? (nombrePorProducto.get(it.product_id) ?? "(producto eliminado)") : "(producto eliminado)");
-    productosPorVenta.set(it.sale_id, lista);
+    const lista = itemsPorVenta.get(it.sale_id) ?? [];
+    lista.push(it);
+    itemsPorVenta.set(it.sale_id, lista);
   }
 
-  const filasTabla = [...ventas]
-    .sort((a, b) => (a.created_at > b.created_at ? -1 : 1))
-    .slice(0, TOPE_FILAS_PDF_DETALLE)
-    .map((v) => [
-      new Date(v.created_at).toLocaleDateString("es-CO", { timeZone: "America/Bogota" }),
-      v.customer_id ? (nombrePorCliente.get(v.customer_id) ?? "Cliente") : "Cliente",
-      (productosPorVenta.get(v.id) ?? []).join(", ") || "—",
-      formatoMoneda(Number(v.total)),
-      formatoMoneda(Math.max(0, saldoPorVenta.get(v.id) ?? 0)),
-    ]);
+  // Una tarjeta POR PRODUCTO de cada venta (no una fila por venta): "cualquier
+  // informe que implique un producto debe mostrar foto" es un requisito real
+  // del dueño. Cliente/fecha/abono/saldo son datos de la VENTA, no del
+  // producto -- se repiten en cada tarjeta de una misma venta a proposito
+  // (sin eso, una venta de 3 productos no dejaria claro a quien/cuando
+  // corresponde cada foto).
+  const ventasOrdenadas = [...ventas].sort((a, b) => (a.created_at > b.created_at ? -1 : 1)).slice(0, TOPE_FILAS_PDF_DETALLE);
+  const tarjetas: TarjetaProducto[] = [];
+  for (const v of ventasOrdenadas) {
+    const nombreCliente = v.customer_id ? (nombrePorCliente.get(v.customer_id) ?? "Cliente") : "Cliente";
+    const fecha = new Date(v.created_at).toLocaleDateString("es-CO", { timeZone: "America/Bogota" });
+    const saldo = Math.max(0, saldoPorVenta.get(v.id) ?? 0);
+    const abonado = Math.max(0, Number(v.total) - saldo);
+    const pills = [{ etiqueta: "Cliente", valores: [nombreCliente] }, { etiqueta: "Fecha", valores: [fecha] }];
+    const nota = `Abono: ${formatoMoneda(abonado)} — Saldo: ${formatoMoneda(saldo)}`;
+    const itemsDeVenta = itemsPorVenta.get(v.id) ?? [];
+    if (itemsDeVenta.length === 0) {
+      tarjetas.push({ fotoUrl: null, nombre: "(venta sin productos registrados)", pills, precio: null, nota });
+      continue;
+    }
+    for (const item of itemsDeVenta) {
+      tarjetas.push({
+        fotoUrl: item.product_id ? (fotosPorId.get(item.product_id) ?? null) : null,
+        nombre: item.product_id ? (nombrePorProducto.get(item.product_id) ?? "(producto eliminado)") : "(producto eliminado)",
+        pills,
+        precio: null,
+        nota,
+      });
+    }
+  }
 
-  const bytes = await generarPdfTabla(`Ventas a crédito — últimos ${dias} día(s)`, ["Fecha", "Cliente", "Productos", "Total", "Saldo pendiente"], filasTabla, { bannerArchivo: "informe-creditos-banner.jpg" });
+  const totalPendiente = ventas.reduce((suma, v) => suma + Math.max(0, saldoPorVenta.get(v.id) ?? 0), 0);
+  const totalAbonado = Math.max(0, totalVendido - totalPendiente);
+  const estadisticas = [
+    { valor: String(ventas.length), etiqueta: "VENTAS A CRÉDITO" },
+    { valor: formatoMoneda(totalAbonado), etiqueta: "ABONADO" },
+    { valor: formatoMoneda(totalPendiente), etiqueta: "SALDO PENDIENTE" },
+  ];
+
+  const bytes = await generarPdfTarjetas("INFORME DE CRÉDITOS", `Últimos ${dias} día(s)`, estadisticas, tarjetas, { bannerArchivo: "informe-creditos-banner.jpg" });
   const link = await subirYFirmar(bytes, "informe-creditos.pdf");
 
   return { texto, fotos: [], documentos: [{ link, filename: "informe-creditos-merylay.pdf" }] };
+}
+
+// Listado de clientas con saldo pendiente REAL en este momento (sumado
+// entre TODAS sus ventas a credito, sin importar cuando se hicieron -- a
+// diferencia de informeCreditos, esto es un estado actual, no un informe
+// por periodo, asi que nunca filtra por fecha). Pedido real del dueño:
+// "dame el informe de clientas que tengan credito con su nombre y saldo
+// pendiente" no encajaba en informeCreditos (que es por VENTA, no por
+// clienta, y no filtra solo las que deben).
+export async function informeCreditosPendientes(conPdf: boolean): Promise<RespuestaLectura> {
+  const supabase = getSupabase();
+
+  const { data, error } = await supabase
+    .from("pos_sales")
+    .select("id, customer_id, total")
+    .eq("payment_method", "credito");
+  if (error) throw new Error(`No se pudieron consultar las ventas a crédito: ${error.message}`);
+
+  const ventas = (data ?? []) as { id: string; customer_id: string | null; total: number }[];
+  if (ventas.length === 0) {
+    return { texto: "No hay ventas a crédito registradas.", fotos: [], documentos: [] };
+  }
+
+  const idsVenta = ventas.map((v) => v.id);
+  const { data: cuotas, error: errorCuotas } = await supabase
+    .from("credit_installments")
+    .select("sale_id, amount, paid_amount")
+    .in("sale_id", idsVenta);
+  if (errorCuotas) throw new Error(`No se pudieron consultar las cuotas de crédito: ${errorCuotas.message}`);
+  const filasCuotas = (cuotas ?? []) as { sale_id: string; amount: number; paid_amount: number }[];
+
+  const saldoPorVenta = new Map<string, number>();
+  for (const c of filasCuotas) {
+    saldoPorVenta.set(c.sale_id, (saldoPorVenta.get(c.sale_id) ?? 0) + Number(c.amount) - Number(c.paid_amount));
+  }
+
+  const SIN_CLIENTE = "__sin_cliente__";
+  const saldoPorCliente = new Map<string, number>();
+  for (const v of ventas) {
+    const saldo = Math.max(0, saldoPorVenta.get(v.id) ?? 0);
+    if (saldo <= 0) continue;
+    const clave = v.customer_id ?? SIN_CLIENTE;
+    saldoPorCliente.set(clave, (saldoPorCliente.get(clave) ?? 0) + saldo);
+  }
+
+  if (saldoPorCliente.size === 0) {
+    return { texto: "No hay clientas con saldo pendiente en este momento. 🎉", fotos: [], documentos: [] };
+  }
+
+  const idsClientesConSaldo = [...saldoPorCliente.keys()].filter((clave) => clave !== SIN_CLIENTE);
+  const nombrePorCliente = await nombresClientesPos(idsClientesConSaldo);
+
+  const ranking = [...saldoPorCliente.entries()]
+    .map(([clave, saldo]) => ({ nombre: clave === SIN_CLIENTE ? "Cliente" : (nombrePorCliente.get(clave) ?? "Cliente"), saldo }))
+    .sort((a, b) => b.saldo - a.saldo);
+
+  const totalPendiente = ranking.reduce((suma, r) => suma + r.saldo, 0);
+  const textoLista = ranking.map((r, i) => `${i + 1}. ${r.nombre} — ${formatoMoneda(r.saldo)}`).join("\n");
+  const texto = `Clientas con saldo pendiente: ${formatoMoneda(totalPendiente)} en total (${ranking.length} clienta(s)).\n${textoLista}`;
+
+  if (!conPdf) {
+    return { texto, fotos: [], documentos: [] };
+  }
+
+  const filasTabla = ranking.map((r) => [r.nombre, formatoMoneda(r.saldo)]);
+  const bytes = await generarPdfTabla("Clientas con crédito pendiente", ["Cliente", "Saldo pendiente"], filasTabla, { bannerArchivo: "informe-creditos-banner.jpg" });
+  const link = await subirYFirmar(bytes, "creditos-pendientes.pdf");
+
+  return { texto, fotos: [], documentos: [{ link, filename: "creditos-pendientes-merylay.pdf" }] };
 }
 
 export async function informeAbonos(dias: number, conPdf: boolean): Promise<RespuestaLectura> {

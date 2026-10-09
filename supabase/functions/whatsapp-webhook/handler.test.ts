@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   historialCliente: vi.fn(),
   informeGastos: vi.fn(),
   informeCreditos: vi.fn(),
+  informeCreditosPendientes: vi.fn(),
   informeAbonos: vi.fn(),
 }));
 
@@ -74,6 +75,7 @@ vi.mock("./reports.ts", () => ({
   historialCliente: mocks.historialCliente,
   informeGastos: mocks.informeGastos,
   informeCreditos: mocks.informeCreditos,
+  informeCreditosPendientes: mocks.informeCreditosPendientes,
   informeAbonos: mocks.informeAbonos,
 }));
 
@@ -526,6 +528,18 @@ describe("acciones de lectura del dueño con fotos/documentos", () => {
     await procesarMensajeEntrante({});
 
     expect(mocks.informeCreditos).toHaveBeenCalledWith(3650, false);
+  });
+
+  it("informe_creditos_pendientes llama a reports.informeCreditosPendientes con conPdf, sin ningun filtro de dias", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.6f", from: "573215879805", texto: "que clientas me deben" });
+    mocks.decidirAccion.mockResolvedValue({ action: "informe_creditos_pendientes", params: { conPdf: true }, response_message: "" });
+    mocks.informeCreditosPendientes.mockResolvedValue({ texto: "María — $100.000", fotos: [], documentos: [{ link: "https://x/cp.pdf", filename: "creditos-pendientes-merylay.pdf" }] });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.informeCreditosPendientes).toHaveBeenCalledWith(true);
+    expect(clienteMocks.enviarDocumentoPorLink).toHaveBeenCalledWith("573215879805", "https://x/cp.pdf", "creditos-pendientes-merylay.pdf");
   });
 
   it("informe_abonos llama a reports.informeAbonos con dias y conPdf (default dias=1 si el modelo no lo manda)", async () => {

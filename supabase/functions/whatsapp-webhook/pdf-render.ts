@@ -593,6 +593,7 @@ export async function generarPdfTarjetas(
   subtitulo: string,
   estadisticas: EstadisticaTarjetas[],
   tarjetas: TarjetaProducto[],
+  opts?: { bannerArchivo?: string },
 ): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   const filas = Math.max(Math.ceil(tarjetas.length / COLUMNAS_TARJETAS), 1);
@@ -600,7 +601,11 @@ export async function generarPdfTarjetas(
   const altoTarjeta = ALTO_FOTO_TARJETA + ALTO_BLOQUE_NOMBRE_TARJETA + maxPills * 24 + 16;
   const altoContenido = filas * altoTarjeta + (filas - 1) * ESPACIO_TARJETAS;
 
-  const [fuentes, logo, banner] = await Promise.all([cargarFuentesMarca(pdf), cargarLogoMarca(pdf), cargarBannerInforme(pdf)]);
+  const [fuentes, logo, banner] = await Promise.all([
+    cargarFuentesMarca(pdf),
+    cargarLogoMarca(pdf),
+    cargarBanner(pdf, opts?.bannerArchivo ?? ARCHIVO_BANNER_PRODUCTOS),
+  ]);
   // El banner ya trae su propio logo/titulo/foto incrustados en el diseño
   // -- se dibuja a todo el ancho de la pagina, respetando su proporcion
   // real (nunca estirado). Si no se pudo cargar (SITE_URL sin configurar,

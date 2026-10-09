@@ -1,18 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../_shared/db.ts", () => ({ getSupabase: vi.fn() }));
-vi.mock("./catalog.ts", () => ({ subirYFirmar: vi.fn(async () => "https://x/informe-firmado.pdf") }));
+vi.mock("./catalog.ts", () => ({
+  subirYFirmar: vi.fn(async () => "https://x/informe-firmado.pdf"),
+  obtenerFotoPrincipal: vi.fn(async () => null),
+}));
 
-// generarPdfTabla ahora vive en pdf-render.ts (le pide a un endpoint de
-// Vercel que renderice HTML a PDF) y se mockea por completo -- reports.ts
-// ya no dibuja PDFs directamente. El mock captura el contenido de `filas`
-// tal cual se lo pasan las funciones de este archivo, para poder verificar
-// (test de zona horaria, mas abajo) que la fecha de una fila sale en hora
-// de Bogota y no en UTC.
-const pdfLibCapturado = vi.hoisted(() => ({ textos: [] as string[] }));
+// generarPdfTabla/generarPdfTarjetas ahora viven en pdf-render.ts y se
+// mockean por completo -- reports.ts ya no dibuja PDFs directamente. El
+// mock de generarPdfTabla captura el contenido de `filas` tal cual se lo
+// pasan las funciones de este archivo, para poder verificar (test de zona
+// horaria, mas abajo) que la fecha de una fila sale en hora de Bogota y no
+// en UTC. El de generarPdfTarjetas captura las `tarjetas` con el mismo fin.
+const pdfLibCapturado = vi.hoisted(() => ({ textos: [] as string[], tarjetas: [] as unknown[] }));
 vi.mock("./pdf-render.ts", () => ({
   generarPdfTabla: vi.fn(async (_titulo: string, _encabezados: string[], filas: string[][]) => {
     filas.forEach((fila) => fila.forEach((valor) => pdfLibCapturado.textos.push(valor)));
+    return new Uint8Array([1, 2, 3]);
+  }),
+  generarPdfTarjetas: vi.fn(async (_titulo: string, _subtitulo: string, _estadisticas: unknown[], tarjetas: unknown[]) => {
+    pdfLibCapturado.tarjetas.push(...tarjetas);
     return new Uint8Array([1, 2, 3]);
   }),
 }));
@@ -702,7 +709,7 @@ describe("informeCreditos", () => {
     expect(resultado.texto).toContain("No hubo ventas a crédito");
   });
 
-  it("con conPdf=true, el detalle incluye cliente (fusion de identidad), productos y saldo pendiente por venta", async () => {
+  it("con conPdf=true, genera una tarjeta POR PRODUCTO de la venta, con cliente (fusion de identidad), fecha, abono y saldo (bug real: el dueño pidio foto por producto, cliente, fecha, abono y saldo pendiente en el informe completo de creditos)", async () => {
     const supabase = mockSupabaseDesdeTablas({
       pos_sales: [{
         data: [{ id: "venta-1", sale_number: "POS-1", customer_id: "cli-1", total: 200000, created_at: "2026-10-05T10:00:00Z" }],
@@ -719,15 +726,20 @@ describe("informeCreditos", () => {
     });
     const { getSupabase } = await import("../_shared/db.ts");
     (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
-    const { generarPdfTabla } = await import("./pdf-render.ts");
+    const { generarPdfTarjetas } = await import("./pdf-render.ts");
 
     const { informeCreditos } = await import("./reports.ts");
     await informeCreditos(7, true);
 
-    expect(generarPdfTabla).toHaveBeenCalledWith(
+    const pillsEsperadas = [{ etiqueta: "Cliente", valores: ["Juan Pérez"] }, { etiqueta: "Fecha", valores: ["5/10/2026"] }];
+    expect(generarPdfTarjetas).toHaveBeenCalledWith(
+      "INFORME DE CRÉDITOS",
       expect.any(String),
-      ["Fecha", "Cliente", "Productos", "Total", "Saldo pendiente"],
-      [["5/10/2026", "Juan Pérez", "Pijama Rosa, Bata Dorada", "$200.000", "$150.000"]],
+      expect.any(Array),
+      [
+        { fotoUrl: null, nombre: "Pijama Rosa", pills: pillsEsperadas, precio: null, nota: "Abono: $50.000 — Saldo: $150.000" },
+        { fotoUrl: null, nombre: "Bata Dorada", pills: pillsEsperadas, precio: null, nota: "Abono: $50.000 — Saldo: $150.000" },
+      ],
       { bannerArchivo: "informe-creditos-banner.jpg" },
     );
   });
@@ -743,22 +755,29 @@ describe("informeCreditos", () => {
     });
     const { getSupabase } = await import("../_shared/db.ts");
     (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
-    const { generarPdfTabla } = await import("./pdf-render.ts");
+    const { generarPdfTarjetas } = await import("./pdf-render.ts");
 
     const { informeCreditos } = await import("./reports.ts");
     await expect(informeCreditos(7, true)).resolves.not.toThrow();
 
-    expect(generarPdfTabla).toHaveBeenCalledWith(
+    expect(generarPdfTarjetas).toHaveBeenCalledWith(
+      "INFORME DE CRÉDITOS",
       expect.any(String),
       expect.any(Array),
-      [["5/10/2026", "Cliente", "—", "$50.000", "$0"]],
+      [{
+        fotoUrl: null,
+        nombre: "(venta sin productos registrados)",
+        pills: [{ etiqueta: "Cliente", valores: ["Cliente"] }, { etiqueta: "Fecha", valores: ["5/10/2026"] }],
+        precio: null,
+        nota: "Abono: $50.000 — Saldo: $0",
+      }],
       { bannerArchivo: "informe-creditos-banner.jpg" },
     );
   });
 
-  it("la fecha del PDF usa hora de Bogota, no UTC, para una venta tarde en la noche", async () => {
+  it("la fecha de la tarjeta usa hora de Bogota, no UTC, para una venta tarde en la noche", async () => {
     // 2026-10-08T01:30:00Z son las 8:30pm del 7 de octubre en Bogota
-    // (UTC-5). Si la fila usara UTC en vez de America/Bogota, mostraria
+    // (UTC-5). Si la tarjeta usara UTC en vez de America/Bogota, mostraria
     // 8/10/2026 en lugar de 7/10/2026 -- mismo caso limite que ya se
     // prueba en informeVentas/historialCliente, repetido aqui porque
     // informeCreditos formatea la fecha con su propio codigo (no
@@ -773,20 +792,119 @@ describe("informeCreditos", () => {
     });
     const { getSupabase } = await import("../_shared/db.ts");
     (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
-    const { generarPdfTabla } = await import("./pdf-render.ts");
+    const { generarPdfTarjetas } = await import("./pdf-render.ts");
 
     const { informeCreditos } = await import("./reports.ts");
     await informeCreditos(7, true);
 
-    // Se usa la ULTIMA llamada (no calls[0]): el mock de generarPdfTabla no
-    // se limpia entre describe blocks de este archivo (salvo un
-    // vi.clearAllMocks() puntual dentro de "informeVentas"), asi que para
-    // este punto del archivo el indice 0 ya no corresponde a esta prueba
-    // sino a una llamada de un informe anterior.
-    const llamadas = (generarPdfTabla as unknown as ReturnType<typeof vi.fn>).mock.calls;
-    const [, , filas] = llamadas[llamadas.length - 1] as [string, string[], string[][]];
-    expect(filas[0][0]).toBe("7/10/2026");
-    expect(filas[0][0]).not.toBe("8/10/2026");
+    // Se usa la ULTIMA llamada (no calls[0]): el mock de generarPdfTarjetas no
+    // se limpia entre describe blocks de este archivo, asi que para este
+    // punto del archivo el indice 0 ya no corresponde a esta prueba sino a
+    // una llamada de un informe anterior.
+    const llamadas = (generarPdfTarjetas as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const [, , , tarjetas] = llamadas[llamadas.length - 1] as [string, string, unknown[], { pills: { etiqueta: string; valores: string[] }[] }[]];
+    const fechaPill = tarjetas[0].pills.find((p) => p.etiqueta === "Fecha");
+    expect(fechaPill?.valores[0]).toBe("7/10/2026");
+    expect(fechaPill?.valores[0]).not.toBe("8/10/2026");
+  });
+});
+
+describe("informeCreditosPendientes", () => {
+  it("lista SOLO las clientas con saldo pendiente real, sumado entre TODAS sus ventas a credito (sin filtro de fecha)", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      pos_sales: [{
+        data: [
+          { id: "venta-1", customer_id: "cli-1", total: 100000 },
+          { id: "venta-2", customer_id: "cli-1", total: 50000 },
+          { id: "venta-3", customer_id: "cli-2", total: 80000 },
+        ],
+        error: null,
+      }],
+      credit_installments: [{
+        data: [
+          { sale_id: "venta-1", amount: 100000, paid_amount: 40000 },
+          { sale_id: "venta-2", amount: 50000, paid_amount: 10000 },
+          { sale_id: "venta-3", amount: 80000, paid_amount: 80000 },
+        ],
+        error: null,
+      }],
+      pos_customers: [{ data: [{ id: "cli-1", profile_id: null, nombre: "María" }, { id: "cli-2", profile_id: null, nombre: "Ana" }], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { informeCreditosPendientes } = await import("./reports.ts");
+    const resultado = await informeCreditosPendientes(false);
+
+    // cli-1 debe (100000-40000)+(50000-10000) = 100000; cli-2 ya pago todo (0) -- no debe aparecer.
+    expect(resultado.texto).toContain("María — $100.000");
+    expect(resultado.texto).not.toContain("Ana");
+    expect(resultado.texto).toContain("1 clienta(s)");
+  });
+
+  it("sin ninguna venta a credito, responde un mensaje claro", async () => {
+    const supabase = mockSupabaseDesdeTablas({ pos_sales: [{ data: [], error: null }] });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { informeCreditosPendientes } = await import("./reports.ts");
+    const resultado = await informeCreditosPendientes(false);
+
+    expect(resultado.texto).toContain("No hay ventas a crédito registradas");
+    expect(resultado.documentos).toHaveLength(0);
+  });
+
+  it("con ventas a credito pero todas pagadas, responde que no hay saldo pendiente", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      pos_sales: [{ data: [{ id: "venta-1", customer_id: "cli-1", total: 50000 }], error: null }],
+      credit_installments: [{ data: [{ sale_id: "venta-1", amount: 50000, paid_amount: 50000 }], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { informeCreditosPendientes } = await import("./reports.ts");
+    const resultado = await informeCreditosPendientes(false);
+
+    expect(resultado.texto).toContain("No hay clientas con saldo pendiente");
+    expect(resultado.documentos).toHaveLength(0);
+  });
+
+  it("una venta a credito sin customer_id (mostrador) no revienta: se agrupa bajo un nombre generico", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      pos_sales: [{ data: [{ id: "venta-1", customer_id: null, total: 50000 }], error: null }],
+      credit_installments: [{ data: [{ sale_id: "venta-1", amount: 50000, paid_amount: 0 }], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { informeCreditosPendientes } = await import("./reports.ts");
+    const resultado = await informeCreditosPendientes(false);
+
+    expect(resultado.texto).toContain("Cliente — $50.000");
+  });
+
+  it("con conPdf=true, sube un PDF de tabla (Cliente, Saldo pendiente) con el banner de creditos", async () => {
+    const supabase = mockSupabaseDesdeTablas({
+      pos_sales: [{ data: [{ id: "venta-1", customer_id: "cli-1", total: 100000 }], error: null }],
+      credit_installments: [{ data: [{ sale_id: "venta-1", amount: 100000, paid_amount: 30000 }], error: null }],
+      pos_customers: [{ data: [{ id: "cli-1", profile_id: null, nombre: "María" }], error: null }],
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+    const { generarPdfTabla } = await import("./pdf-render.ts");
+    const { subirYFirmar } = await import("./catalog.ts");
+
+    const { informeCreditosPendientes } = await import("./reports.ts");
+    const resultado = await informeCreditosPendientes(true);
+
+    expect(generarPdfTabla).toHaveBeenCalledWith(
+      "Clientas con crédito pendiente",
+      ["Cliente", "Saldo pendiente"],
+      [["María", "$70.000"]],
+      { bannerArchivo: "informe-creditos-banner.jpg" },
+    );
+    expect(subirYFirmar).toHaveBeenCalled();
+    expect(resultado.documentos).toEqual([{ link: "https://x/informe-firmado.pdf", filename: "creditos-pendientes-merylay.pdf" }]);
   });
 });
 
