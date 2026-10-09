@@ -114,7 +114,11 @@ function agregadoDesdeDiasValido(valor: unknown): number | undefined {
 async function ejecutarAccionLectura(accion: string, params: Record<string, unknown>): Promise<ownerActions.RespuestaLectura> {
   switch (accion) {
     case "informe_ventas": {
-      const dias = diasValidos(params.dias, 1);
+      // Sin periodo mencionado, el dueño espera ver TODO el historico de
+      // ventas, no solo las de hoy -- mismo criterio ya aplicado a
+      // informe_creditos (bug real: pedia un informe sin filtro y el bot
+      // le mostraba un recorte silencioso en vez de todo lo que hay).
+      const dias = diasValidos(params.dias, 3650);
       const resultado = await informeVentas(dias, Boolean(params.conPdf));
       return resultado;
     }
@@ -124,7 +128,9 @@ async function ejecutarAccionLectura(accion: string, params: Record<string, unkn
       return productosMasVendidos(dias, limite, Boolean(params.conPdf));
     }
     case "informe_clientes": {
-      const dias = diasValidos(params.dias, 30);
+      // Mismo criterio que informe_ventas/informe_creditos: sin periodo
+      // mencionado, todo el historico, no solo los ultimos 30 dias.
+      const dias = diasValidos(params.dias, 3650);
       const limite = limiteValido(params.limite, 10, 10);
       return informeClientes(dias, limite, Boolean(params.conPdf));
     }

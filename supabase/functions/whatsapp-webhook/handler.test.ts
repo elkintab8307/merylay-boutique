@@ -606,15 +606,37 @@ describe("acciones de lectura del dueño con fotos/documentos", () => {
     expect(mocks.productosMasVendidos).toHaveBeenCalledWith(365, 10, false);
   });
 
-  it("informe_ventas cae al default de 'dias' si el modelo manda un valor no numerico (ej. 'hoy')", async () => {
+  it("informe_ventas cae al default de 'dias' (todo el historico) si el modelo manda un valor no numerico", async () => {
     mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.3g", from: "573215879805", texto: "ventas de hoy" });
-    mocks.decidirAccion.mockResolvedValue({ action: "informe_ventas", params: { dias: "hoy", conPdf: false }, response_message: "" });
+    mocks.decidirAccion.mockResolvedValue({ action: "informe_ventas", params: { dias: "no-numero", conPdf: false }, response_message: "" });
     mocks.informeVentas.mockResolvedValue({ texto: "Ventas: $100.000", fotos: [], documentos: [] });
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
     await procesarMensajeEntrante({});
 
-    expect(mocks.informeVentas).toHaveBeenCalledWith(1, false);
+    expect(mocks.informeVentas).toHaveBeenCalledWith(3650, false);
+  });
+
+  it("informe_ventas sin dias (el dueño no pidio ningun periodo) trae todo el historico, no solo hoy (bug real: el dueño pedia un informe sin filtro y no le mostraba todo lo que habia en la tienda)", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.3h", from: "573215879805", texto: "dame el informe de ventas" });
+    mocks.decidirAccion.mockResolvedValue({ action: "informe_ventas", params: { conPdf: false }, response_message: "" });
+    mocks.informeVentas.mockResolvedValue({ texto: "Ventas: $100.000", fotos: [], documentos: [] });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.informeVentas).toHaveBeenCalledWith(3650, false);
+  });
+
+  it("informe_clientes sin dias (el dueño no pidio ningun periodo) trae todo el historico, no solo los ultimos 30 dias", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.3i", from: "573215879805", texto: "dame el listado de clientes" });
+    mocks.decidirAccion.mockResolvedValue({ action: "informe_clientes", params: { conPdf: false }, response_message: "" });
+    mocks.informeClientes.mockResolvedValue({ texto: "1. Juan Pérez", fotos: [], documentos: [] });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.informeClientes).toHaveBeenCalledWith(3650, 10, false);
   });
 });
 

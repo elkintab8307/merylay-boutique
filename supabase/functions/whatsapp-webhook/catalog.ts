@@ -387,11 +387,24 @@ export function construirTarjetasProductos(productos: ProductoEncontrado[]): {
 } {
   const agrupados = agruparPorProducto(productos);
   const categorias = new Set(agrupados.map((p) => p.categoria).filter((c): c is string => Boolean(c)));
-  const tallas = new Set(agrupados.flatMap((p) => p.tallas));
+  // Stock REAL sumado por talla (no solo que tallas existen) -- contar
+  // estilos/categorias no refleja cuanta ropa hay de verdad; el dueño pidio
+  // la cantidad real por talla, sumada entre TODOS los productos/estilos
+  // que coincidan (ej. dos estilos distintos que ambos tienen talla M
+  // suman su stock en una sola cifra de "M").
+  const stockPorTalla = new Map<string, number>();
+  for (const p of productos) {
+    if (!p.talla) continue;
+    stockPorTalla.set(p.talla, (stockPorTalla.get(p.talla) ?? 0) + p.stock);
+  }
+  const resumenTallas = [...stockPorTalla.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([talla, stock]) => `${talla}: ${stock}`)
+    .join(" · ") || "—";
   const estadisticas = [
     { valor: String(agrupados.length), etiqueta: "PRODUCTOS" },
     { valor: String(categorias.size), etiqueta: "CATEGORÍAS" },
-    { valor: [...tallas].sort().join(" - ") || "—", etiqueta: "TALLAS" },
+    { valor: resumenTallas, etiqueta: "STOCK POR TALLA" },
   ];
   const tarjetas: TarjetaProducto[] = productos.map((p) => ({
     fotoUrl: p.fotoUrl,

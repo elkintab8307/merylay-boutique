@@ -641,13 +641,19 @@ export async function generarPdfTarjetas(
   pagina.drawRectangle({ x: 0, y: yStatsTop - ALTO_STATS_TARJETAS, width: ANCHO_PAGINA_TARJETAS, height: ALTO_STATS_TARJETAS, color: COLORES_MARCA.blanco });
   if (estadisticas.length > 0) {
     const anchoBloque = ANCHO_PAGINA_TARJETAS / estadisticas.length;
+    const anchoMaxStat = anchoBloque - 16;
     estadisticas.forEach((stat, i) => {
       const xBloque = i * anchoBloque;
       const centro = xBloque + anchoBloque / 2;
-      const anchoValor = fuentes.titulo.widthOfTextAtSize(stat.valor, 20);
-      pagina.drawText(stat.valor, { x: centro - anchoValor / 2, y: yStatsTop - 26, size: 20, font: fuentes.titulo, color: COLORES_MARCA.rosaFuerte });
-      const anchoEtiqueta = fuentes.texto.widthOfTextAtSize(stat.etiqueta, 9);
-      pagina.drawText(stat.etiqueta, { x: centro - anchoEtiqueta / 2, y: yStatsTop - 44, size: 9, font: fuentes.texto, color: COLORES_MARCA.ciruela });
+      // STOCK POR TALLA puede traer varias tallas ("S: 12 · M: 8 · L: 5 · XL: 3")
+      // -- sin recortar, se desborda sobre el bloque de stat vecino con
+      // catalogos de muchas tallas.
+      const valorRecortado = clipTexto(stat.valor, anchoMaxStat, fuentes.titulo, 20);
+      const anchoValor = fuentes.titulo.widthOfTextAtSize(valorRecortado, 20);
+      pagina.drawText(valorRecortado, { x: centro - anchoValor / 2, y: yStatsTop - 26, size: 20, font: fuentes.titulo, color: COLORES_MARCA.rosaFuerte });
+      const etiquetaRecortada = clipTexto(stat.etiqueta, anchoMaxStat, fuentes.texto, 9);
+      const anchoEtiqueta = fuentes.texto.widthOfTextAtSize(etiquetaRecortada, 9);
+      pagina.drawText(etiquetaRecortada, { x: centro - anchoEtiqueta / 2, y: yStatsTop - 44, size: 9, font: fuentes.texto, color: COLORES_MARCA.ciruela });
       if (i > 0) {
         pagina.drawRectangle({ x: xBloque, y: yStatsTop - ALTO_STATS_TARJETAS + 10, width: 1, height: ALTO_STATS_TARJETAS - 20, color: COLORES_MARCA.dorado });
       }

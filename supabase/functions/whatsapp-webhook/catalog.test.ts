@@ -430,7 +430,7 @@ describe("agruparPorProducto", () => {
 });
 
 describe("construirTarjetasProductos", () => {
-  it("cuenta productos/categorias distintas y lista las tallas ordenadas en las estadisticas", async () => {
+  it("cuenta productos/categorias distintas y suma el STOCK REAL por talla (no solo la lista de tallas) en las estadisticas", async () => {
     const { construirTarjetasProductos } = await import("./catalog.ts");
     const { estadisticas } = construirTarjetasProductos([
       { productId: "p1", variantId: "v1", nombre: "Camiseta A", talla: "M", color: null, precio: 40000, stock: 1, imageId: null, fotoUrl: null, categoria: "Camisetas" },
@@ -441,8 +441,28 @@ describe("construirTarjetasProductos", () => {
     expect(estadisticas).toEqual([
       { valor: "2", etiqueta: "PRODUCTOS" },
       { valor: "2", etiqueta: "CATEGORÍAS" },
-      { valor: "M - S", etiqueta: "TALLAS" },
+      { valor: "M: 1 · S: 1", etiqueta: "STOCK POR TALLA" },
     ]);
+  });
+
+  it("el stock por talla suma TODAS las filas de esa talla, aunque sean de estilos/productos distintos (bug real: el dueño pedia la cantidad real por talla, no solo cuantos estilos hay)", async () => {
+    const { construirTarjetasProductos } = await import("./catalog.ts");
+    const { estadisticas } = construirTarjetasProductos([
+      { productId: "p1", variantId: null, nombre: "Camiseta A", talla: "M", color: null, precio: 40000, stock: 5, imageId: null, fotoUrl: null, categoria: "Camisetas" },
+      { productId: "p2", variantId: null, nombre: "Camiseta B", talla: "M", color: null, precio: 40000, stock: 3, imageId: null, fotoUrl: null, categoria: "Camisetas" },
+      { productId: "p3", variantId: null, nombre: "Camiseta C", talla: "L", color: null, precio: 40000, stock: 2, imageId: null, fotoUrl: null, categoria: "Camisetas" },
+    ]);
+
+    expect(estadisticas[2]).toEqual({ valor: "L: 2 · M: 8", etiqueta: "STOCK POR TALLA" });
+  });
+
+  it("sin ninguna talla registrada, el stock por talla queda en guion (no revienta)", async () => {
+    const { construirTarjetasProductos } = await import("./catalog.ts");
+    const { estadisticas } = construirTarjetasProductos([
+      { productId: "p1", variantId: null, nombre: "Bata Dorada", talla: null, color: null, precio: 120000, stock: 3, imageId: null, fotoUrl: null, categoria: "Batas" },
+    ]);
+
+    expect(estadisticas[2]).toEqual({ valor: "—", etiqueta: "STOCK POR TALLA" });
   });
 
   it("cada tarjeta lleva las insignias de Talla/Color/Categoría solo cuando hay dato real", async () => {
