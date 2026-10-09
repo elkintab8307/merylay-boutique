@@ -116,6 +116,27 @@ describe("envolverTexto", () => {
   });
 });
 
+describe("urlFotoRedimensionada", () => {
+  it("convierte una URL publica de Supabase Storage a su endpoint de transformacion, redimensionada y con menos calidad", async () => {
+    const { urlFotoRedimensionada } = await import("./pdf-render.ts");
+
+    const resultado = urlFotoRedimensionada(
+      "https://umnyolwszwvavwcxzyfy.supabase.co/storage/v1/object/public/product-images/abc/def.png",
+    );
+
+    expect(resultado).toBe(
+      "https://umnyolwszwvavwcxzyfy.supabase.co/storage/v1/render/image/public/product-images/abc/def.png?width=400&height=400&resize=contain&quality=70",
+    );
+  });
+
+  it("si la URL no es de un bucket publico de Supabase Storage, la devuelve sin cambios", async () => {
+    const { urlFotoRedimensionada } = await import("./pdf-render.ts");
+
+    const url = "https://otrocdn.com/foto.jpg";
+    expect(urlFotoRedimensionada(url)).toBe(url);
+  });
+});
+
 describe("ajustarImagenContenida", () => {
   it("si la imagen es mas ancha que alta, la limita por el ancho del area y la centra verticalmente", async () => {
     const { ajustarImagenContenida } = await import("./pdf-render.ts");
@@ -342,6 +363,63 @@ describe("generarPdfTarjetas", () => {
     expect(bytes.length).toBeGreaterThan(0);
   });
 
+  it("pide la version redimensionada de la foto (endpoint de transformacion de Supabase Storage), no el original pesado", async () => {
+    vi.doUnmock("pdf-lib");
+    const fetchMock = vi.fn(async () => {
+      throw new Error("sin red en este test");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { generarPdfTarjetas } = await import("./pdf-render.ts");
+
+    await generarPdfTarjetas("CATÁLOGO", "SUB", null, [], [
+      {
+        fotoUrl: "https://umnyolwszwvavwcxzyfy.supabase.co/storage/v1/object/public/product-images/abc/def.png",
+        nombre: "Producto",
+        pills: [],
+        precio: 1000,
+      },
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/render/image/public/product-images/abc/def.png?width=400"));
+  });
+
+  it("si la version redimensionada falla, reintenta con la foto original antes de rendirse", async () => {
+    vi.doUnmock("pdf-lib");
+    // 1x1 PNG real minimo -- pdf.embedPng necesita bytes validos para que
+    // el reintento con el original tenga exito de verdad.
+    const pngMinimo = Uint8Array.from(atob(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+    ), (c) => c.charCodeAt(0));
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("/render/image/")) {
+        throw new Error("transformacion no disponible en este test");
+      }
+      if (url.includes("/object/public/product-images/")) {
+        return new Response(pngMinimo, { status: 200 });
+      }
+      // fuentes/logo: fallan (no es lo que prueba este test) -- caen a sus
+      // reemplazos estandar sin romper el PDF, igual que en otros tests.
+      throw new Error("sin red en este test");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { generarPdfTarjetas } = await import("./pdf-render.ts");
+
+    const bytes = await generarPdfTarjetas("CATÁLOGO", "SUB", null, [], [
+      {
+        fotoUrl: "https://umnyolwszwvavwcxzyfy.supabase.co/storage/v1/object/public/product-images/abc/def.png",
+        nombre: "Producto",
+        pills: [],
+        precio: 1000,
+      },
+    ]);
+
+    expect(bytes.length).toBeGreaterThan(0);
+    // 3 fuentes + 1 logo (SITE_URL esta configurado en el beforeEach global)
+    // + 2 intentos de la foto (redimensionada, que falla, y el reintento
+    // con la original, que si funciona).
+    expect(fetchMock).toHaveBeenCalledTimes(3 + 1 + 2);
+  });
+
   it("limita cuantas fotos reales intenta incrustar, sin importar cuantas tarjetas haya (evita CPU Time exceeded en Supabase con catalogos grandes; mas alla del tope la tarjeta se dibuja sin foto)", async () => {
     vi.doUnmock("pdf-lib");
     const fetchMock = vi.fn(async () => {
@@ -350,7 +428,7 @@ describe("generarPdfTarjetas", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { generarPdfTarjetas } = await import("./pdf-render.ts");
 
-    const tarjetas = Array.from({ length: 15 }, (_, i) => ({
+    const tarjetas = Array.from({ length: 35 }, (_, i) => ({
       fotoUrl: `https://x/foto-${i}.jpg`,
       nombre: `Producto ${i}`,
       pills: [],
@@ -361,6 +439,6 @@ describe("generarPdfTarjetas", () => {
 
     expect(bytes.length).toBeGreaterThan(0);
     const llamadasAFotos = fetchMock.mock.calls.filter(([url]) => typeof url === "string" && url.includes("/foto-")).length;
-    expect(llamadasAFotos).toBeLessThanOrEqual(9);
+    expect(llamadasAFotos).toBeLessThanOrEqual(30);
   });
 });

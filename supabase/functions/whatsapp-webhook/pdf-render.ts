@@ -317,9 +317,13 @@ export interface TarjetaProducto {
 const ANCHO_PAGINA_TARJETAS = 780;
 const COLUMNAS_TARJETAS = 3;
 // Tope de fotos reales a incrustar por PDF -- ver el comentario en el bucle
-// de la cuadricula de tarjetas (generarPdfTarjetas). 9 = una cuadricula de
-// 3x3, holgado sobre el caso real ya probado en produccion (3 fotos).
-const TOPE_FOTOS_REALES_TARJETAS = 9;
+// de la cuadricula de tarjetas (generarPdfTarjetas). Ahora que cada foto se
+// pide redimensionada (urlFotoRedimensionada, ~96% menos peso/pixeles que
+// el original), el costo de CPU por foto bajo mucho -- se sube el tope de
+// 9 a 30 con ese margen, pero sigue siendo un tope, no una garantia: un
+// catalogo MUY grande (ej. el caso real de 47 tarjetas que motivo este
+// cambio) todavia puede topar.
+const TOPE_FOTOS_REALES_TARJETAS = 30;
 const MARGEN_TARJETAS = 24;
 const ESPACIO_TARJETAS = 16;
 const ALTO_FOTO_TARJETA = 150;
@@ -336,19 +340,57 @@ const ALTO_BLOQUE_NOMBRE_TARJETA = 20 + LINEAS_NOMBRE_TARJETA * ALTO_LINEA_NOMBR
 const ANCHO_TARJETA =
   (ANCHO_PAGINA_TARJETAS - MARGEN_TARJETAS * 2 - ESPACIO_TARJETAS * (COLUMNAS_TARJETAS - 1)) / COLUMNAS_TARJETAS;
 
+const MARCADOR_STORAGE_PUBLICO = "/storage/v1/object/public/";
+const ANCHO_TRANSFORMACION_FOTO = 400;
+const ALTO_TRANSFORMACION_FOTO = 400;
+const CALIDAD_TRANSFORMACION_FOTO = 70;
+
+// Si `url` es un objeto publico de Supabase Storage, devuelve la URL
+// equivalente de su endpoint de transformacion de imagenes (redimensionada
+// y con menos calidad). Decodificar e incrustar una foto de celular de
+// varios MB en pdf-lib tiene un costo de CPU real -- con varias fotos en un
+// mismo PDF eso agotaba el presupuesto de CPU de la Edge Function ("CPU
+// Time exceeded" visto en produccion). Una foto de ~400x400 pesa ~96% menos
+// que el original (medido: 2.26MB -> 88KB en una foto real del catalogo).
+// Si la URL no es de un bucket publico de Supabase Storage, se devuelve tal
+// cual -- degrada con gracia en vez de fallar.
+export function urlFotoRedimensionada(url: string): string {
+  const indice = url.indexOf(MARCADOR_STORAGE_PUBLICO);
+  if (indice === -1) return url;
+  const base = url.slice(0, indice);
+  const ruta = url.slice(indice + MARCADOR_STORAGE_PUBLICO.length);
+  return `${base}/storage/v1/render/image/public/${ruta}?width=${ANCHO_TRANSFORMACION_FOTO}&height=${ALTO_TRANSFORMACION_FOTO}&resize=contain&quality=${CALIDAD_TRANSFORMACION_FOTO}`;
+}
+
+async function descargarImagen(url: string): Promise<ArrayBuffer> {
+  const respuesta = await fetch(url);
+  if (!respuesta.ok) throw new Error(`descarga respondio ${respuesta.status}`);
+  return respuesta.arrayBuffer();
+}
+
 // Mismo patron de descarga+incrustacion que generarPdfConFotos (catalog.ts),
 // duplicado aqui porque pdf-render.ts no depende de catalog.ts (evitar el
 // import circular que ya se documento al mover generarPdfTabla).
 async function embedFotoDesdeUrl(pdf: PDFDocument, url: string): Promise<PDFImage | null> {
+  const urlLigera = urlFotoRedimensionada(url);
   try {
-    const bytes = await fetch(url).then((r) => {
-      if (!r.ok) throw new Error(`descarga respondio ${r.status}`);
-      return r.arrayBuffer();
-    });
+    const bytes = await descargarImagen(urlLigera);
     return url.toLowerCase().endsWith(".png") ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
   } catch (error) {
-    console.error(`[pdf-render] No se pudo incrustar la foto ${url}:`, error);
-    return null;
+    if (urlLigera === url) {
+      console.error(`[pdf-render] No se pudo incrustar la foto ${url}:`, error);
+      return null;
+    }
+    // La transformacion de imagenes puede fallar por su cuenta (limite del
+    // plan, imagen corrupta, etc.) sin que la foto original deje de servir
+    // -- se reintenta una vez con el original antes de rendirse del todo.
+    try {
+      const bytes = await descargarImagen(url);
+      return url.toLowerCase().endsWith(".png") ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
+    } catch (errorOriginal) {
+      console.error(`[pdf-render] No se pudo incrustar la foto ${url} (ni redimensionada ni original):`, errorOriginal);
+      return null;
+    }
   }
 }
 
