@@ -316,6 +316,10 @@ export interface TarjetaProducto {
 
 const ANCHO_PAGINA_TARJETAS = 780;
 const COLUMNAS_TARJETAS = 3;
+// Tope de fotos reales a incrustar por PDF -- ver el comentario en el bucle
+// de la cuadricula de tarjetas (generarPdfTarjetas). 9 = una cuadricula de
+// 3x3, holgado sobre el caso real ya probado en produccion (3 fotos).
+const TOPE_FOTOS_REALES_TARJETAS = 9;
 const MARGEN_TARJETAS = 24;
 const ESPACIO_TARJETAS = 16;
 const ALTO_FOTO_TARJETA = 150;
@@ -494,12 +498,20 @@ export async function generarPdfTarjetas(
   }
 
   // --- Cuadricula de tarjetas ---
+  // Mas alla de TOPE_FOTOS_REALES_TARJETAS, la tarjeta se dibuja SIN
+  // incrustar su foto (precio/talla/stock si se muestran) -- descargar y
+  // decodificar cada foto real tiene un costo de CPU real, y con catalogos
+  // grandes (ahora una tarjeta por talla, no por estilo) sumaba mas CPU de
+  // la que la Edge Function tiene de presupuesto, matando la funcion a
+  // medio generar el PDF ("CPU Time exceeded" en los logs de Supabase, el
+  // dueño se quedaba sin respuesta del bot).
   let yTarjetaTop = yStatsTop - ALTO_STATS_TARJETAS - MARGEN_TARJETAS;
   for (let i = 0; i < tarjetas.length; i++) {
     const columna = i % COLUMNAS_TARJETAS;
     if (columna === 0 && i > 0) yTarjetaTop -= altoTarjeta + ESPACIO_TARJETAS;
     const xTarjeta = MARGEN_TARJETAS + columna * (ANCHO_TARJETA + ESPACIO_TARJETAS);
-    await dibujarTarjetaProducto(pdf, pagina, tarjetas[i], { x: xTarjeta, yTop: yTarjetaTop, ancho: ANCHO_TARJETA, altoTarjeta, fuentes });
+    const tarjeta = i < TOPE_FOTOS_REALES_TARJETAS ? tarjetas[i] : { ...tarjetas[i], fotoUrl: null };
+    await dibujarTarjetaProducto(pdf, pagina, tarjeta, { x: xTarjeta, yTop: yTarjetaTop, ancho: ANCHO_TARJETA, altoTarjeta, fuentes });
   }
 
   dibujarPiePagina(pagina, { fuentes, anchoPagina: ANCHO_PAGINA_TARJETAS });

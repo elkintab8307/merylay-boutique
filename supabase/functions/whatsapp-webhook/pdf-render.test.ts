@@ -341,4 +341,26 @@ describe("generarPdfTarjetas", () => {
 
     expect(bytes.length).toBeGreaterThan(0);
   });
+
+  it("limita cuantas fotos reales intenta incrustar, sin importar cuantas tarjetas haya (evita CPU Time exceeded en Supabase con catalogos grandes; mas alla del tope la tarjeta se dibuja sin foto)", async () => {
+    vi.doUnmock("pdf-lib");
+    const fetchMock = vi.fn(async () => {
+      throw new Error("sin red en este test");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { generarPdfTarjetas } = await import("./pdf-render.ts");
+
+    const tarjetas = Array.from({ length: 15 }, (_, i) => ({
+      fotoUrl: `https://x/foto-${i}.jpg`,
+      nombre: `Producto ${i}`,
+      pills: [],
+      precio: 1000,
+    }));
+
+    const bytes = await generarPdfTarjetas("CATÁLOGO", "SUB", null, [], tarjetas);
+
+    expect(bytes.length).toBeGreaterThan(0);
+    const llamadasAFotos = fetchMock.mock.calls.filter(([url]) => typeof url === "string" && url.includes("/foto-")).length;
+    expect(llamadasAFotos).toBeLessThanOrEqual(9);
+  });
 });
