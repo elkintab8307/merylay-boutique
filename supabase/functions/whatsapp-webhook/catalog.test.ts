@@ -64,7 +64,7 @@ describe("buscarCatalogo", () => {
     expect(select).toHaveBeenCalledWith(expect.stringContaining("product_variants!inner"));
     expect(resultado).toEqual([{
       productId: "p1", variantId: "v1", nombre: "Pijama Rosa", talla: "M", color: "Rosa",
-      precio: 89900, stock: 4, imageId: null, fotoUrl: null, categoria: "Pijamas",
+      precio: 89900, stock: 4, imageId: null, fotoUrl: null, categoria: "Pijamas", descripcion: null,
     }]);
   });
 
@@ -166,6 +166,34 @@ describe("buscarCatalogo", () => {
     const resultado = await buscarCatalogo({ texto: "camiseta" });
 
     expect(resultado[0].categoria).toBe("Camiseta algodón licrado");
+  });
+
+  it("incluye la descripcion del producto en el resultado (para mostrar toda la info al cliente por WhatsApp)", async () => {
+    const productos = [
+      { id: "p1", name: "Pijama Rosa", price: 89900, stock: 5, description: "Pijama de dos piezas en algodón suave, ideal para dormir fresca.", categories: null, product_variants: [], product_images: [] },
+    ];
+    const { supabase } = mockCatalogo(productos);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { buscarCatalogo } = await import("./catalog.ts");
+    const resultado = await buscarCatalogo({ texto: "pijama" });
+
+    expect(resultado[0].descripcion).toBe("Pijama de dos piezas en algodón suave, ideal para dormir fresca.");
+  });
+
+  it("sin descripcion en la base de datos, descripcion queda en null (no revienta)", async () => {
+    const productos = [
+      { id: "p1", name: "Producto suelto", price: 10000, stock: 1, description: null, categories: null, product_variants: [], product_images: [] },
+    ];
+    const { supabase } = mockCatalogo(productos);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { buscarCatalogo } = await import("./catalog.ts");
+    const resultado = await buscarCatalogo({ texto: "producto" });
+
+    expect(resultado[0].descripcion).toBeNull();
   });
 
   it("sin categoria asignada, categoria queda en null (no revienta)", async () => {

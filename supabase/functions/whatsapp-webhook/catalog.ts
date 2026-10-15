@@ -17,6 +17,7 @@ export interface ProductoEncontrado {
   imageId: string | null;
   fotoUrl: string | null;
   categoria: string | null;
+  descripcion: string | null;
 }
 
 export interface ProductoParaCarrito {
@@ -79,7 +80,7 @@ async function buscarCatalogoInterno(filtros: FiltrosCatalogo): Promise<Producto
 
   let query = supabase
     .from("products")
-    .select(`id, name, price, stock, created_at, categories(name), ${variantesEmbed}, product_images(id, url, is_primary, variant_id, vendida)`)
+    .select(`id, name, description, price, stock, created_at, categories(name), ${variantesEmbed}, product_images(id, url, is_primary, variant_id, vendida)`)
     .eq("is_active", true);
 
   if (filtros.talla) query = query.ilike("product_variants.talla", `%${escaparPatronLike(filtros.talla)}%`);
@@ -95,6 +96,7 @@ async function buscarCatalogoInterno(filtros: FiltrosCatalogo): Promise<Producto
   const productos = data as unknown as Array<{
     id: string;
     name: string;
+    description: string | null;
     price: number;
     stock: number;
     categories: { name: string } | null;
@@ -126,6 +128,7 @@ async function buscarCatalogoInterno(filtros: FiltrosCatalogo): Promise<Producto
         imageId: imagen?.id ?? null,
         fotoUrl: imagen?.url ?? null,
         categoria: producto.categories?.name ?? null,
+        descripcion: producto.description ?? null,
       }];
     }
     return variantes.map((variante) => {
@@ -141,6 +144,7 @@ async function buscarCatalogoInterno(filtros: FiltrosCatalogo): Promise<Producto
         imageId: imagen?.id ?? null,
         fotoUrl: imagen?.url ?? null,
         categoria: producto.categories?.name ?? null,
+        descripcion: producto.description ?? null,
       };
     });
   });

@@ -210,7 +210,8 @@ const agregarAlCarritoSchema = z.object({
 function formatearCuerpoProducto(p: catalog.ProductoEncontrado): string {
   const detalles = [p.talla ? `talla ${p.talla}` : null, p.color ? `color ${p.color}` : null].filter(Boolean);
   const sufijo = detalles.length > 0 ? ` (${detalles.join(", ")})` : "";
-  return `${p.nombre}${sufijo}\n$${p.precio.toLocaleString("es-CO")} — stock: ${p.stock}`;
+  const descripcion = p.descripcion ? `\n${p.descripcion}` : "";
+  return `${p.nombre}${sufijo}${descripcion}\n$${p.precio.toLocaleString("es-CO")} — stock: ${p.stock}`;
 }
 
 const direccionEnvioSchema = z.object({
@@ -290,7 +291,7 @@ async function ejecutarAccionCliente(
         fotoUrl: p.fotoUrl as string,
         cuerpo: formatearCuerpoProducto(p),
         botonId: `add:${p.productId}:${p.variantId ?? "-"}`,
-        botonTitulo: "Agregar al carrito",
+        botonTitulo: "COMPRAR",
       }));
       const truncado = productos.length > TOPE
         ? ` Encontré ${productos.length} en total — si quieres verlos todos, pídeme el catálogo en PDF.`

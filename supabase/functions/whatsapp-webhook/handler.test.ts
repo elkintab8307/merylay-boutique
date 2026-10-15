@@ -688,11 +688,11 @@ describe("acciones de lectura del dueño con fotos/documentos", () => {
 });
 
 describe("buscar_producto con tarjetas de foto y boton", () => {
-  it("manda hasta 10 tarjetas con foto, cuerpo y boton 'Agregar al carrito'", async () => {
+  it("manda hasta 10 tarjetas con foto, cuerpo y boton 'COMPRAR'", async () => {
     mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.3", from: "573001234567", texto: "pijamas" });
     mocks.decidirAccion.mockResolvedValue({ action: "buscar_producto", params: { consulta: "pijama" }, response_message: "" });
     clienteMocks.buscarCatalogo.mockResolvedValue([
-      { productId: PRODUCTO_ID, variantId: VARIANTE_ID, nombre: "Pijama Rosa", talla: "M", color: "Rosa", precio: 89900, stock: 5, imageId: null, fotoUrl: "https://x/pijama.jpg" },
+      { productId: PRODUCTO_ID, variantId: VARIANTE_ID, nombre: "Pijama Rosa", talla: "M", color: "Rosa", precio: 89900, stock: 5, imageId: null, fotoUrl: "https://x/pijama.jpg", descripcion: null },
     ]);
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
@@ -702,8 +702,23 @@ describe("buscar_producto con tarjetas de foto y boton", () => {
       fotoUrl: "https://x/pijama.jpg",
       cuerpo: expect.stringContaining("Pijama Rosa"),
       botonId: `add:${PRODUCTO_ID}:${VARIANTE_ID}`,
-      botonTitulo: "Agregar al carrito",
+      botonTitulo: "COMPRAR",
     });
+  });
+
+  it("si el producto tiene descripcion, la incluye en el cuerpo de la tarjeta (el cliente debe ver toda la info antes de comprar)", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.3b", from: "573001234567", texto: "pijama rosa" });
+    mocks.decidirAccion.mockResolvedValue({ action: "buscar_producto", params: { consulta: "pijama rosa" }, response_message: "" });
+    clienteMocks.buscarCatalogo.mockResolvedValue([
+      { productId: PRODUCTO_ID, variantId: VARIANTE_ID, nombre: "Pijama Rosa", talla: "M", color: "Rosa", precio: 89900, stock: 5, imageId: null, fotoUrl: "https://x/pijama.jpg", descripcion: "Dos piezas en algodón suave." },
+    ]);
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.enviarBotonProducto).toHaveBeenCalledWith("573001234567", expect.objectContaining({
+      cuerpo: expect.stringContaining("Dos piezas en algodón suave."),
+    }));
   });
 
   it("sin coincidencias, responde un mensaje claro sin mandar ningun boton", async () => {

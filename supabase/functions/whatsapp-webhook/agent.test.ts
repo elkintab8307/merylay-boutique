@@ -109,7 +109,7 @@ describe("decidirAccion", () => {
     // La nueva instruccion debe decirle al modelo que pida al cliente tocar
     // el boton (o describir el producto de nuevo) cuando no haya un id real.
     expect(prompt).toContain("boton");
-    expect(prompt).toContain("Agregar al carrito");
+    expect(prompt).toContain("COMPRAR");
     // La prohibicion de inventar/deducir los ids del nombre se mantiene.
     expect(prompt).toMatch(/NUNCA los inventes ni los deduzcas del nombre/);
   });
