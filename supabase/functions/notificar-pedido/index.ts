@@ -142,13 +142,14 @@ async function datosVentaPos(supabase: Supabase, record: Record<string, unknown>
 }
 
 // A diferencia de una venta nueva, un abono no trae items que mostrar con
-// foto -- es un pago contra un saldo ya existente. El mensaje sigue el
-// formato pedido por el dueño: cliente, monto, y a que producto(s)
-// corresponde el credito, mas el saldo que queda tras este abono.
+// foto -- es un pago contra un saldo ya existente. Formato pedido por el
+// dueño: "Se abono x al credito No x de la clienta x, pagado x, saldo x"
+// -- el credito se referencia por sale_number (no por producto), "pagado"
+// es el acumulado de TODOS los abonos de esta venta (incluye el que acaba
+// de insertarse) y "saldo" es lo que queda tras este abono.
 async function datosAbonoCredito(supabase: Supabase, record: Record<string, unknown>): Promise<string | null> {
   const saleId = record.sale_id as string;
   const monto = Number(record.amount ?? 0);
-  const metodo = (record.payment_method as string) ?? "—";
 
   const { data: ventaData } = await supabase.from("pos_sales").select("sale_number, customer_id").eq("id", saleId).maybeSingle();
   const venta = ventaData as { sale_number: string; customer_id: string | null } | null;
@@ -156,17 +157,14 @@ async function datosAbonoCredito(supabase: Supabase, record: Record<string, unkn
 
   const nombreCliente = venta.customer_id ? ((await nombreClientePos(supabase, venta.customer_id)) ?? "Cliente") : "Cliente";
 
-  const { data: itemsData } = await supabase.from("pos_sale_items").select("product_id").eq("sale_id", saleId);
-  const idsProductos = [...new Set(((itemsData ?? []) as { product_id: string | null }[]).map((i) => i.product_id).filter((id): id is string => Boolean(id)))];
-  const { data: productosData } = idsProductos.length > 0
-    ? await supabase.from("products").select("name").in("id", idsProductos)
-    : { data: [] as { name: string }[] };
-  const refProductos = ((productosData ?? []) as { name: string }[]).map((p) => p.name).join(", ") || venta.sale_number;
+  const [pagosRes, cuotasRes] = await Promise.all([
+    supabase.from("credit_payments").select("amount").eq("sale_id", saleId),
+    supabase.from("credit_installments").select("amount, paid_amount").eq("sale_id", saleId),
+  ]);
+  const pagado = ((pagosRes.data ?? []) as { amount: number }[]).reduce((suma: number, p: { amount: number }) => suma + Number(p.amount), 0);
+  const saldo = Math.max(0, ((cuotasRes.data ?? []) as { amount: number; paid_amount: number }[]).reduce((suma: number, c: { amount: number; paid_amount: number }) => suma + Number(c.amount) - Number(c.paid_amount), 0));
 
-  const { data: cuotasData } = await supabase.from("credit_installments").select("amount, paid_amount").eq("sale_id", saleId);
-  const saldo = Math.max(0, ((cuotasData ?? []) as { amount: number; paid_amount: number }[]).reduce((suma: number, c: { amount: number; paid_amount: number }) => suma + Number(c.amount) - Number(c.paid_amount), 0));
-
-  return `💰 El cliente "${nombreCliente}" abonó ${formatoMoneda(monto)} al crédito de "${refProductos}".\n💳 Método: ${metodo}\n📊 Saldo pendiente: ${formatoMoneda(saldo)}`;
+  return `💰 Se abonó ${formatoMoneda(monto)} al crédito No. ${venta.sale_number} de la clienta ${nombreCliente}.\n✅ Pagado: ${formatoMoneda(pagado)}\n📊 Saldo: ${formatoMoneda(saldo)}`;
 }
 
 async function enviarNotificacionVenta(numero: string, datos: NotificacionVenta): Promise<void> {

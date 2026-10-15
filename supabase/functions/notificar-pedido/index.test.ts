@@ -148,13 +148,12 @@ describe("handleRequest", () => {
     expect(enviarTextoMock).toHaveBeenCalledWith("573215879805", expect.stringContaining("Saldo pendiente: $150.000"));
   });
 
-  it("abono a credito (credit_payments): avisa con el nombre del cliente, el monto, el producto y el saldo pendiente resultante", async () => {
+  it("abono a credito (credit_payments): avisa con el monto abonado, el No. del credito (sale_number), la clienta, el total pagado acumulado y el saldo pendiente", async () => {
     const supabase = mockSupabaseDesdeTablas({
       pos_sales: { data: [{ sale_number: "POS-003", customer_id: "cli-1" }], error: null },
       pos_customers: { data: [{ id: "cli-1", profile_id: null, nombre: "María López" }], error: null },
-      pos_sale_items: { data: [{ product_id: "prod-1" }], error: null },
-      products: { data: [{ name: "Camiseta Mariposa" }], error: null },
-      credit_installments: { data: [{ amount: 100000, paid_amount: 60000 }], error: null },
+      credit_payments: { data: [{ amount: 60000 }, { amount: 30000 }], error: null },
+      credit_installments: { data: [{ amount: 100000, paid_amount: 90000 }], error: null },
     });
     getSupabaseMock.mockReturnValue(supabase);
 
@@ -164,10 +163,13 @@ describe("handleRequest", () => {
     }));
 
     expect(respuesta.status).toBe(200);
-    expect(enviarTextoMock).toHaveBeenCalledWith("573215879805", expect.stringContaining('María López'));
-    expect(enviarTextoMock).toHaveBeenCalledWith("573215879805", expect.stringContaining("$30.000"));
-    expect(enviarTextoMock).toHaveBeenCalledWith("573215879805", expect.stringContaining("Camiseta Mariposa"));
-    expect(enviarTextoMock).toHaveBeenCalledWith("573215879805", expect.stringContaining("$40.000"));
+    expect(enviarTextoMock).toHaveBeenCalledWith("573215879805", expect.stringContaining("Se abonó $30.000"));
+    expect(enviarTextoMock).toHaveBeenCalledWith("573215879805", expect.stringContaining("crédito No. POS-003"));
+    expect(enviarTextoMock).toHaveBeenCalledWith("573215879805", expect.stringContaining("María López"));
+    // pagado = suma acumulada de TODOS los abonos de esta venta (incluye el recien insertado)
+    expect(enviarTextoMock).toHaveBeenCalledWith("573215879805", expect.stringContaining("$90.000"));
+    // saldo = lo que queda tras este abono
+    expect(enviarTextoMock).toHaveBeenCalledWith("573215879805", expect.stringContaining("$10.000"));
     // no manda imagenes para el aviso de abono (no es una venta nueva con items a mostrar)
     expect(enviarImagenPorLinkMock).not.toHaveBeenCalled();
   });
