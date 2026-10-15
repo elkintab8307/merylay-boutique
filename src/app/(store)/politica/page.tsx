@@ -53,12 +53,12 @@ export default function PoliticaPrivacidadPage() {
             </a>{" "}
             · WhatsApp/Teléfono:{" "}
             <a
-              href="https://api.whatsapp.com/send/?phone=573135328267&text&type=phone_number&app_absent=0"
+              href="https://api.whatsapp.com/send/?phone=573011878677&text&type=phone_number&app_absent=0"
               target="_blank"
               rel="noopener noreferrer"
               className="text-brand-rosa underline underline-offset-2"
             >
-              +57 313 532 8267
+              +57 301 187 8677
             </a>
           </p>
         </section>
