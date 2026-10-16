@@ -263,28 +263,45 @@ async function agregarAlCarrito(
   return `Agregado: ${producto.nombre} x${qtyTotal}. Tu carrito tiene ${sessionData.cart.length} producto(s), total $${total.toLocaleString("es-CO")}.`;
 }
 
+interface RespuestaSaliente {
+  texto: string;
+  documentos: { link: string; filename: string }[];
+  botones: { fotoUrl: string; cuerpo: string; botonId: string; botonTitulo: string }[];
+}
+
+const SALUDO_RESPALDO_PRODUCTO = "¡Aquí tienes lo que encontré para ti! 💕";
+
 async function ejecutarAccionCliente(
   accion: string,
   params: Record<string, unknown>,
   profileId: string,
   sessionData: SessionData,
   mensajeDeRespaldo: string,
-): Promise<{
-  texto: string;
-  documentos: { link: string; filename: string }[];
-  botones: { fotoUrl: string; cuerpo: string; botonId: string; botonTitulo: string }[];
-}> {
+  slugProducto: string | null,
+): Promise<RespuestaSaliente> {
   switch (accion) {
     case "buscar_producto": {
       const consulta = typeof params.consulta === "string" ? params.consulta.trim() : "";
       const talla = typeof params.talla === "string" ? params.talla : undefined;
       const color = typeof params.color === "string" ? params.color : undefined;
-      if (!consulta && !talla && !color) {
+      if (!slugProducto && !consulta && !talla && !color) {
         return { texto: "¿Qué producto estás buscando?", documentos: [], botones: [] };
       }
-      const productos = await catalog.buscarCatalogo({ texto: consulta || undefined, talla, color });
+      // Si el mensaje trae el link de "Preguntar por WhatsApp" de una pagina
+      // de producto, se busca por slug EXACTO en vez de por el texto libre
+      // que el modelo haya extraido como "consulta" -- el modelo puede
+      // parafrasear o generalizar el nombre (ej. "camiseta" en vez de
+      // "Camiseta Mariposa"), lo que antes devolvia TODO un rango de
+      // camisetas en vez del producto puntual que la clienta pidio ver.
+      const productos = await catalog.buscarCatalogo(
+        slugProducto ? { slug: slugProducto, talla, color } : { texto: consulta || undefined, talla, color },
+      );
       if (productos.length === 0) {
-        return { texto: `No encontré productos para esa búsqueda.`, documentos: [], botones: [] };
+        return {
+          texto: "No encontré ese producto en este momento, pero cuéntame qué buscas y te ayudo a encontrar algo ideal para ti 💕",
+          documentos: [],
+          botones: [],
+        };
       }
       const TOPE = 10;
       const botones = productos.slice(0, TOPE).filter((p) => p.fotoUrl).map((p) => ({
@@ -296,7 +313,13 @@ async function ejecutarAccionCliente(
       const truncado = productos.length > TOPE
         ? ` Encontré ${productos.length} en total — si quieres verlos todos, pídeme el catálogo en PDF.`
         : "";
-      return { texto: `Te mando las opciones que encontré.${truncado}`, documentos: [], botones };
+      // El texto cercano y especifico lo escribe el modelo (response_message)
+      // -- se manda ANTES que las tarjetas (ver procesarMensajeEntrante), asi
+      // la clienta recibe un saludo/reconocimiento primero y no un bombardeo
+      // de fotos sin contexto. Solo se usa un saludo generico de respaldo si
+      // el modelo no escribio nada.
+      const saludo = mensajeDeRespaldo.trim() || SALUDO_RESPALDO_PRODUCTO;
+      return { texto: `${saludo}${truncado}`, documentos: [], botones };
     }
 
     case "agregar_al_carrito": {
@@ -375,6 +398,10 @@ async function ejecutarAccionCliente(
 
 const MENSAJE_AUDIO_NO_ENTENDIDO = "No pude entender tu nota de voz, ¿puedes escribirla o intentarlo de nuevo?";
 const REGEX_BOTON_CARRITO = /^add:([0-9a-f-]{36}):(-|[0-9a-f-]{36})$/i;
+// Identifica el producto exacto cuando el mensaje trae el link que arma
+// WhatsappProductButton ("Preguntar por WhatsApp" en una pagina de
+// producto: ".../producto/<slug>"), sin importar el dominio.
+const REGEX_SLUG_PRODUCTO = /\/producto\/([a-z0-9-]+)/i;
 
 async function manejarBoton(botonId: string, sessionData: SessionData): Promise<string> {
   const match = REGEX_BOTON_CARRITO.exec(botonId);
@@ -457,17 +484,26 @@ export async function procesarMensajeEntrante(payload: unknown): Promise<void> {
   // lo va a reintentar), asi que cualquier excepcion sin capturar dejaria
   // al usuario sin ninguna respuesta. Se captura todo, se registra el
   // error real y se responde con una disculpa generica.
-  let respuesta: string;
+  let resultado: RespuestaSaliente;
   try {
-    respuesta = await generarRespuesta(telefono, { messageId: entrante.messageId, texto });
+    resultado = await generarRespuesta(telefono, { messageId: entrante.messageId, texto });
   } catch (error) {
     console.error(`[handler] Error procesando el mensaje ${entrante.messageId} de ${telefono}:`, error);
-    respuesta = MENSAJE_ERROR_GENERICO;
+    resultado = { texto: MENSAJE_ERROR_GENERICO, documentos: [], botones: [] };
   }
 
+  // El texto (saludo/respuesta de la asesora) se manda SIEMPRE primero,
+  // y las tarjetas de producto/documentos despues -- asi la clienta recibe
+  // contexto antes que un bombardeo de fotos sin explicacion.
   try {
-    await enviarTexto(telefono, respuesta);
-    await registrarMensaje(telefono, "outbound", respuesta);
+    await enviarTexto(telefono, resultado.texto);
+    for (const boton of resultado.botones) {
+      await enviarBotonProducto(telefono, boton);
+    }
+    for (const documento of resultado.documentos) {
+      await enviarDocumentoPorLink(telefono, documento.link, documento.filename);
+    }
+    await registrarMensaje(telefono, "outbound", resultado.texto);
   } catch (error) {
     console.error(`[handler] No se pudo enviar/registrar la respuesta a ${telefono}:`, error);
   }
@@ -478,7 +514,7 @@ const MENSAJE_ERROR_GENERICO = "Disculpa, tuve un problema procesando tu mensaje
 async function generarRespuesta(
   telefono: string,
   entrante: { messageId: string; texto: string },
-): Promise<string> {
+): Promise<RespuestaSaliente> {
   const nombreDueno = esDueno(telefono);
   const rol = nombreDueno ? "owner" : "customer";
 
@@ -492,7 +528,8 @@ async function generarRespuesta(
       // falle: si quedara colgada, un "si" posterior sin relacion la
       // volveria a disparar.
       try {
-        return await ejecutarAccionEscritura(action, params);
+        const texto = await ejecutarAccionEscritura(action, params);
+        return { texto, documentos: [], botones: [] };
       } finally {
         sessionData.pendingConfirmation = null;
         await guardarSesion(sessionId, sessionData);
@@ -500,7 +537,7 @@ async function generarRespuesta(
     }
     sessionData.pendingConfirmation = null;
     await guardarSesion(sessionId, sessionData);
-    return "Entendido, no hice ningún cambio. ¿En qué más te ayudo?";
+    return { texto: "Entendido, no hice ningún cambio. ¿En qué más te ayudo?", documentos: [], botones: [] };
   }
 
   const historial = await cargarHistorial(telefono, entrante.messageId);
@@ -514,14 +551,18 @@ async function generarRespuesta(
   // "chat" es una respuesta libre y "error" trae la disculpa que ya armo
   // decidirAccion: en ambos casos se usa response_message tal cual.
   if (decision.action === "chat" || decision.action === "error") {
-    return decision.response_message;
+    return { texto: decision.response_message, documentos: [], botones: [] };
   }
 
   if (rol === "owner") {
     if (ACCIONES_ESCRITURA.has(decision.action)) {
       sessionData.pendingConfirmation = { action: decision.action, params: decision.params };
       await guardarSesion(sessionId, sessionData);
-      return `¿Confirmas esta acción? ${decision.action} con ${JSON.stringify(decision.params)}. Responde "sí" para confirmar.`;
+      return {
+        texto: `¿Confirmas esta acción? ${decision.action} con ${JSON.stringify(decision.params)}. Responde "sí" para confirmar.`,
+        documentos: [],
+        botones: [],
+      };
     }
     const resultadoLectura = await ejecutarAccionLectura(decision.action, decision.params);
     for (const foto of resultadoLectura.fotos) {
@@ -530,16 +571,11 @@ async function generarRespuesta(
     for (const documento of resultadoLectura.documentos) {
       await enviarDocumentoPorLink(telefono, documento.link, documento.filename);
     }
-    return resultadoLectura.texto;
+    return { texto: resultadoLectura.texto, documentos: [], botones: [] };
   }
 
-  const resultado = await ejecutarAccionCliente(decision.action, decision.params, profileId, sessionData, decision.response_message);
+  const slugProducto = REGEX_SLUG_PRODUCTO.exec(entrante.texto)?.[1] ?? null;
+  const resultado = await ejecutarAccionCliente(decision.action, decision.params, profileId, sessionData, decision.response_message, slugProducto);
   await guardarSesion(sessionId, sessionData);
-  for (const boton of resultado.botones) {
-    await enviarBotonProducto(telefono, boton);
-  }
-  for (const documento of resultado.documentos) {
-    await enviarDocumentoPorLink(telefono, documento.link, documento.filename);
-  }
-  return resultado.texto;
+  return resultado;
 }

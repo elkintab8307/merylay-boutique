@@ -51,13 +51,18 @@ export interface FiltrosCatalogo {
   color?: string;
   agregadoDesdeDias?: number;
   soloConStock?: boolean;
+  // Coincidencia EXACTA por la columna slug -- usado cuando el cliente llega
+  // desde el boton "Preguntar por WhatsApp" de una pagina de producto (el
+  // mensaje trae el link .../producto/<slug>): identifica el producto exacto
+  // sin depender de que el modelo extraiga bien el nombre como texto libre.
+  slug?: string;
 }
 
 export const TOPE_BUSCAR_CATALOGO = 50;
 
 export async function buscarCatalogo(filtros: FiltrosCatalogo): Promise<ProductoEncontrado[]> {
-  if (!filtros.texto && !filtros.talla && !filtros.color && !filtros.agregadoDesdeDias) {
-    throw new Error("buscarCatalogo requiere al menos un filtro (texto, talla, color o agregadoDesdeDias).");
+  if (!filtros.texto && !filtros.talla && !filtros.color && !filtros.agregadoDesdeDias && !filtros.slug) {
+    throw new Error("buscarCatalogo requiere al menos un filtro (texto, talla, color, agregadoDesdeDias o slug).");
   }
   return buscarCatalogoInterno(filtros);
 }
@@ -83,6 +88,7 @@ async function buscarCatalogoInterno(filtros: FiltrosCatalogo): Promise<Producto
     .select(`id, name, description, price, stock, created_at, categories(name), ${variantesEmbed}, product_images(id, url, is_primary, variant_id, vendida)`)
     .eq("is_active", true);
 
+  if (filtros.slug) query = query.eq("slug", filtros.slug);
   if (filtros.talla) query = query.ilike("product_variants.talla", `%${escaparPatronLike(filtros.talla)}%`);
   if (filtros.color) query = query.ilike("product_variants.color", `%${escaparPatronLike(filtros.color)}%`);
   if (filtros.agregadoDesdeDias) {

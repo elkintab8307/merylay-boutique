@@ -790,6 +790,77 @@ describe("buscar_producto con tarjetas de foto y boton", () => {
   });
 });
 
+describe("mensaje calido antes de las tarjetas (appointment setter)", () => {
+  it("usa el response_message del modelo como texto, en vez de un mensaje generico fijo", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.30", from: "573001234567", texto: "pijamas" });
+    mocks.decidirAccion.mockResolvedValue({
+      action: "buscar_producto",
+      params: { consulta: "pijama" },
+      response_message: "¡Hola! Qué bueno que preguntas por nuestras pijamas 💕 mira estas opciones:",
+    });
+    clienteMocks.buscarCatalogo.mockResolvedValue([
+      { productId: PRODUCTO_ID, variantId: null, nombre: "Pijama Rosa", talla: null, color: null, precio: 89900, stock: 5, imageId: null, fotoUrl: "https://x/pijama.jpg", descripcion: null },
+    ]);
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.enviarTexto).toHaveBeenCalledWith("573001234567", "¡Hola! Qué bueno que preguntas por nuestras pijamas 💕 mira estas opciones:");
+  });
+
+  it("manda el texto ANTES que las tarjetas de producto (saluda primero, no bombardea con fotos sin contexto)", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.31", from: "573001234567", texto: "pijamas" });
+    mocks.decidirAccion.mockResolvedValue({ action: "buscar_producto", params: { consulta: "pijama" }, response_message: "Aquí tienes:" });
+    clienteMocks.buscarCatalogo.mockResolvedValue([
+      { productId: PRODUCTO_ID, variantId: null, nombre: "Pijama Rosa", talla: null, color: null, precio: 89900, stock: 5, imageId: null, fotoUrl: "https://x/pijama.jpg", descripcion: null },
+    ]);
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    const ordenTexto = mocks.enviarTexto.mock.invocationCallOrder[0];
+    const ordenBoton = mocks.enviarBotonProducto.mock.invocationCallOrder[0];
+    expect(ordenTexto).toBeLessThan(ordenBoton);
+  });
+
+  it("si el response_message viene vacío, usa un saludo de respaldo cálido (nunca manda un texto vacío)", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.33", from: "573001234567", texto: "pijamas" });
+    mocks.decidirAccion.mockResolvedValue({ action: "buscar_producto", params: { consulta: "pijama" }, response_message: "" });
+    clienteMocks.buscarCatalogo.mockResolvedValue([
+      { productId: PRODUCTO_ID, variantId: null, nombre: "Pijama Rosa", talla: null, color: null, precio: 89900, stock: 5, imageId: null, fotoUrl: "https://x/pijama.jpg", descripcion: null },
+    ]);
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.enviarTexto).toHaveBeenCalledWith("573001234567", expect.not.stringMatching(/^\s*$/));
+  });
+});
+
+describe("boton 'Preguntar por WhatsApp' identifica el producto exacto por el link del mensaje", () => {
+  it("con un link /producto/<slug> en el mensaje, busca por slug exacto en vez de confiar en 'consulta'", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({
+      kind: "texto",
+      messageId: "wamid.32",
+      from: "573001234567",
+      texto: "Hola, estoy interesada en este producto: Camiseta Mariposa — https://merylay.shop/producto/camiseta-mariposa",
+    });
+    mocks.decidirAccion.mockResolvedValue({
+      action: "buscar_producto",
+      params: { consulta: "camiseta" },
+      response_message: "¡Hola! Qué linda elección, la Camiseta Mariposa es hermosa 💕",
+    });
+    clienteMocks.buscarCatalogo.mockResolvedValue([
+      { productId: PRODUCTO_ID, variantId: null, nombre: "Camiseta Mariposa", talla: null, color: null, precio: 45000, stock: 3, imageId: null, fotoUrl: "https://x/camiseta.jpg", descripcion: null },
+    ]);
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(clienteMocks.buscarCatalogo).toHaveBeenCalledWith(expect.objectContaining({ slug: "camiseta-mariposa" }));
+  });
+});
+
 describe("generar_catalogo_pdf con filtros", () => {
   it("pasa consulta/talla/color a generarCatalogoPdf", async () => {
     mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.5", from: "573001234567", texto: "catalogo de camisetas en talla M" });

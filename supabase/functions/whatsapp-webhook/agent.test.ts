@@ -207,4 +207,50 @@ describe("decidirAccion", () => {
     const prompt = cuerpo.messages[0].content as string;
     expect(prompt).toMatch(/saluda|cordial/i);
   });
+
+  it("el prompt de cliente pide reconocer especificamente lo que la clienta escribio o el producto que le intereso, en vez de un saludo generico (actitud de appointment setter)", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({ action: "chat", params: {}, response_message: "Hola" }) } }],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { decidirAccion } = await import("./agent.ts");
+    await decidirAccion({ rol: "customer", historial: [], mensajeEntrante: "hola" });
+
+    const cuerpo = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    const prompt = cuerpo.messages[0].content as string;
+    expect(prompt).toMatch(/appointment setter/i);
+    expect(prompt).toMatch(/reconozca|reconoce/i);
+    expect(prompt).toMatch(/catálogo automático/i);
+  });
+
+  it("el prompt de cliente permite actuar de una vez si ya hay info suficiente, y preguntar ANTES de buscar solo si el pedido es muy abierto", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({ action: "chat", params: {}, response_message: "Hola" }) } }],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { decidirAccion } = await import("./agent.ts");
+    await decidirAccion({ rol: "customer", historial: [], mensajeEntrante: "hola" });
+
+    const cuerpo = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    const prompt = cuerpo.messages[0].content as string;
+    expect(prompt).toMatch(/ejecuta la acción correspondiente de una vez/i);
+    expect(prompt).toMatch(/nunca más de una pregunta a la vez/i);
+  });
+
+  it("la instruccion de buscar_producto explica que el sistema identifica el producto exacto por el link de 'Preguntar por WhatsApp', sin depender de que el modelo extraiga el nombre en 'consulta'", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({ action: "chat", params: {}, response_message: "Hola" }) } }],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { decidirAccion } = await import("./agent.ts");
+    await decidirAccion({ rol: "customer", historial: [], mensajeEntrante: "hola" });
+
+    const cuerpo = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    const prompt = cuerpo.messages[0].content as string;
+    expect(prompt).toMatch(/el SISTEMA ya identifica el producto exacto por ese link/);
+    expect(prompt).toMatch(/para que la respuesta se sienta personal/i);
+  });
 });

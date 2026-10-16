@@ -46,6 +46,32 @@ describe("buscarCatalogo", () => {
     expect(resultado[0].nombre).toBe("Camiseta Blanca");
   });
 
+  it("con slug no lanza (satisface el filtro minimo) y NO aplica el filtro de texto en memoria -- la columna slug ya trae un solo producto exacto desde la base", async () => {
+    const productos = [
+      { id: "p1", name: "Camiseta Mariposa", price: 45000, stock: 3, categories: { name: "Camisetas" }, product_variants: [], product_images: [] },
+    ];
+    const { supabase } = mockCatalogo(productos);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { buscarCatalogo } = await import("./catalog.ts");
+    const resultado = await buscarCatalogo({ slug: "camiseta-mariposa" });
+
+    expect(resultado).toHaveLength(1);
+    expect(resultado[0].nombre).toBe("Camiseta Mariposa");
+  });
+
+  it("con slug, filtra la consulta por la columna slug (coincidencia exacta, no por substring)", async () => {
+    const { supabase, query } = mockCatalogo([]);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { buscarCatalogo } = await import("./catalog.ts");
+    await buscarCatalogo({ slug: "camiseta-mariposa" });
+
+    expect((query.eq as ReturnType<typeof vi.fn>).mock.calls).toContainEqual(["slug", "camiseta-mariposa"]);
+  });
+
   it("con talla, usa product_variants!inner y filtra por talla", async () => {
     const productos = [
       {
