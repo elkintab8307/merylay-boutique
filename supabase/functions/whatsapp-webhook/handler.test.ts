@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   decidirAccion: vi.fn(),
   enviarTexto: vi.fn(),
   enviarImagenPorLink: vi.fn(),
-  enviarListaProductos: vi.fn(),
+  enviarCarruselProductos: vi.fn(),
   enviarProductoUnico: vi.fn(),
   marcarLeidoYEscribiendo: vi.fn(),
   consultarStockBajo: vi.fn(),
@@ -58,7 +58,7 @@ vi.mock("./agent.ts", () => ({ decidirAccion: mocks.decidirAccion }));
 vi.mock("../_shared/meta.ts", () => ({
   enviarTexto: mocks.enviarTexto,
   enviarImagenPorLink: mocks.enviarImagenPorLink,
-  enviarListaProductos: mocks.enviarListaProductos,
+  enviarCarruselProductos: mocks.enviarCarruselProductos,
   enviarProductoUnico: mocks.enviarProductoUnico,
   enviarDocumentoPorLink: clienteMocks.enviarDocumentoPorLink,
   marcarLeidoYEscribiendo: mocks.marcarLeidoYEscribiendo,
@@ -804,7 +804,7 @@ describe("buscar_producto manda el carrusel nativo del catalogo de Meta", () => 
     await procesarMensajeEntrante({});
 
     expect(mocks.enviarProductoUnico).toHaveBeenCalledWith("573001234567", expect.objectContaining({ retailerId: "SKU-PIJAMA-M" }));
-    expect(mocks.enviarListaProductos).not.toHaveBeenCalled();
+    expect(mocks.enviarCarruselProductos).not.toHaveBeenCalled();
   });
 
   it("sin coincidencias, responde un mensaje claro sin mandar ningun carrusel", async () => {
@@ -816,11 +816,11 @@ describe("buscar_producto manda el carrusel nativo del catalogo de Meta", () => 
     await procesarMensajeEntrante({});
 
     expect(mocks.enviarProductoUnico).not.toHaveBeenCalled();
-    expect(mocks.enviarListaProductos).not.toHaveBeenCalled();
+    expect(mocks.enviarCarruselProductos).not.toHaveBeenCalled();
     expect(mocks.enviarTexto).toHaveBeenCalledWith("573001234567", expect.stringContaining("No encontré"));
   });
 
-  it("con varios resultados, manda el carrusel nativo (product_list) agrupado por categoria", async () => {
+  it("con varios resultados (hasta 10), manda un unico carrusel (interactive carousel) con todas las coincidencias", async () => {
     mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.6", from: "573001234567", texto: "pijamas" });
     mocks.decidirAccion.mockResolvedValue({ action: "buscar_producto", params: { consulta: "pijama" }, response_message: "" });
     clienteMocks.buscarCatalogo.mockResolvedValue([
@@ -831,13 +831,12 @@ describe("buscar_producto manda el carrusel nativo del catalogo de Meta", () => 
     const { procesarMensajeEntrante } = await import("./handler.ts");
     await procesarMensajeEntrante({});
 
-    expect(mocks.enviarListaProductos).toHaveBeenCalledWith("573001234567", expect.objectContaining({
-      secciones: [{ titulo: "Pijamas", retailerIds: ["SKU-P1", "SKU-P2-M"] }],
-      // WhatsApp EXIGE interactive.header en los mensajes product_list (si
-      // falta, la Graph API responde 400 "#131009 interactive['header'] is
-      // required") -- bug real: el carrusel se mandaba sin encabezado y la
-      // clienta se quedaba sin ver nada, con el error solo en el log.
-      encabezado: expect.stringMatching(/\S/),
+    // interactive carousel se muestra deslizable DIRECTO en el chat, sin que
+    // la clienta tenga que tocar "Ver articulos" -- a diferencia del viejo
+    // product_list, no necesita encabezado ni categorias.
+    expect(mocks.enviarCarruselProductos).toHaveBeenCalledTimes(1);
+    expect(mocks.enviarCarruselProductos).toHaveBeenCalledWith("573001234567", expect.objectContaining({
+      retailerIds: ["SKU-P1", "SKU-P2-M"],
     }));
   });
 
@@ -848,7 +847,7 @@ describe("buscar_producto manda el carrusel nativo del catalogo de Meta", () => 
       { productId: "p-1", variantId: null, nombre: "Camiseta Blanca", talla: "L", color: null, precio: 45000, stock: 5, imageId: null, fotoUrl: "https://x/p1.jpg", categoria: "Camisetas", retailerId: "SKU-P1" },
       { productId: "p-2", variantId: null, nombre: "Camiseta Negra", talla: "L", color: null, precio: 45000, stock: 5, imageId: null, fotoUrl: "https://x/p2.jpg", categoria: "Camisetas", retailerId: "SKU-P2" },
     ]);
-    mocks.enviarListaProductos.mockRejectedValueOnce(new Error("Graph API respondio 400: interactive['header'] is required"));
+    mocks.enviarCarruselProductos.mockRejectedValueOnce(new Error("Graph API respondio 400: parametro invalido"));
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
     await expect(procesarMensajeEntrante({})).resolves.not.toThrow();
@@ -857,41 +856,25 @@ describe("buscar_producto manda el carrusel nativo del catalogo de Meta", () => 
     expect(mocks.enviarTexto).toHaveBeenCalledWith("573001234567", expect.stringContaining("problema para mostrarte"));
   });
 
-  it("con una categoria de nombre largo, trunca el titulo de la seccion a 24 caracteres (limite real de WhatsApp: bug real, 'Section title text length invalid. Max length: 24')", async () => {
-    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.6d", from: "573001234567", texto: "camisetas" });
+  it("con 11 resultados, los reparte en 2 carruseles parejos (6 y 5) en vez de un lote de 10 y uno de 1 (Meta exige minimo 2 tarjetas por carrusel)", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.6e", from: "573001234567", texto: "camisetas" });
     mocks.decidirAccion.mockResolvedValue({ action: "buscar_producto", params: { consulta: "camiseta" }, response_message: "" });
-    clienteMocks.buscarCatalogo.mockResolvedValue([
-      { productId: "p-1", variantId: null, nombre: "Camiseta A", talla: null, color: null, precio: 45000, stock: 5, imageId: null, fotoUrl: "https://x/p1.jpg", categoria: "Camiseta algodón licrado manga doblada en Pedrería", retailerId: "SKU-P1" },
-      { productId: "p-2", variantId: null, nombre: "Camiseta B", talla: null, color: null, precio: 45000, stock: 5, imageId: null, fotoUrl: "https://x/p2.jpg", categoria: "Camiseta algodón licrado manga doblada en Pedrería", retailerId: "SKU-P2" },
-    ]);
-
-    const { procesarMensajeEntrante } = await import("./handler.ts");
-    await procesarMensajeEntrante({});
-
-    const llamada = mocks.enviarListaProductos.mock.calls[0][1] as { secciones: { titulo: string }[] };
-    for (const seccion of llamada.secciones) {
-      expect(seccion.titulo.length).toBeLessThanOrEqual(24);
-    }
-  });
-
-  it("sin categoria, agrupa bajo el titulo 'Productos'", async () => {
-    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.6b", from: "573001234567", texto: "pijamas" });
-    mocks.decidirAccion.mockResolvedValue({ action: "buscar_producto", params: { consulta: "pijama" }, response_message: "" });
-    clienteMocks.buscarCatalogo.mockResolvedValue([
-      { productId: "p-1", variantId: null, nombre: "Pijama Rosa", talla: null, color: null, precio: 89900, stock: 5, imageId: null, fotoUrl: "https://x/p1.jpg", categoria: null, retailerId: "SKU-P1" },
-      { productId: "p-2", variantId: null, nombre: "Pijama Azul", talla: null, color: null, precio: 95000, stock: 3, imageId: null, fotoUrl: "https://x/p2.jpg", categoria: null, retailerId: "SKU-P2" },
-    ]);
-
-    const { procesarMensajeEntrante } = await import("./handler.ts");
-    await procesarMensajeEntrante({});
-
-    expect(mocks.enviarListaProductos).toHaveBeenCalledWith("573001234567", expect.objectContaining({
-      secciones: [{ titulo: "Productos", retailerIds: ["SKU-P1", "SKU-P2"] }],
-      encabezado: expect.stringMatching(/\S/),
+    const productos = Array.from({ length: 11 }, (_, i) => ({
+      productId: `p-${i}`, variantId: null, nombre: `Camiseta ${i}`, talla: null, color: null,
+      precio: 45000, stock: 1, imageId: null, fotoUrl: `https://x/p${i}.jpg`, categoria: "Camisetas", retailerId: `SKU-P${i}`,
     }));
+    clienteMocks.buscarCatalogo.mockResolvedValue(productos);
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.enviarCarruselProductos).toHaveBeenCalledTimes(2);
+    const tamanos = mocks.enviarCarruselProductos.mock.calls.map((llamada) => (llamada[1] as { retailerIds: string[] }).retailerIds.length);
+    expect(tamanos.sort()).toEqual([5, 6]);
+    expect(tamanos.every((t) => t >= 2)).toBe(true);
   });
 
-  it("con mas de 30 coincidencias, trunca a 30 items en el carrusel y avisa del total en el texto", async () => {
+  it("con mas de 30 coincidencias, trunca a 30 items repartidos en 3 carruseles de 10, y avisa del total en el texto", async () => {
     mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.8", from: "573001234567", texto: "pijamas" });
     mocks.decidirAccion.mockResolvedValue({ action: "buscar_producto", params: { consulta: "pijama" }, response_message: "" });
     const productos = Array.from({ length: 31 }, (_, i) => ({
@@ -903,8 +886,11 @@ describe("buscar_producto manda el carrusel nativo del catalogo de Meta", () => 
     const { procesarMensajeEntrante } = await import("./handler.ts");
     await procesarMensajeEntrante({});
 
-    const llamada = mocks.enviarListaProductos.mock.calls[0][1] as { secciones: { retailerIds: string[] }[] };
-    const totalItems = llamada.secciones.reduce((suma, s) => suma + s.retailerIds.length, 0);
+    expect(mocks.enviarCarruselProductos).toHaveBeenCalledTimes(3);
+    const totalItems = mocks.enviarCarruselProductos.mock.calls.reduce(
+      (suma, llamada) => suma + (llamada[1] as { retailerIds: string[] }).retailerIds.length,
+      0,
+    );
     expect(totalItems).toBe(30);
     expect(mocks.enviarTexto).toHaveBeenCalledWith("573001234567", expect.stringContaining("Encontré 31 en total"));
   });

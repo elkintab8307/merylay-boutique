@@ -72,31 +72,28 @@ function catalogoId(): string {
   return id;
 }
 
-// Carrusel nativo de WhatsApp (interactive product_list): hasta 10 secciones
-// y 30 items en total, cada uno referenciado por su retailer_id (el sku en
-// nuestro catalogo). El cliente arma su propio carrito nativo tocando los
-// productos y lo envia -- ese envio llega como un mensaje tipo "order" (ver
-// adapters.ts), no como el boton de respuesta que se usaba antes.
-export async function enviarListaProductos(
+// Carrusel nativo de WhatsApp (interactive carousel): entre 2 y 10 tarjetas
+// de producto deslizables, mostradas DIRECTO en el chat -- a diferencia de
+// product_list, no requiere que la clienta toque "Ver articulos" para verlas.
+// Meta exige NO mandar header/footer/botones en este tipo, y cada tarjeta
+// lleva su propio card_index (0-9, unico) y el mismo catalog_id. El cliente
+// arma su propio carrito nativo tocando los productos y lo envia -- ese
+// envio llega como un mensaje tipo "order" (ver adapters.ts).
+export async function enviarCarruselProductos(
   to: string,
-  opts: { cuerpo: string; encabezado: string; secciones: { titulo: string; retailerIds: string[] }[] },
+  opts: { cuerpo: string; retailerIds: string[] },
 ): Promise<void> {
   await enviarMensaje({
     to,
     type: "interactive",
     interactive: {
-      type: "product_list",
-      // WhatsApp EXIGE este campo para product_list -- sin el, la Graph API
-      // responde 400 (#131009 "interactive['header'] is required") y el
-      // mensaje nunca llega (bug real: antes era opcional aqui, y el
-      // llamador no siempre lo mandaba).
-      header: { type: "text", text: opts.encabezado },
+      type: "carousel",
       body: { text: opts.cuerpo },
       action: {
-        catalog_id: catalogoId(),
-        sections: opts.secciones.map((s) => ({
-          title: s.titulo,
-          product_items: s.retailerIds.map((id) => ({ product_retailer_id: id })),
+        cards: opts.retailerIds.map((id, indice) => ({
+          card_index: indice,
+          type: "product",
+          action: { catalog_id: catalogoId(), product_retailer_id: id },
         })),
       },
     },

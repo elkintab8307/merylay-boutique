@@ -1,5 +1,5 @@
 import { getSupabase } from "../_shared/db.ts";
-import { enviarTexto, enviarImagenPorLink, enviarDocumentoPorLink, enviarListaProductos, enviarProductoUnico, marcarLeidoYEscribiendo } from "../_shared/meta.ts";
+import { enviarTexto, enviarImagenPorLink, enviarDocumentoPorLink, enviarCarruselProductos, enviarProductoUnico, marcarLeidoYEscribiendo } from "../_shared/meta.ts";
 import { parsearMensajeEntrante } from "./adapters.ts";
 import { buscarOCrearCliente, normalizarTelefono, generarAccesoWeb } from "./customers.ts";
 import { obtenerOCrearSesion, guardarSesion, cargarHistorial } from "./sessions.ts";
@@ -295,32 +295,35 @@ interface RespuestaSaliente {
   documentos: { link: string; filename: string }[];
   carrusel:
     | { tipo: "unico"; retailerId: string }
-    | { tipo: "lista"; encabezado: string; secciones: { titulo: string; retailerIds: string[] }[] }
+    // Un carrusel nativo (interactive type "carousel") solo acepta entre 2 y
+    // 10 tarjetas -- "lotes" son los mensajes de carrusel a mandar en
+    // secuencia (uno por cada hasta-10 resultados), para que la clienta vea
+    // TODO lo encontrado (hasta TOPE_CARRUSEL) sin tener que pedir el PDF.
+    | { tipo: "multiple"; lotes: string[][] }
     | null;
 }
 
 const SALUDO_RESPALDO_PRODUCTO = "¡Aquí tienes lo que encontré para ti! 💕";
 const TOPE_CARRUSEL = 30;
-// WhatsApp exige section.title entre 1 y 24 caracteres -- sin este tope, una
-// categoria con nombre largo (ej. "Camiseta algodón licrado manga doblada en
-// Pedrería", 50 caracteres) hace que la Graph API rechace TODO el carrusel
-// con 400 (#131009 "Section title text length invalid"), y la clienta se
-// queda sin ver nada (bug real).
-const TOPE_TITULO_SECCION = 24;
+// Meta exige entre 2 y 10 tarjetas por mensaje de carrusel.
+const TOPE_TARJETAS_POR_LOTE = 10;
 
-// Agrupa los resultados en secciones por categoria (WhatsApp exige al menos
-// un titulo de seccion en product_list) -- "Productos" como titulo cuando
-// no hay categoria. Limite real de la API: 30 items, 10 secciones, 24
-// caracteres por titulo de seccion.
-function agruparParaCarrusel(productos: catalog.ProductoEncontrado[]): { titulo: string; retailerIds: string[] }[] {
-  const porCategoria = new Map<string, string[]>();
-  for (const p of productos.slice(0, TOPE_CARRUSEL)) {
-    const titulo = (p.categoria ?? "Productos").slice(0, TOPE_TITULO_SECCION);
-    const lista = porCategoria.get(titulo) ?? [];
-    lista.push(p.retailerId);
-    porCategoria.set(titulo, lista);
+// Reparte `items` en lotes de maximo `tamanoMax`, distribuidos lo mas parejo
+// posible (nunca un lote de 1: con items.length >= 2 garantizado por el
+// llamador, el lote mas chico que puede salir es 2 -- Meta rechaza un
+// carrusel con menos de 2 tarjetas).
+function dividirEnLotes(items: string[], tamanoMax: number): string[][] {
+  const numLotes = Math.ceil(items.length / tamanoMax);
+  const base = Math.floor(items.length / numLotes);
+  const extra = items.length % numLotes;
+  const lotes: string[][] = [];
+  let i = 0;
+  for (let l = 0; l < numLotes; l++) {
+    const tamano = base + (l < extra ? 1 : 0);
+    lotes.push(items.slice(i, i + tamano));
+    i += tamano;
   }
-  return [...porCategoria.entries()].slice(0, 10).map(([titulo, retailerIds]) => ({ titulo, retailerIds }));
+  return lotes;
 }
 
 async function ejecutarAccionCliente(
@@ -368,15 +371,12 @@ async function ejecutarAccionCliente(
       const truncado = productos.length > TOPE_CARRUSEL
         ? ` Encontré ${productos.length} en total — si quieres verlos todos, pídeme el catálogo en PDF.`
         : "";
-      const secciones = agruparParaCarrusel(productos);
-      // WhatsApp exige interactive.header en product_list -- si solo hay una
-      // categoria se usa su nombre, si hay varias un encabezado generico
-      // (nunca se manda vacio: la Graph API lo rechaza con 400 #131009).
-      const encabezado = secciones.length === 1 ? secciones[0].titulo : "Nuestras opciones para ti";
+      const retailerIds = productos.slice(0, TOPE_CARRUSEL).map((p) => p.retailerId);
+      const lotes = dividirEnLotes(retailerIds, TOPE_TARJETAS_POR_LOTE);
       return {
         texto: `${saludo}${truncado}`,
         documentos: [],
-        carrusel: { tipo: "lista", encabezado, secciones },
+        carrusel: { tipo: "multiple", lotes },
       };
     }
 
@@ -567,7 +567,12 @@ export async function procesarMensajeEntrante(payload: unknown): Promise<void> {
         if (resultado.carrusel.tipo === "unico") {
           await enviarProductoUnico(telefono, { cuerpo: CUERPO_CARRUSEL, retailerId: resultado.carrusel.retailerId });
         } else {
-          await enviarListaProductos(telefono, { cuerpo: CUERPO_CARRUSEL, encabezado: resultado.carrusel.encabezado, secciones: resultado.carrusel.secciones });
+          // Un mensaje de carrusel por lote (max 10 tarjetas cada uno), en
+          // secuencia -- asi la clienta ve TODO lo encontrado sin tener que
+          // pedir el PDF, aunque sean mas de 10 resultados.
+          for (const lote of resultado.carrusel.lotes) {
+            await enviarCarruselProductos(telefono, { cuerpo: CUERPO_CARRUSEL, retailerIds: lote });
+          }
         }
       } catch (error) {
         console.error(`[handler] No se pudo mandar el carrusel de producto a ${telefono}:`, error);

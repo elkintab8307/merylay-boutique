@@ -141,7 +141,7 @@ describe("marcarLeidoYEscribiendo", () => {
   });
 });
 
-describe("enviarListaProductos", () => {
+describe("enviarCarruselProductos", () => {
   beforeEach(() => {
     vi.stubGlobal("Deno", {
       env: { get: vi.fn((key: string) => ({
@@ -154,13 +154,16 @@ describe("enviarListaProductos", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it("manda un carrusel nativo (interactive product_list) referenciando el catalogo y los retailer_id por seccion", async () => {
-    const { enviarListaProductos } = await import("./meta.ts");
+  // interactive.type "carousel": a diferencia de product_list, estas
+  // tarjetas se muestran deslizables DIRECTO en el chat (sin el paso extra
+  // de tocar "Ver articulos") -- Meta exige NO mandar header/footer/botones,
+  // y cada tarjeta lleva su propio card_index (0-9) y catalog_id repetido.
+  it("manda un carrusel (interactive carousel) con una tarjeta de producto por retailer_id", async () => {
+    const { enviarCarruselProductos } = await import("./meta.ts");
 
-    await enviarListaProductos("573001234567", {
+    await enviarCarruselProductos("573001234567", {
       cuerpo: "Elige el que más te guste:",
-      encabezado: "Pijamas",
-      secciones: [{ titulo: "Pijamas", retailerIds: ["SKU-1", "SKU-2"] }],
+      retailerIds: ["SKU-1", "SKU-2", "SKU-3"],
     });
 
     const [, opciones] = (fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls[0] as [string, RequestInit];
@@ -169,35 +172,35 @@ describe("enviarListaProductos", () => {
       to: "573001234567",
       type: "interactive",
       interactive: {
-        type: "product_list",
-        header: { type: "text", text: "Pijamas" },
+        type: "carousel",
         body: { text: "Elige el que más te guste:" },
         action: {
-          catalog_id: "1832369491097812",
-          sections: [{ title: "Pijamas", product_items: [{ product_retailer_id: "SKU-1" }, { product_retailer_id: "SKU-2" }] }],
+          cards: [
+            { card_index: 0, type: "product", action: { catalog_id: "1832369491097812", product_retailer_id: "SKU-1" } },
+            { card_index: 1, type: "product", action: { catalog_id: "1832369491097812", product_retailer_id: "SKU-2" } },
+            { card_index: 2, type: "product", action: { catalog_id: "1832369491097812", product_retailer_id: "SKU-3" } },
+          ],
         },
       },
     });
   });
 
-  // WhatsApp exige interactive.header en los mensajes product_list -- sin
-  // el, la Graph API responde 400 (#131009 "the parameter interactive['header']
-  // is required"). Bug real: enviarListaProductos lo mandaba opcional, y la
-  // clienta se quedaba sin ver nada (el error quedaba solo en el log).
-  it("el header SIEMPRE se incluye en el mensaje (la Graph API lo exige para product_list)", async () => {
-    const { enviarListaProductos } = await import("./meta.ts");
+  it("nunca incluye header, footer ni botones (Meta los rechaza en interactive carousel)", async () => {
+    const { enviarCarruselProductos } = await import("./meta.ts");
 
-    await enviarListaProductos("573001234567", { cuerpo: "Mira:", encabezado: "Camisetas", secciones: [{ titulo: "X", retailerIds: ["SKU-1"] }] });
+    await enviarCarruselProductos("573001234567", { cuerpo: "Mira:", retailerIds: ["SKU-1", "SKU-2"] });
 
     const [, opciones] = (fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls[0] as [string, RequestInit];
     const cuerpo = JSON.parse(opciones.body as string);
-    expect(cuerpo.interactive.header).toEqual({ type: "text", text: "Camisetas" });
+    expect(cuerpo.interactive.header).toBeUndefined();
+    expect(cuerpo.interactive.footer).toBeUndefined();
+    expect(cuerpo.interactive.action.buttons).toBeUndefined();
   });
 
   it("lanza un error claro si falta META_CATALOG_ID", async () => {
     vi.stubGlobal("Deno", { env: { get: vi.fn((key: string) => (key === "META_ACCESS_TOKEN" ? "token-de-prueba" : key === "META_PHONE_NUMBER_ID" ? "123456" : undefined)) } });
-    const { enviarListaProductos } = await import("./meta.ts");
-    await expect(enviarListaProductos("573001234567", { cuerpo: "x", encabezado: "x", secciones: [] })).rejects.toThrow(/META_CATALOG_ID/);
+    const { enviarCarruselProductos } = await import("./meta.ts");
+    await expect(enviarCarruselProductos("573001234567", { cuerpo: "x", retailerIds: ["SKU-1", "SKU-2"] })).rejects.toThrow(/META_CATALOG_ID/);
   });
 });
 
