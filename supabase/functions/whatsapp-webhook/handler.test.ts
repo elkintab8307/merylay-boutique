@@ -857,6 +857,23 @@ describe("buscar_producto manda el carrusel nativo del catalogo de Meta", () => 
     expect(mocks.enviarTexto).toHaveBeenCalledWith("573001234567", expect.stringContaining("problema para mostrarte"));
   });
 
+  it("con una categoria de nombre largo, trunca el titulo de la seccion a 24 caracteres (limite real de WhatsApp: bug real, 'Section title text length invalid. Max length: 24')", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.6d", from: "573001234567", texto: "camisetas" });
+    mocks.decidirAccion.mockResolvedValue({ action: "buscar_producto", params: { consulta: "camiseta" }, response_message: "" });
+    clienteMocks.buscarCatalogo.mockResolvedValue([
+      { productId: "p-1", variantId: null, nombre: "Camiseta A", talla: null, color: null, precio: 45000, stock: 5, imageId: null, fotoUrl: "https://x/p1.jpg", categoria: "Camiseta algodón licrado manga doblada en Pedrería", retailerId: "SKU-P1" },
+      { productId: "p-2", variantId: null, nombre: "Camiseta B", talla: null, color: null, precio: 45000, stock: 5, imageId: null, fotoUrl: "https://x/p2.jpg", categoria: "Camiseta algodón licrado manga doblada en Pedrería", retailerId: "SKU-P2" },
+    ]);
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    const llamada = mocks.enviarListaProductos.mock.calls[0][1] as { secciones: { titulo: string }[] };
+    for (const seccion of llamada.secciones) {
+      expect(seccion.titulo.length).toBeLessThanOrEqual(24);
+    }
+  });
+
   it("sin categoria, agrupa bajo el titulo 'Productos'", async () => {
     mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.6b", from: "573001234567", texto: "pijamas" });
     mocks.decidirAccion.mockResolvedValue({ action: "buscar_producto", params: { consulta: "pijama" }, response_message: "" });

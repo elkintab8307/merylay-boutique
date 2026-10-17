@@ -301,14 +301,21 @@ interface RespuestaSaliente {
 
 const SALUDO_RESPALDO_PRODUCTO = "¡Aquí tienes lo que encontré para ti! 💕";
 const TOPE_CARRUSEL = 30;
+// WhatsApp exige section.title entre 1 y 24 caracteres -- sin este tope, una
+// categoria con nombre largo (ej. "Camiseta algodón licrado manga doblada en
+// Pedrería", 50 caracteres) hace que la Graph API rechace TODO el carrusel
+// con 400 (#131009 "Section title text length invalid"), y la clienta se
+// queda sin ver nada (bug real).
+const TOPE_TITULO_SECCION = 24;
 
 // Agrupa los resultados en secciones por categoria (WhatsApp exige al menos
 // un titulo de seccion en product_list) -- "Productos" como titulo cuando
-// no hay categoria. Limite real de la API: 30 items y 10 secciones.
+// no hay categoria. Limite real de la API: 30 items, 10 secciones, 24
+// caracteres por titulo de seccion.
 function agruparParaCarrusel(productos: catalog.ProductoEncontrado[]): { titulo: string; retailerIds: string[] }[] {
   const porCategoria = new Map<string, string[]>();
   for (const p of productos.slice(0, TOPE_CARRUSEL)) {
-    const titulo = p.categoria ?? "Productos";
+    const titulo = (p.categoria ?? "Productos").slice(0, TOPE_TITULO_SECCION);
     const lista = porCategoria.get(titulo) ?? [];
     lista.push(p.retailerId);
     porCategoria.set(titulo, lista);
