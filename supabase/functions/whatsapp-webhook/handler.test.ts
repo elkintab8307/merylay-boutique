@@ -173,7 +173,7 @@ describe("procesarMensajeEntrante", () => {
     expect(mocks.guardarMemoria).not.toHaveBeenCalled();
   });
 
-  it("confirmar_pedido exitoso guarda nombre/direccion/ciudad en memoria sin pasar por el modelo", async () => {
+  it("confirmar_pedido exitoso guarda direccion/ciudad en memoria, pero NO sobrescribe el nombre de la clienta (podria ser un regalo a otra persona)", async () => {
     mocks.obtenerOCrearSesion.mockResolvedValue({
       id: "sesion-1",
       sessionData: { cart: [{ productId: PRODUCTO_ID, variantId: null, imageId: null, qty: 1, unitPrice: 50000, nameSnapshot: "Pijama Rosa" }], pendingConfirmation: null },
@@ -190,7 +190,6 @@ describe("procesarMensajeEntrante", () => {
     await procesarMensajeEntrante({});
 
     expect(mocks.guardarMemoria).toHaveBeenCalledWith("perfil-1", [
-      { categoria: "contacto", clave: "nombre_completo", valor: "Camila Restrepo" },
       { categoria: "contacto", clave: "direccion_habitual", valor: "Calle 10 #5-20" },
       { categoria: "contacto", clave: "ciudad_habitual", valor: "Medellín" },
     ]);

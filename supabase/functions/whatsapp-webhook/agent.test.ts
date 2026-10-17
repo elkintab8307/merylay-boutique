@@ -158,6 +158,26 @@ describe("decidirAccion", () => {
     expect(prompt).toContain("Nunca vuelvas a preguntarle el nombre ni la ciudad");
   });
 
+  it("el prompt deja claro que las notas de la dueña son contexto interno, nunca se le mencionan a la clienta", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({ action: "chat", params: {}, response_message: "Hola" }) } }],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { decidirAccion } = await import("./agent.ts");
+    await decidirAccion({
+      rol: "customer",
+      historial: [],
+      mensajeEntrante: "hola",
+      memoriaCliente: [{ categoria: "nota", clave: "nota_1", valor: "es mayorista, siempre paga tarde", origen: "dueño" }],
+    });
+
+    const cuerpo = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    const prompt = cuerpo.messages[0].content as string;
+    expect(prompt).toContain("(nota de la dueña) es mayorista, siempre paga tarde");
+    expect(prompt).toContain("nunca se las menciones ni las cites a la clienta");
+  });
+
   it("el prompt de cliente documenta el campo memoria y su vocabulario cerrado de claves", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({
       choices: [{ message: { content: JSON.stringify({ action: "chat", params: {}, response_message: "Hola" }) } }],

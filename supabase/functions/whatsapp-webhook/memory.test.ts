@@ -93,6 +93,32 @@ describe("guardarMemoria", () => {
     expect(upsert).not.toHaveBeenCalled();
   });
 
+  it("no revienta si un hecho trae un valor que no es string (ej. una talla numerica), y guarda los demas hechos validos", async () => {
+    const { supabase, upsert } = mockUpsert();
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { guardarMemoria } = await import("./memory.ts");
+    await expect(guardarMemoria("perfil-1", [
+      { categoria: "preferencia", clave: "talla_preferida", valor: 38 as unknown as string },
+      { categoria: "contacto", clave: "nombre_completo", valor: "Camila" },
+    ])).resolves.toBeUndefined();
+
+    expect(upsert).toHaveBeenCalledWith(
+      [expect.objectContaining({ clave: "nombre_completo", valor: "Camila" })],
+      { onConflict: "customer_id,clave" },
+    );
+  });
+
+  it("no revienta si un elemento del arreglo es null o no es un objeto", async () => {
+    const { supabase } = mockUpsert();
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { guardarMemoria } = await import("./memory.ts");
+    await expect(guardarMemoria("perfil-1", [null as never, "texto-suelto" as never])).resolves.toBeUndefined();
+  });
+
   it("no llama a la base de datos si no queda ningun hecho valido", async () => {
     const { getSupabase } = await import("../_shared/db.ts");
     const getSupabaseMock = getSupabase as unknown as ReturnType<typeof vi.fn>;

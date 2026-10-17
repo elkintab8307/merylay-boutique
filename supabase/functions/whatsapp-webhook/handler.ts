@@ -427,10 +427,13 @@ async function ejecutarAccionCliente(
       const { linkPago, orderNumber } = await crearPedidoWompiDesdeCarrito(profileId, sessionData.cart, direccion.data);
       sessionData.cart = [];
       // Determinista, no depende de que el modelo transcriba bien la
-      // direccion: si confirmar_pedido ya se ejecuto con exito, estos
-      // cuatro datos son reales y van directo a memoria.
+      // direccion: si confirmar_pedido ya se ejecuto con exito, estos datos
+      // son reales y van directo a memoria. fullName NO se guarda aqui --
+      // es el nombre de quien RECIBE el pedido, no necesariamente el de la
+      // clienta que escribe (puede ser un regalo para otra persona); el
+      // nombre de la clienta solo se aprende cuando ella misma lo dice en
+      // la conversacion (ver INSTRUCCION_MEMORIA en agent.ts).
       await guardarMemoria(profileId, [
-        { categoria: "contacto", clave: "nombre_completo", valor: direccion.data.fullName },
         { categoria: "contacto", clave: "direccion_habitual", valor: direccion.data.address },
         { categoria: "contacto", clave: "ciudad_habitual", valor: direccion.data.city },
       ]);

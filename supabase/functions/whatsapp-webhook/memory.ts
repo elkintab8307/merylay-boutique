@@ -32,6 +32,23 @@ export const CLAVES_VALIDAS: readonly string[] = [
 
 const CATEGORIAS_MEMORIA_LLM = new Set(["preferencia", "contacto", "resumen"]);
 
+// El modelo manda un JSON sin schema validado (response_format: json_object
+// solo garantiza JSON valido, no esta forma): un item puede llegar como
+// null, un string suelto, o con "valor" como numero (ej. una talla "38").
+// Sin este chequeo de tipos, h.valor.trim() revienta con un TypeError real
+// que se propaga hasta procesarMensajeEntrante y la clienta recibe el
+// mensaje de error generico en vez de su respuesta (bug real encontrado en
+// la revision final).
+function esHechoValido(h: unknown): h is HechoMemoria {
+  if (!h || typeof h !== "object") return false;
+  const { categoria, clave, valor } = h as Record<string, unknown>;
+  return (
+    typeof categoria === "string" && CATEGORIAS_MEMORIA_LLM.has(categoria) &&
+    typeof clave === "string" && CLAVES_VALIDAS.includes(clave) &&
+    typeof valor === "string" && valor.trim().length > 0
+  );
+}
+
 // Los mas recientes primero: si en el futuro hay que recortar (ej. una
 // cuenta con años de hechos acumulados), lo mas reciente es lo mas
 // relevante para la conversacion de hoy.
@@ -57,25 +74,30 @@ export async function cargarMemoria(profileId: string): Promise<RecuerdoCliente[
 // correctamente (clave desconocida) o que se mostraria como si ya se
 // hubiera preguntado algo que en realidad no se sabe (valor vacio).
 export async function guardarMemoria(profileId: string, hechos: HechoMemoria[]): Promise<void> {
-  const validos = hechos.filter(
-    (h) => CATEGORIAS_MEMORIA_LLM.has(h.categoria) && CLAVES_VALIDAS.includes(h.clave) && h.valor.trim().length > 0,
-  );
+  const validos = hechos.filter(esHechoValido);
   if (validos.length === 0) return;
 
-  const supabase = getSupabase();
-  const ahora = new Date().toISOString();
-  const filas = validos.map((h) => ({
-    customer_id: profileId,
-    categoria: h.categoria,
-    clave: h.clave,
-    valor: h.valor.trim(),
-    origen: "bot",
-    updated_at: ahora,
-  }));
+  try {
+    const supabase = getSupabase();
+    const ahora = new Date().toISOString();
+    const filas = validos.map((h) => ({
+      customer_id: profileId,
+      categoria: h.categoria,
+      clave: h.clave,
+      valor: h.valor.trim(),
+      origen: "bot",
+      updated_at: ahora,
+    }));
 
-  const { error } = await supabase.from("customer_memory").upsert(filas, { onConflict: "customer_id,clave" });
-  if (error) {
-    console.error(`[memory] No se pudo guardar memoria de ${profileId}:`, error);
+    const { error } = await supabase.from("customer_memory").upsert(filas, { onConflict: "customer_id,clave" });
+    if (error) {
+      console.error(`[memory] No se pudo guardar memoria de ${profileId}:`, error);
+    }
+  } catch (error) {
+    // Respaldo: cualquier fallo inesperado (ej. getSupabase() sin
+    // variables de entorno) tampoco debe propagarse -- guardarMemoria es
+    // siempre best-effort.
+    console.error(`[memory] Error inesperado guardando memoria de ${profileId}:`, error);
   }
 }
 
