@@ -66,18 +66,50 @@ export async function descargarMedia(url: string): Promise<Uint8Array> {
   return new Uint8Array(await respuesta.arrayBuffer());
 }
 
-export async function enviarBotonProducto(
+function catalogoId(): string {
+  const id = Deno.env.get("META_CATALOG_ID");
+  if (!id) throw new Error("Falta META_CATALOG_ID.");
+  return id;
+}
+
+// Carrusel nativo de WhatsApp (interactive product_list): hasta 10 secciones
+// y 30 items en total, cada uno referenciado por su retailer_id (el sku en
+// nuestro catalogo). El cliente arma su propio carrito nativo tocando los
+// productos y lo envia -- ese envio llega como un mensaje tipo "order" (ver
+// adapters.ts), no como el boton de respuesta que se usaba antes.
+export async function enviarListaProductos(
   to: string,
-  opts: { fotoUrl: string; cuerpo: string; botonId: string; botonTitulo: string },
+  opts: { cuerpo: string; encabezado?: string; secciones: { titulo: string; retailerIds: string[] }[] },
 ): Promise<void> {
   await enviarMensaje({
     to,
     type: "interactive",
     interactive: {
-      type: "button",
-      header: { type: "image", image: { link: opts.fotoUrl } },
+      type: "product_list",
+      ...(opts.encabezado ? { header: { type: "text", text: opts.encabezado } } : {}),
       body: { text: opts.cuerpo },
-      action: { buttons: [{ type: "reply", reply: { id: opts.botonId, title: opts.botonTitulo } }] },
+      action: {
+        catalog_id: catalogoId(),
+        sections: opts.secciones.map((s) => ({
+          title: s.titulo,
+          product_items: s.retailerIds.map((id) => ({ product_retailer_id: id })),
+        })),
+      },
+    },
+  });
+}
+
+// Mensaje interactivo de UN solo producto del catalogo -- usado cuando el
+// cliente llega desde el boton "Preguntar por WhatsApp" de una pagina de
+// producto especifica (ya se identifico el producto exacto por su slug).
+export async function enviarProductoUnico(to: string, opts: { cuerpo: string; retailerId: string }): Promise<void> {
+  await enviarMensaje({
+    to,
+    type: "interactive",
+    interactive: {
+      type: "product",
+      body: { text: opts.cuerpo },
+      action: { catalog_id: catalogoId(), product_retailer_id: opts.retailerId },
     },
   });
 }

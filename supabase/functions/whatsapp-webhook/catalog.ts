@@ -18,6 +18,11 @@ export interface ProductoEncontrado {
   fotoUrl: string | null;
   categoria: string | null;
   descripcion: string | null;
+  // El sku (del producto, o de la variante si la tiene) -- es el
+  // retailer_id con el que esta sincronizado el item en el Catalogo de
+  // Meta (ver sincronizar-catalogo), usado para mandar el carrusel nativo
+  // de WhatsApp.
+  retailerId: string;
 }
 
 export interface ProductoParaCarrito {
@@ -43,6 +48,7 @@ interface VarianteProducto {
   color: string | null;
   price_override: number | null;
   stock: number;
+  sku: string;
 }
 
 export interface FiltrosCatalogo {
@@ -80,12 +86,12 @@ async function buscarCatalogoInterno(filtros: FiltrosCatalogo): Promise<Producto
   // talla/color no se usa !inner: un producto sin ninguna variante que
   // "coincida" (porque no se esta filtrando por variante) no debe excluirse.
   const variantesEmbed = (filtros.talla || filtros.color)
-    ? "product_variants!inner(id, talla, color, price_override, stock)"
-    : "product_variants(id, talla, color, price_override, stock)";
+    ? "product_variants!inner(id, talla, color, price_override, stock, sku)"
+    : "product_variants(id, talla, color, price_override, stock, sku)";
 
   let query = supabase
     .from("products")
-    .select(`id, name, description, price, stock, created_at, categories(name), ${variantesEmbed}, product_images(id, url, is_primary, variant_id, vendida)`)
+    .select(`id, name, description, price, stock, sku, created_at, categories(name), ${variantesEmbed}, product_images(id, url, is_primary, variant_id, vendida)`)
     .eq("is_active", true);
 
   if (filtros.slug) query = query.eq("slug", filtros.slug);
@@ -105,6 +111,7 @@ async function buscarCatalogoInterno(filtros: FiltrosCatalogo): Promise<Producto
     description: string | null;
     price: number;
     stock: number;
+    sku: string;
     categories: { name: string } | null;
     product_variants: VarianteProducto[] | null;
     product_images: ImagenProducto[] | null;
@@ -135,6 +142,7 @@ async function buscarCatalogoInterno(filtros: FiltrosCatalogo): Promise<Producto
         fotoUrl: imagen?.url ?? null,
         categoria: producto.categories?.name ?? null,
         descripcion: producto.description ?? null,
+        retailerId: producto.sku,
       }];
     }
     return variantes.map((variante) => {
@@ -151,6 +159,7 @@ async function buscarCatalogoInterno(filtros: FiltrosCatalogo): Promise<Producto
         fotoUrl: imagen?.url ?? null,
         categoria: producto.categories?.name ?? null,
         descripcion: producto.description ?? null,
+        retailerId: variante.sku,
       };
     });
   });
@@ -308,6 +317,57 @@ export async function obtenerProductoParaCarrito(
     precio: v.price_override ?? p.price,
     stock: v.stock,
     // imageId siempre null: ver comentario arriba en la rama sin variante.
+    imageId: null,
+  };
+}
+
+// Resuelve el retailer_id que manda WhatsApp en un mensaje nativo "order"
+// (el carrito que el cliente arma en el carrusel del catalogo) de vuelta a
+// un producto/variante real -- igual que obtenerProductoParaCarrito, nunca
+// se confia en nombre/precio que venga del pedido, solo en el sku. Primero
+// busca el sku entre los productos base (sin variantes); si no aparece,
+// entre los skus de las variantes.
+export async function obtenerProductoPorSku(sku: string): Promise<ProductoParaCarrito | null> {
+  const supabase = getSupabase();
+
+  const { data: producto, error } = await supabase
+    .from("products")
+    .select("id, name, price, stock, product_variants(id)")
+    .eq("sku", sku)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (!error && producto) {
+    const p = producto as unknown as { id: string; name: string; price: number; stock: number; product_variants: { id: string }[] | null };
+    // Un producto con variantes no se vende por el sku del producto base
+    // (cada variante tiene su propio sku en el catalogo) -- si esto
+    // sucede es un estado inconsistente, se trata como no encontrado.
+    if ((p.product_variants ?? []).length > 0) return null;
+    return { productId: p.id, variantId: null, nombre: p.name, precio: p.price, stock: p.stock, imageId: null };
+  }
+
+  const { data: variante, error: errorVariante } = await supabase
+    .from("product_variants")
+    .select("id, name, price_override, stock, product_id, products!inner(id, name, price)")
+    .eq("sku", sku)
+    .maybeSingle();
+
+  if (errorVariante || !variante) return null;
+  const v = variante as unknown as {
+    id: string;
+    name: string;
+    price_override: number | null;
+    stock: number;
+    product_id: string;
+    products: { id: string; name: string; price: number };
+  };
+
+  return {
+    productId: v.product_id,
+    variantId: v.id,
+    nombre: `${v.products.name} (${v.name})`,
+    precio: v.price_override ?? v.products.price,
+    stock: v.stock,
     imageId: null,
   };
 }

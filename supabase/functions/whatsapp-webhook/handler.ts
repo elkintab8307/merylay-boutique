@@ -1,5 +1,5 @@
 import { getSupabase } from "../_shared/db.ts";
-import { enviarTexto, enviarImagenPorLink, enviarDocumentoPorLink, enviarBotonProducto, marcarLeidoYEscribiendo } from "../_shared/meta.ts";
+import { enviarTexto, enviarImagenPorLink, enviarDocumentoPorLink, enviarListaProductos, enviarProductoUnico, marcarLeidoYEscribiendo } from "../_shared/meta.ts";
 import { parsearMensajeEntrante } from "./adapters.ts";
 import { buscarOCrearCliente, normalizarTelefono, generarAccesoWeb } from "./customers.ts";
 import { obtenerOCrearSesion, guardarSesion, cargarHistorial } from "./sessions.ts";
@@ -207,13 +207,6 @@ const agregarAlCarritoSchema = z.object({
   qty: z.number().int().positive().default(1),
 });
 
-function formatearCuerpoProducto(p: catalog.ProductoEncontrado): string {
-  const detalles = [p.talla ? `talla ${p.talla}` : null, p.color ? `color ${p.color}` : null].filter(Boolean);
-  const sufijo = detalles.length > 0 ? ` (${detalles.join(", ")})` : "";
-  const descripcion = p.descripcion ? `\n${p.descripcion}` : "";
-  return `${p.nombre}${sufijo}${descripcion}\n$${p.precio.toLocaleString("es-CO")} — stock: ${p.stock}`;
-}
-
 const direccionEnvioSchema = z.object({
   fullName: z.string().min(1),
   phone: z.string().min(1),
@@ -221,20 +214,13 @@ const direccionEnvioSchema = z.object({
   city: z.string().min(1),
 });
 
-async function agregarAlCarrito(
-  sessionData: SessionData,
-  productId: string,
-  variantId: string | null,
-  qty: number,
-): Promise<string> {
-  // Nombre, precio, stock e imagen salen SIEMPRE de la base de datos,
-  // nunca de params: el modelo solo aporta los ids (ya validados como
-  // uuid) y la cantidad.
-  const producto = await catalog.obtenerProductoParaCarrito(productId, variantId);
-  if (!producto) {
-    return "No encontré ese producto (o esa talla/color) en el catálogo. ¿Me dices de nuevo cuál quieres?";
-  }
-
+// Aplica un producto YA RESUELTO (con nombre/precio/stock reales de la base
+// de datos) al carrito -- no vuelve a consultar nada. Compartida por
+// agregarAlCarrito (que resuelve por productId/variantId) y
+// manejarPedidoCatalogo (que resuelve por retailerId/sku): evitar que cada
+// una vuelva a buscar el producto por su propio camino cuando la otra ya lo
+// hizo es lo que mantiene esto en una sola fuente de verdad por llamada.
+function aplicarAlCarrito(sessionData: SessionData, producto: catalog.ProductoParaCarrito, qty: number): string {
   const existente = sessionData.cart.find(
     (i) => i.productId === producto.productId && i.variantId === producto.variantId,
   );
@@ -263,13 +249,69 @@ async function agregarAlCarrito(
   return `Agregado: ${producto.nombre} x${qtyTotal}. Tu carrito tiene ${sessionData.cart.length} producto(s), total $${total.toLocaleString("es-CO")}.`;
 }
 
+async function agregarAlCarrito(
+  sessionData: SessionData,
+  productId: string,
+  variantId: string | null,
+  qty: number,
+): Promise<string> {
+  // Nombre, precio, stock e imagen salen SIEMPRE de la base de datos,
+  // nunca de params: el modelo solo aporta los ids (ya validados como
+  // uuid) y la cantidad.
+  const producto = await catalog.obtenerProductoParaCarrito(productId, variantId);
+  if (!producto) {
+    return "No encontré ese producto (o esa talla/color) en el catálogo. ¿Me dices de nuevo cuál quieres?";
+  }
+  return aplicarAlCarrito(sessionData, producto, qty);
+}
+
+// El cliente arma su propio carrito tocando productos en el carrusel nativo
+// del catalogo y lo envia ("Enviar al vendedor") -- eso llega como un
+// mensaje "order" con un item por producto (ver adapters.ts). Cada
+// retailerId (sku) se resuelve a un producto/variante real y se agrega con
+// la MISMA funcion agregarAlCarrito (mismo chequeo de stock/duplicados) que
+// usa el flujo de agregar por texto libre.
+async function manejarPedidoCatalogo(
+  items: { retailerId: string; cantidad: number }[],
+  sessionData: SessionData,
+): Promise<string> {
+  const mensajes: string[] = [];
+  for (const item of items) {
+    const producto = await catalog.obtenerProductoPorSku(item.retailerId);
+    if (!producto) {
+      mensajes.push(`No encontré uno de los productos que elegiste (código ${item.retailerId}), así que no lo pude agregar.`);
+      continue;
+    }
+    mensajes.push(aplicarAlCarrito(sessionData, producto, item.cantidad));
+  }
+  return mensajes.join("\n\n");
+}
+
 interface RespuestaSaliente {
   texto: string;
   documentos: { link: string; filename: string }[];
-  botones: { fotoUrl: string; cuerpo: string; botonId: string; botonTitulo: string }[];
+  carrusel:
+    | { tipo: "unico"; retailerId: string }
+    | { tipo: "lista"; secciones: { titulo: string; retailerIds: string[] }[] }
+    | null;
 }
 
 const SALUDO_RESPALDO_PRODUCTO = "¡Aquí tienes lo que encontré para ti! 💕";
+const TOPE_CARRUSEL = 30;
+
+// Agrupa los resultados en secciones por categoria (WhatsApp exige al menos
+// un titulo de seccion en product_list) -- "Productos" como titulo cuando
+// no hay categoria. Limite real de la API: 30 items y 10 secciones.
+function agruparParaCarrusel(productos: catalog.ProductoEncontrado[]): { titulo: string; retailerIds: string[] }[] {
+  const porCategoria = new Map<string, string[]>();
+  for (const p of productos.slice(0, TOPE_CARRUSEL)) {
+    const titulo = p.categoria ?? "Productos";
+    const lista = porCategoria.get(titulo) ?? [];
+    lista.push(p.retailerId);
+    porCategoria.set(titulo, lista);
+  }
+  return [...porCategoria.entries()].slice(0, 10).map(([titulo, retailerIds]) => ({ titulo, retailerIds }));
+}
 
 async function ejecutarAccionCliente(
   accion: string,
@@ -285,7 +327,7 @@ async function ejecutarAccionCliente(
       const talla = typeof params.talla === "string" ? params.talla : undefined;
       const color = typeof params.color === "string" ? params.color : undefined;
       if (!slugProducto && !consulta && !talla && !color) {
-        return { texto: "¿Qué producto estás buscando?", documentos: [], botones: [] };
+        return { texto: "¿Qué producto estás buscando?", documentos: [], carrusel: null };
       }
       // Si el mensaje trae el link de "Preguntar por WhatsApp" de una pagina
       // de producto, se busca por slug EXACTO en vez de por el texto libre
@@ -300,36 +342,37 @@ async function ejecutarAccionCliente(
         return {
           texto: "No encontré ese producto en este momento, pero cuéntame qué buscas y te ayudo a encontrar algo ideal para ti 💕",
           documentos: [],
-          botones: [],
+          carrusel: null,
         };
       }
-      const TOPE = 10;
-      const botones = productos.slice(0, TOPE).filter((p) => p.fotoUrl).map((p) => ({
-        fotoUrl: p.fotoUrl as string,
-        cuerpo: formatearCuerpoProducto(p),
-        botonId: `add:${p.productId}:${p.variantId ?? "-"}`,
-        botonTitulo: "COMPRAR",
-      }));
-      const truncado = productos.length > TOPE
-        ? ` Encontré ${productos.length} en total — si quieres verlos todos, pídeme el catálogo en PDF.`
-        : "";
       // El texto cercano y especifico lo escribe el modelo (response_message)
-      // -- se manda ANTES que las tarjetas (ver procesarMensajeEntrante), asi
+      // -- se manda ANTES que el carrusel (ver procesarMensajeEntrante), asi
       // la clienta recibe un saludo/reconocimiento primero y no un bombardeo
       // de fotos sin contexto. Solo se usa un saludo generico de respaldo si
       // el modelo no escribio nada.
       const saludo = mensajeDeRespaldo.trim() || SALUDO_RESPALDO_PRODUCTO;
-      return { texto: `${saludo}${truncado}`, documentos: [], botones };
+
+      if (productos.length === 1) {
+        return { texto: saludo, documentos: [], carrusel: { tipo: "unico", retailerId: productos[0].retailerId } };
+      }
+      const truncado = productos.length > TOPE_CARRUSEL
+        ? ` Encontré ${productos.length} en total — si quieres verlos todos, pídeme el catálogo en PDF.`
+        : "";
+      return {
+        texto: `${saludo}${truncado}`,
+        documentos: [],
+        carrusel: { tipo: "lista", secciones: agruparParaCarrusel(productos) },
+      };
     }
 
     case "agregar_al_carrito": {
       const validacion = agregarAlCarritoSchema.safeParse(params);
       if (!validacion.success) {
-        return { texto: "Perdona, no entendí qué producto quieres agregar, ¿puedes repetirlo?", documentos: [], botones: [] };
+        return { texto: "Perdona, no entendí qué producto quieres agregar, ¿puedes repetirlo?", documentos: [], carrusel: null };
       }
       const { productId, variantId, qty } = validacion.data;
       const texto = await agregarAlCarrito(sessionData, productId, variantId ?? null, qty);
-      return { texto, documentos: [], botones: [] };
+      return { texto, documentos: [], carrusel: null };
     }
 
     case "quitar_del_carrito": {
@@ -337,7 +380,7 @@ async function ejecutarAccionCliente(
       sessionData.cart = sessionData.cart.filter(
         (item) => !(item.productId === params.productId && (variantId === null || item.variantId === variantId)),
       );
-      return { texto: "Listo, lo quité del carrito.", documentos: [], botones: [] };
+      return { texto: "Listo, lo quité del carrito.", documentos: [], carrusel: null };
     }
 
     case "generar_catalogo_pdf": {
@@ -349,28 +392,28 @@ async function ejecutarAccionCliente(
       return {
         texto: "Aquí tienes nuestro catálogo 💕",
         documentos,
-        botones: [],
+        carrusel: null,
       };
     }
 
     case "generar_cotizacion_pdf": {
       if (sessionData.cart.length === 0) {
-        return { texto: "Tu carrito está vacío, agrega algún producto antes de pedir la cotización.", documentos: [], botones: [] };
+        return { texto: "Tu carrito está vacío, agrega algún producto antes de pedir la cotización.", documentos: [], carrusel: null };
       }
       const link = await catalog.generarCotizacionPdf(sessionData.cart);
-      return { texto: "Aquí tienes tu cotización 💕", documentos: [{ link, filename: "cotizacion-merylay.pdf" }], botones: [] };
+      return { texto: "Aquí tienes tu cotización 💕", documentos: [{ link, filename: "cotizacion-merylay.pdf" }], carrusel: null };
     }
 
     case "confirmar_pedido": {
       if (sessionData.cart.length === 0) {
-        return { texto: "Tu carrito está vacío, agrega algún producto antes de confirmar un pedido.", documentos: [], botones: [] };
+        return { texto: "Tu carrito está vacío, agrega algún producto antes de confirmar un pedido.", documentos: [], carrusel: null };
       }
       const direccion = direccionEnvioSchema.safeParse(params);
       if (!direccion.success) {
         return {
           texto: "Para confirmar necesito tu nombre completo, teléfono, dirección y ciudad de envío.",
           documentos: [],
-          botones: [],
+          carrusel: null,
         };
       }
       const { linkPago, orderNumber } = await crearPedidoWompiDesdeCarrito(profileId, sessionData.cart, direccion.data);
@@ -378,7 +421,7 @@ async function ejecutarAccionCliente(
       return {
         texto: `Tu pedido ${orderNumber} quedó listo. Paga aquí para confirmarlo: ${linkPago}`,
         documentos: [],
-        botones: [],
+        carrusel: null,
       };
     }
 
@@ -387,31 +430,20 @@ async function ejecutarAccionCliente(
       return {
         texto: `Ya puedes entrar a merylayboutique.com con el usuario ${usuario} y la contraseña ${contrasena}. Te recomendamos cambiarla después de tu primer ingreso.`,
         documentos: [],
-        botones: [],
+        carrusel: null,
       };
     }
 
     default:
-      return { texto: mensajeDeRespaldo, documentos: [], botones: [] };
+      return { texto: mensajeDeRespaldo, documentos: [], carrusel: null };
   }
 }
 
 const MENSAJE_AUDIO_NO_ENTENDIDO = "No pude entender tu nota de voz, ¿puedes escribirla o intentarlo de nuevo?";
-const REGEX_BOTON_CARRITO = /^add:([0-9a-f-]{36}):(-|[0-9a-f-]{36})$/i;
 // Identifica el producto exacto cuando el mensaje trae el link que arma
 // WhatsappProductButton ("Preguntar por WhatsApp" en una pagina de
 // producto: ".../producto/<slug>"), sin importar el dominio.
 const REGEX_SLUG_PRODUCTO = /\/producto\/([a-z0-9-]+)/i;
-
-async function manejarBoton(botonId: string, sessionData: SessionData): Promise<string> {
-  const match = REGEX_BOTON_CARRITO.exec(botonId);
-  if (!match) {
-    return "No entendí esa acción, ¿puedes escribirme qué necesitas?";
-  }
-  const [, productId, variantIdCrudo] = match;
-  const variantId = variantIdCrudo === "-" ? null : variantIdCrudo;
-  return agregarAlCarrito(sessionData, productId, variantId, 1);
-}
 
 export async function procesarMensajeEntrante(payload: unknown): Promise<void> {
   const entrante = parsearMensajeEntrante(payload);
@@ -429,18 +461,19 @@ export async function procesarMensajeEntrante(payload: unknown): Promise<void> {
     console.error(`[handler] No se pudo activar el indicador de escribiendo para ${entrante.messageId}:`, error);
   }
 
-  if (entrante.kind === "boton") {
-    const esNuevo = await registrarMensaje(telefono, "inbound", `[boton] ${entrante.botonId}`, entrante.messageId);
+  if (entrante.kind === "pedido_catalogo") {
+    const resumenPedido = entrante.items.map((i) => `${i.retailerId}x${i.cantidad}`).join(", ");
+    const esNuevo = await registrarMensaje(telefono, "inbound", `[pedido catalogo] ${resumenPedido}`, entrante.messageId);
     if (!esNuevo) return;
 
     let respuesta: string;
     try {
       const { profileId } = await buscarOCrearCliente(telefono);
       const { id: sessionId, sessionData } = await obtenerOCrearSesion(telefono, profileId);
-      respuesta = await manejarBoton(entrante.botonId, sessionData);
+      respuesta = await manejarPedidoCatalogo(entrante.items, sessionData);
       await guardarSesion(sessionId, sessionData);
     } catch (error) {
-      console.error(`[handler] Error procesando el boton ${entrante.messageId} de ${telefono}:`, error);
+      console.error(`[handler] Error procesando el pedido de catalogo ${entrante.messageId} de ${telefono}:`, error);
       respuesta = MENSAJE_ERROR_GENERICO;
     }
 
@@ -489,7 +522,7 @@ export async function procesarMensajeEntrante(payload: unknown): Promise<void> {
     resultado = await generarRespuesta(telefono, { messageId: entrante.messageId, texto });
   } catch (error) {
     console.error(`[handler] Error procesando el mensaje ${entrante.messageId} de ${telefono}:`, error);
-    resultado = { texto: MENSAJE_ERROR_GENERICO, documentos: [], botones: [] };
+    resultado = { texto: MENSAJE_ERROR_GENERICO, documentos: [], carrusel: null };
   }
 
   // El texto (saludo/respuesta de la asesora) se manda SIEMPRE primero,
@@ -497,8 +530,10 @@ export async function procesarMensajeEntrante(payload: unknown): Promise<void> {
   // contexto antes que un bombardeo de fotos sin explicacion.
   try {
     await enviarTexto(telefono, resultado.texto);
-    for (const boton of resultado.botones) {
-      await enviarBotonProducto(telefono, boton);
+    if (resultado.carrusel?.tipo === "unico") {
+      await enviarProductoUnico(telefono, { cuerpo: CUERPO_CARRUSEL, retailerId: resultado.carrusel.retailerId });
+    } else if (resultado.carrusel?.tipo === "lista") {
+      await enviarListaProductos(telefono, { cuerpo: CUERPO_CARRUSEL, secciones: resultado.carrusel.secciones });
     }
     for (const documento of resultado.documentos) {
       await enviarDocumentoPorLink(telefono, documento.link, documento.filename);
@@ -508,6 +543,8 @@ export async function procesarMensajeEntrante(payload: unknown): Promise<void> {
     console.error(`[handler] No se pudo enviar/registrar la respuesta a ${telefono}:`, error);
   }
 }
+
+const CUERPO_CARRUSEL = "Toca el que más te guste para ver los detalles y agregarlo a tu carrito 💕";
 
 const MENSAJE_ERROR_GENERICO = "Disculpa, tuve un problema procesando tu mensaje. Intenta de nuevo en un momento.";
 
@@ -529,7 +566,7 @@ async function generarRespuesta(
       // volveria a disparar.
       try {
         const texto = await ejecutarAccionEscritura(action, params);
-        return { texto, documentos: [], botones: [] };
+        return { texto, documentos: [], carrusel: null };
       } finally {
         sessionData.pendingConfirmation = null;
         await guardarSesion(sessionId, sessionData);
@@ -537,7 +574,7 @@ async function generarRespuesta(
     }
     sessionData.pendingConfirmation = null;
     await guardarSesion(sessionId, sessionData);
-    return { texto: "Entendido, no hice ningún cambio. ¿En qué más te ayudo?", documentos: [], botones: [] };
+    return { texto: "Entendido, no hice ningún cambio. ¿En qué más te ayudo?", documentos: [], carrusel: null };
   }
 
   const historial = await cargarHistorial(telefono, entrante.messageId);
@@ -551,7 +588,7 @@ async function generarRespuesta(
   // "chat" es una respuesta libre y "error" trae la disculpa que ya armo
   // decidirAccion: en ambos casos se usa response_message tal cual.
   if (decision.action === "chat" || decision.action === "error") {
-    return { texto: decision.response_message, documentos: [], botones: [] };
+    return { texto: decision.response_message, documentos: [], carrusel: null };
   }
 
   if (rol === "owner") {
@@ -561,7 +598,7 @@ async function generarRespuesta(
       return {
         texto: `¿Confirmas esta acción? ${decision.action} con ${JSON.stringify(decision.params)}. Responde "sí" para confirmar.`,
         documentos: [],
-        botones: [],
+        carrusel: null,
       };
     }
     const resultadoLectura = await ejecutarAccionLectura(decision.action, decision.params);
@@ -571,7 +608,7 @@ async function generarRespuesta(
     for (const documento of resultadoLectura.documentos) {
       await enviarDocumentoPorLink(telefono, documento.link, documento.filename);
     }
-    return { texto: resultadoLectura.texto, documentos: [], botones: [] };
+    return { texto: resultadoLectura.texto, documentos: [], carrusel: null };
   }
 
   const slugProducto = REGEX_SLUG_PRODUCTO.exec(entrante.texto)?.[1] ?? null;

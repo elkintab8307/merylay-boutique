@@ -9,7 +9,8 @@ const mocks = vi.hoisted(() => ({
   decidirAccion: vi.fn(),
   enviarTexto: vi.fn(),
   enviarImagenPorLink: vi.fn(),
-  enviarBotonProducto: vi.fn(),
+  enviarListaProductos: vi.fn(),
+  enviarProductoUnico: vi.fn(),
   marcarLeidoYEscribiendo: vi.fn(),
   consultarStockBajo: vi.fn(),
   actualizarPrecioProducto: vi.fn(),
@@ -28,6 +29,7 @@ const mocks = vi.hoisted(() => ({
 const clienteMocks = vi.hoisted(() => ({
   buscarCatalogo: vi.fn(),
   obtenerProductoParaCarrito: vi.fn(),
+  obtenerProductoPorSku: vi.fn(),
   generarCatalogoPdf: vi.fn(),
   generarCotizacionPdf: vi.fn(),
   crearPedidoWompiDesdeCarrito: vi.fn(),
@@ -50,7 +52,8 @@ vi.mock("./agent.ts", () => ({ decidirAccion: mocks.decidirAccion }));
 vi.mock("../_shared/meta.ts", () => ({
   enviarTexto: mocks.enviarTexto,
   enviarImagenPorLink: mocks.enviarImagenPorLink,
-  enviarBotonProducto: mocks.enviarBotonProducto,
+  enviarListaProductos: mocks.enviarListaProductos,
+  enviarProductoUnico: mocks.enviarProductoUnico,
   enviarDocumentoPorLink: clienteMocks.enviarDocumentoPorLink,
   marcarLeidoYEscribiendo: mocks.marcarLeidoYEscribiendo,
 }));
@@ -63,6 +66,7 @@ vi.mock("./owner-actions.ts", () => ({
 vi.mock("./catalog.ts", () => ({
   buscarCatalogo: clienteMocks.buscarCatalogo,
   obtenerProductoParaCarrito: clienteMocks.obtenerProductoParaCarrito,
+  obtenerProductoPorSku: clienteMocks.obtenerProductoPorSku,
   generarCatalogoPdf: clienteMocks.generarCatalogoPdf,
   generarCotizacionPdf: clienteMocks.generarCotizacionPdf,
 }));
@@ -687,41 +691,22 @@ describe("acciones de lectura del dueño con fotos/documentos", () => {
   });
 });
 
-describe("buscar_producto con tarjetas de foto y boton", () => {
-  it("manda hasta 10 tarjetas con foto, cuerpo y boton 'COMPRAR'", async () => {
+describe("buscar_producto manda el carrusel nativo del catalogo de Meta", () => {
+  it("con UN solo resultado, manda un mensaje de producto unico (interactive product) con su retailerId", async () => {
     mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.3", from: "573001234567", texto: "pijamas" });
-    mocks.decidirAccion.mockResolvedValue({ action: "buscar_producto", params: { consulta: "pijama" }, response_message: "" });
+    mocks.decidirAccion.mockResolvedValue({ action: "buscar_producto", params: { consulta: "pijama" }, response_message: "¡Mira esto!" });
     clienteMocks.buscarCatalogo.mockResolvedValue([
-      { productId: PRODUCTO_ID, variantId: VARIANTE_ID, nombre: "Pijama Rosa", talla: "M", color: "Rosa", precio: 89900, stock: 5, imageId: null, fotoUrl: "https://x/pijama.jpg", descripcion: null },
+      { productId: PRODUCTO_ID, variantId: VARIANTE_ID, nombre: "Pijama Rosa", talla: "M", color: "Rosa", precio: 89900, stock: 5, imageId: null, fotoUrl: "https://x/pijama.jpg", descripcion: null, retailerId: "SKU-PIJAMA-M" },
     ]);
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
     await procesarMensajeEntrante({});
 
-    expect(mocks.enviarBotonProducto).toHaveBeenCalledWith("573001234567", {
-      fotoUrl: "https://x/pijama.jpg",
-      cuerpo: expect.stringContaining("Pijama Rosa"),
-      botonId: `add:${PRODUCTO_ID}:${VARIANTE_ID}`,
-      botonTitulo: "COMPRAR",
-    });
+    expect(mocks.enviarProductoUnico).toHaveBeenCalledWith("573001234567", expect.objectContaining({ retailerId: "SKU-PIJAMA-M" }));
+    expect(mocks.enviarListaProductos).not.toHaveBeenCalled();
   });
 
-  it("si el producto tiene descripcion, la incluye en el cuerpo de la tarjeta (el cliente debe ver toda la info antes de comprar)", async () => {
-    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.3b", from: "573001234567", texto: "pijama rosa" });
-    mocks.decidirAccion.mockResolvedValue({ action: "buscar_producto", params: { consulta: "pijama rosa" }, response_message: "" });
-    clienteMocks.buscarCatalogo.mockResolvedValue([
-      { productId: PRODUCTO_ID, variantId: VARIANTE_ID, nombre: "Pijama Rosa", talla: "M", color: "Rosa", precio: 89900, stock: 5, imageId: null, fotoUrl: "https://x/pijama.jpg", descripcion: "Dos piezas en algodón suave." },
-    ]);
-
-    const { procesarMensajeEntrante } = await import("./handler.ts");
-    await procesarMensajeEntrante({});
-
-    expect(mocks.enviarBotonProducto).toHaveBeenCalledWith("573001234567", expect.objectContaining({
-      cuerpo: expect.stringContaining("Dos piezas en algodón suave."),
-    }));
-  });
-
-  it("sin coincidencias, responde un mensaje claro sin mandar ningun boton", async () => {
+  it("sin coincidencias, responde un mensaje claro sin mandar ningun carrusel", async () => {
     mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.4", from: "573001234567", texto: "algo raro" });
     mocks.decidirAccion.mockResolvedValue({ action: "buscar_producto", params: { consulta: "algo raro" }, response_message: "" });
     clienteMocks.buscarCatalogo.mockResolvedValue([]);
@@ -729,64 +714,59 @@ describe("buscar_producto con tarjetas de foto y boton", () => {
     const { procesarMensajeEntrante } = await import("./handler.ts");
     await procesarMensajeEntrante({});
 
-    expect(mocks.enviarBotonProducto).not.toHaveBeenCalled();
+    expect(mocks.enviarProductoUnico).not.toHaveBeenCalled();
+    expect(mocks.enviarListaProductos).not.toHaveBeenCalled();
     expect(mocks.enviarTexto).toHaveBeenCalledWith("573001234567", expect.stringContaining("No encontré"));
   });
 
-  it("manda un boton por cada producto encontrado cuando hay varios", async () => {
+  it("con varios resultados, manda el carrusel nativo (product_list) agrupado por categoria", async () => {
     mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.6", from: "573001234567", texto: "pijamas" });
     mocks.decidirAccion.mockResolvedValue({ action: "buscar_producto", params: { consulta: "pijama" }, response_message: "" });
     clienteMocks.buscarCatalogo.mockResolvedValue([
-      { productId: "p-1", variantId: null, nombre: "Pijama Rosa", talla: null, color: null, precio: 89900, stock: 5, imageId: null, fotoUrl: "https://x/p1.jpg" },
-      { productId: "p-2", variantId: "v-2", nombre: "Pijama Azul", talla: "M", color: "Azul", precio: 95000, stock: 3, imageId: null, fotoUrl: "https://x/p2.jpg" },
+      { productId: "p-1", variantId: null, nombre: "Pijama Rosa", talla: null, color: null, precio: 89900, stock: 5, imageId: null, fotoUrl: "https://x/p1.jpg", categoria: "Pijamas", retailerId: "SKU-P1" },
+      { productId: "p-2", variantId: "v-2", nombre: "Pijama Azul", talla: "M", color: "Azul", precio: 95000, stock: 3, imageId: null, fotoUrl: "https://x/p2.jpg", categoria: "Pijamas", retailerId: "SKU-P2-M" },
     ]);
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
     await procesarMensajeEntrante({});
 
-    expect(mocks.enviarBotonProducto).toHaveBeenCalledTimes(2);
-    expect(mocks.enviarBotonProducto).toHaveBeenNthCalledWith(1, "573001234567", expect.objectContaining({
-      fotoUrl: "https://x/p1.jpg",
-      botonId: "add:p-1:-",
-    }));
-    expect(mocks.enviarBotonProducto).toHaveBeenNthCalledWith(2, "573001234567", expect.objectContaining({
-      fotoUrl: "https://x/p2.jpg",
-      botonId: "add:p-2:v-2",
+    expect(mocks.enviarListaProductos).toHaveBeenCalledWith("573001234567", expect.objectContaining({
+      secciones: [{ titulo: "Pijamas", retailerIds: ["SKU-P1", "SKU-P2-M"] }],
     }));
   });
 
-  it("excluye del boton los productos sin fotoUrl", async () => {
-    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.7", from: "573001234567", texto: "pijamas" });
+  it("sin categoria, agrupa bajo el titulo 'Productos'", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.6b", from: "573001234567", texto: "pijamas" });
     mocks.decidirAccion.mockResolvedValue({ action: "buscar_producto", params: { consulta: "pijama" }, response_message: "" });
     clienteMocks.buscarCatalogo.mockResolvedValue([
-      { productId: "p-sin-foto", variantId: null, nombre: "Pijama Sin Foto", talla: null, color: null, precio: 70000, stock: 2, imageId: null, fotoUrl: null },
-      { productId: "p-con-foto", variantId: null, nombre: "Pijama Con Foto", talla: null, color: null, precio: 80000, stock: 1, imageId: null, fotoUrl: "https://x/con-foto.jpg" },
+      { productId: "p-1", variantId: null, nombre: "Pijama Rosa", talla: null, color: null, precio: 89900, stock: 5, imageId: null, fotoUrl: "https://x/p1.jpg", categoria: null, retailerId: "SKU-P1" },
+      { productId: "p-2", variantId: null, nombre: "Pijama Azul", talla: null, color: null, precio: 95000, stock: 3, imageId: null, fotoUrl: "https://x/p2.jpg", categoria: null, retailerId: "SKU-P2" },
     ]);
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
     await procesarMensajeEntrante({});
 
-    expect(mocks.enviarBotonProducto).toHaveBeenCalledTimes(1);
-    expect(mocks.enviarBotonProducto).toHaveBeenCalledWith("573001234567", expect.objectContaining({
-      fotoUrl: "https://x/con-foto.jpg",
-      botonId: "add:p-con-foto:-",
+    expect(mocks.enviarListaProductos).toHaveBeenCalledWith("573001234567", expect.objectContaining({
+      secciones: [{ titulo: "Productos", retailerIds: ["SKU-P1", "SKU-P2"] }],
     }));
   });
 
-  it("con mas de 10 coincidencias, manda a lo sumo 10 botones y avisa del total en el texto", async () => {
+  it("con mas de 30 coincidencias, trunca a 30 items en el carrusel y avisa del total en el texto", async () => {
     mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.8", from: "573001234567", texto: "pijamas" });
     mocks.decidirAccion.mockResolvedValue({ action: "buscar_producto", params: { consulta: "pijama" }, response_message: "" });
-    const productos = Array.from({ length: 11 }, (_, i) => ({
+    const productos = Array.from({ length: 31 }, (_, i) => ({
       productId: `p-${i}`, variantId: null, nombre: `Pijama ${i}`, talla: null, color: null,
-      precio: 50000, stock: 1, imageId: null, fotoUrl: `https://x/p${i}.jpg`,
+      precio: 50000, stock: 1, imageId: null, fotoUrl: `https://x/p${i}.jpg`, categoria: "Pijamas", retailerId: `SKU-P${i}`,
     }));
     clienteMocks.buscarCatalogo.mockResolvedValue(productos);
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
     await procesarMensajeEntrante({});
 
-    expect(mocks.enviarBotonProducto).toHaveBeenCalledTimes(10);
-    expect(mocks.enviarTexto).toHaveBeenCalledWith("573001234567", expect.stringContaining("Encontré 11 en total"));
+    const llamada = mocks.enviarListaProductos.mock.calls[0][1] as { secciones: { retailerIds: string[] }[] };
+    const totalItems = llamada.secciones.reduce((suma, s) => suma + s.retailerIds.length, 0);
+    expect(totalItems).toBe(30);
+    expect(mocks.enviarTexto).toHaveBeenCalledWith("573001234567", expect.stringContaining("Encontré 31 en total"));
   });
 });
 
@@ -799,7 +779,7 @@ describe("mensaje calido antes de las tarjetas (appointment setter)", () => {
       response_message: "¡Hola! Qué bueno que preguntas por nuestras pijamas 💕 mira estas opciones:",
     });
     clienteMocks.buscarCatalogo.mockResolvedValue([
-      { productId: PRODUCTO_ID, variantId: null, nombre: "Pijama Rosa", talla: null, color: null, precio: 89900, stock: 5, imageId: null, fotoUrl: "https://x/pijama.jpg", descripcion: null },
+      { productId: PRODUCTO_ID, variantId: null, nombre: "Pijama Rosa", talla: null, color: null, precio: 89900, stock: 5, imageId: null, fotoUrl: "https://x/pijama.jpg", descripcion: null, retailerId: "SKU-P1" },
     ]);
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
@@ -808,26 +788,26 @@ describe("mensaje calido antes de las tarjetas (appointment setter)", () => {
     expect(mocks.enviarTexto).toHaveBeenCalledWith("573001234567", "¡Hola! Qué bueno que preguntas por nuestras pijamas 💕 mira estas opciones:");
   });
 
-  it("manda el texto ANTES que las tarjetas de producto (saluda primero, no bombardea con fotos sin contexto)", async () => {
+  it("manda el texto ANTES que el carrusel de producto (saluda primero, no bombardea con fotos sin contexto)", async () => {
     mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.31", from: "573001234567", texto: "pijamas" });
     mocks.decidirAccion.mockResolvedValue({ action: "buscar_producto", params: { consulta: "pijama" }, response_message: "Aquí tienes:" });
     clienteMocks.buscarCatalogo.mockResolvedValue([
-      { productId: PRODUCTO_ID, variantId: null, nombre: "Pijama Rosa", talla: null, color: null, precio: 89900, stock: 5, imageId: null, fotoUrl: "https://x/pijama.jpg", descripcion: null },
+      { productId: PRODUCTO_ID, variantId: null, nombre: "Pijama Rosa", talla: null, color: null, precio: 89900, stock: 5, imageId: null, fotoUrl: "https://x/pijama.jpg", descripcion: null, retailerId: "SKU-P1" },
     ]);
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
     await procesarMensajeEntrante({});
 
     const ordenTexto = mocks.enviarTexto.mock.invocationCallOrder[0];
-    const ordenBoton = mocks.enviarBotonProducto.mock.invocationCallOrder[0];
-    expect(ordenTexto).toBeLessThan(ordenBoton);
+    const ordenCarrusel = mocks.enviarProductoUnico.mock.invocationCallOrder[0];
+    expect(ordenTexto).toBeLessThan(ordenCarrusel);
   });
 
   it("si el response_message viene vacío, usa un saludo de respaldo cálido (nunca manda un texto vacío)", async () => {
     mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.33", from: "573001234567", texto: "pijamas" });
     mocks.decidirAccion.mockResolvedValue({ action: "buscar_producto", params: { consulta: "pijama" }, response_message: "" });
     clienteMocks.buscarCatalogo.mockResolvedValue([
-      { productId: PRODUCTO_ID, variantId: null, nombre: "Pijama Rosa", talla: null, color: null, precio: 89900, stock: 5, imageId: null, fotoUrl: "https://x/pijama.jpg", descripcion: null },
+      { productId: PRODUCTO_ID, variantId: null, nombre: "Pijama Rosa", talla: null, color: null, precio: 89900, stock: 5, imageId: null, fotoUrl: "https://x/pijama.jpg", descripcion: null, retailerId: "SKU-P1" },
     ]);
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
@@ -898,33 +878,48 @@ describe("mensajes de audio", () => {
   });
 });
 
-describe("boton 'Agregar al carrito'", () => {
-  it("agrega el producto/variante al carrito sin llamar a decidirAccion", async () => {
-    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "boton", messageId: "wamid.BOTON1", from: "573001234567", botonId: `add:${PRODUCTO_ID}:${VARIANTE_ID}` });
-    clienteMocks.obtenerProductoParaCarrito.mockResolvedValue({ productId: PRODUCTO_ID, variantId: VARIANTE_ID, nombre: "Pijama Rosa", precio: 89900, stock: 5, imageId: null });
+describe("pedido armado en el carrito nativo del catalogo (mensaje 'order')", () => {
+  it("agrega cada item del pedido al carrito por su retailerId (sku), sin llamar a decidirAccion", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({
+      kind: "pedido_catalogo", messageId: "wamid.ORDER1", from: "573001234567",
+      items: [{ retailerId: "SKU-PIJAMA-M", cantidad: 1 }],
+    });
+    clienteMocks.obtenerProductoPorSku.mockResolvedValue({ productId: PRODUCTO_ID, variantId: VARIANTE_ID, nombre: "Pijama Rosa", precio: 89900, stock: 5, imageId: null });
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
     await procesarMensajeEntrante({});
 
     expect(mocks.decidirAccion).not.toHaveBeenCalled();
+    expect(clienteMocks.obtenerProductoPorSku).toHaveBeenCalledWith("SKU-PIJAMA-M");
     expect(mocks.enviarTexto).toHaveBeenCalledWith("573001234567", expect.stringContaining("Agregado: Pijama Rosa"));
   });
 
-  it("dos toques distintos del mismo boton suman cantidad (no fallan ni duplican la fila)", async () => {
-    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "boton", messageId: "wamid.BOTON2", from: "573001234567", botonId: `add:${PRODUCTO_ID}:${VARIANTE_ID}` });
-    clienteMocks.obtenerProductoParaCarrito.mockResolvedValue({ productId: PRODUCTO_ID, variantId: VARIANTE_ID, nombre: "Pijama Rosa", precio: 89900, stock: 5, imageId: null });
-    const sessionData = { cart: [{ productId: PRODUCTO_ID, variantId: VARIANTE_ID, imageId: null, qty: 1, unitPrice: 89900, nameSnapshot: "Pijama Rosa" }], pendingConfirmation: null };
-    mocks.obtenerOCrearSesion.mockResolvedValue({ id: "sesion-1", sessionData });
+  it("un pedido con varios items los agrega todos, uno por uno", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({
+      kind: "pedido_catalogo", messageId: "wamid.ORDER2", from: "573001234567",
+      items: [{ retailerId: "SKU-P1", cantidad: 2 }, { retailerId: "SKU-P2", cantidad: 1 }],
+    });
+    clienteMocks.obtenerProductoPorSku.mockImplementation(async (sku: string) =>
+      sku === "SKU-P1"
+        ? { productId: "p-1", variantId: null, nombre: "Pijama Rosa", precio: 89900, stock: 5, imageId: null }
+        : { productId: "p-2", variantId: null, nombre: "Bata Dorada", precio: 120000, stock: 5, imageId: null },
+    );
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
     await procesarMensajeEntrante({});
 
-    expect(mocks.enviarTexto).toHaveBeenCalledWith("573001234567", expect.stringContaining("x2"));
+    expect(clienteMocks.obtenerProductoPorSku).toHaveBeenCalledTimes(2);
+    const [, respuesta] = mocks.enviarTexto.mock.calls[0];
+    expect(respuesta).toContain("Pijama Rosa x2");
+    expect(respuesta).toContain("Bata Dorada");
   });
 
   it("producto agotado responde 'agotado' sin agregarlo al carrito", async () => {
-    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "boton", messageId: "wamid.BOTON3", from: "573001234567", botonId: `add:${PRODUCTO_ID}:-` });
-    clienteMocks.obtenerProductoParaCarrito.mockResolvedValue({ productId: PRODUCTO_ID, variantId: null, nombre: "Pijama Rosa", precio: 89900, stock: 0, imageId: null });
+    mocks.parsearMensajeEntrante.mockReturnValue({
+      kind: "pedido_catalogo", messageId: "wamid.ORDER3", from: "573001234567",
+      items: [{ retailerId: "SKU-PIJAMA", cantidad: 1 }],
+    });
+    clienteMocks.obtenerProductoPorSku.mockResolvedValue({ productId: PRODUCTO_ID, variantId: null, nombre: "Pijama Rosa", precio: 89900, stock: 0, imageId: null });
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
     await procesarMensajeEntrante({});
@@ -932,13 +927,16 @@ describe("boton 'Agregar al carrito'", () => {
     expect(mocks.enviarTexto).toHaveBeenCalledWith("573001234567", expect.stringContaining("agotado"));
   });
 
-  it("boton con id malformado responde un mensaje generico sin lanzar", async () => {
-    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "boton", messageId: "wamid.BOTON4", from: "573001234567", botonId: "algo-inesperado" });
+  it("si un retailerId del pedido no se encuentra, avisa sin lanzar y sin bloquear los demas items", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({
+      kind: "pedido_catalogo", messageId: "wamid.ORDER4", from: "573001234567",
+      items: [{ retailerId: "SKU-INEXISTENTE", cantidad: 1 }],
+    });
+    clienteMocks.obtenerProductoPorSku.mockResolvedValue(null);
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
     await expect(procesarMensajeEntrante({})).resolves.not.toThrow();
-    expect(mocks.enviarTexto).toHaveBeenCalledWith("573001234567", expect.any(String));
-    expect(clienteMocks.obtenerProductoParaCarrito).not.toHaveBeenCalled();
+    expect(mocks.enviarTexto).toHaveBeenCalledWith("573001234567", expect.stringContaining("No encontré"));
   });
 });
 
@@ -967,9 +965,12 @@ describe("indicador de escribiendo", () => {
     expect(ordenEscribiendo).toBeLessThan(ordenTranscripcion);
   });
 
-  it("activa el indicador con el messageId de un boton", async () => {
-    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "boton", messageId: "wamid.TYPING3", from: "573001234567", botonId: `add:${PRODUCTO_ID}:-` });
-    clienteMocks.obtenerProductoParaCarrito.mockResolvedValue({ productId: PRODUCTO_ID, variantId: null, nombre: "Pijama Rosa", precio: 89900, stock: 5, imageId: null });
+  it("activa el indicador con el messageId de un pedido del catalogo", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({
+      kind: "pedido_catalogo", messageId: "wamid.TYPING3", from: "573001234567",
+      items: [{ retailerId: "SKU-P1", cantidad: 1 }],
+    });
+    clienteMocks.obtenerProductoPorSku.mockResolvedValue({ productId: PRODUCTO_ID, variantId: null, nombre: "Pijama Rosa", precio: 89900, stock: 5, imageId: null });
 
     const { procesarMensajeEntrante } = await import("./handler.ts");
     await procesarMensajeEntrante({});

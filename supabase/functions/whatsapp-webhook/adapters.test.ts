@@ -16,12 +16,36 @@ describe("parsearMensajeEntrante", () => {
     expect(parsearMensajeEntrante(payload)).toEqual({ kind: "audio", messageId: "wamid.AUDIO1", from: "573001234567", mediaId: "media-999" });
   });
 
-  it("extrae id, remitente y botonId de un boton de respuesta interactivo", () => {
+  it("un boton de respuesta interactivo (ya no soportado -- reemplazado por el carrito nativo del catalogo) devuelve null", () => {
     const payload = payloadMensaje({
       id: "wamid.BOTON1", from: "573001234567", type: "interactive",
       interactive: { type: "button_reply", button_reply: { id: "add:p1:v1", title: "Agregar al carrito" } },
     });
-    expect(parsearMensajeEntrante(payload)).toEqual({ kind: "boton", messageId: "wamid.BOTON1", from: "573001234567", botonId: "add:p1:v1" });
+    expect(parsearMensajeEntrante(payload)).toBeNull();
+  });
+
+  it("extrae id, remitente e items (retailerId + cantidad) de un pedido armado en el carrito nativo del catalogo", () => {
+    const payload = payloadMensaje({
+      id: "wamid.ORDER1", from: "573001234567", type: "order",
+      order: {
+        catalog_id: "1832369491097812",
+        product_items: [
+          { product_retailer_id: "SKU-P1", quantity: "2", item_price: "89900", currency: "COP" },
+          { product_retailer_id: "SKU-P2-M", quantity: "1", item_price: "48000", currency: "COP" },
+        ],
+      },
+    });
+    expect(parsearMensajeEntrante(payload)).toEqual({
+      kind: "pedido_catalogo",
+      messageId: "wamid.ORDER1",
+      from: "573001234567",
+      items: [{ retailerId: "SKU-P1", cantidad: 2 }, { retailerId: "SKU-P2-M", cantidad: 1 }],
+    });
+  });
+
+  it("un pedido del catalogo sin product_items (o malformado) devuelve null", () => {
+    const payload = payloadMensaje({ id: "wamid.ORDER2", from: "573001234567", type: "order", order: {} });
+    expect(parsearMensajeEntrante(payload)).toBeNull();
   });
 
   it("devuelve null para un status update (sin mensaje)", () => {

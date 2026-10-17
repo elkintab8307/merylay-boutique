@@ -141,26 +141,26 @@ describe("marcarLeidoYEscribiendo", () => {
   });
 });
 
-describe("enviarBotonProducto", () => {
+describe("enviarListaProductos", () => {
   beforeEach(() => {
     vi.stubGlobal("Deno", {
       env: { get: vi.fn((key: string) => ({
         META_ACCESS_TOKEN: "token-de-prueba",
         META_PHONE_NUMBER_ID: "123456",
+        META_CATALOG_ID: "1832369491097812",
       } as Record<string, string>)[key]) },
     });
     vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 200 })));
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it("manda un mensaje interactivo con imagen, cuerpo y un boton de respuesta", async () => {
-    const { enviarBotonProducto } = await import("./meta.ts");
+  it("manda un carrusel nativo (interactive product_list) referenciando el catalogo y los retailer_id por seccion", async () => {
+    const { enviarListaProductos } = await import("./meta.ts");
 
-    await enviarBotonProducto("573001234567", {
-      fotoUrl: "https://x/foto.jpg",
-      cuerpo: "Pijama Rosa\nTalla M\n$89.900\nStock: 5",
-      botonId: "add:11111111-1111-4111-8111-111111111111:-",
-      botonTitulo: "Agregar al carrito",
+    await enviarListaProductos("573001234567", {
+      cuerpo: "Elige el que más te guste:",
+      encabezado: "Pijamas",
+      secciones: [{ titulo: "Pijamas", retailerIds: ["SKU-1", "SKU-2"] }],
     });
 
     const [, opciones] = (fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls[0] as [string, RequestInit];
@@ -169,10 +169,61 @@ describe("enviarBotonProducto", () => {
       to: "573001234567",
       type: "interactive",
       interactive: {
-        type: "button",
-        header: { type: "image", image: { link: "https://x/foto.jpg" } },
-        body: { text: "Pijama Rosa\nTalla M\n$89.900\nStock: 5" },
-        action: { buttons: [{ type: "reply", reply: { id: "add:11111111-1111-4111-8111-111111111111:-", title: "Agregar al carrito" } }] },
+        type: "product_list",
+        header: { type: "text", text: "Pijamas" },
+        body: { text: "Elige el que más te guste:" },
+        action: {
+          catalog_id: "1832369491097812",
+          sections: [{ title: "Pijamas", product_items: [{ product_retailer_id: "SKU-1" }, { product_retailer_id: "SKU-2" }] }],
+        },
+      },
+    });
+  });
+
+  it("sin encabezado, no incluye header en el mensaje", async () => {
+    const { enviarListaProductos } = await import("./meta.ts");
+
+    await enviarListaProductos("573001234567", { cuerpo: "Mira:", secciones: [{ titulo: "X", retailerIds: ["SKU-1"] }] });
+
+    const [, opciones] = (fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls[0] as [string, RequestInit];
+    const cuerpo = JSON.parse(opciones.body as string);
+    expect(cuerpo.interactive.header).toBeUndefined();
+  });
+
+  it("lanza un error claro si falta META_CATALOG_ID", async () => {
+    vi.stubGlobal("Deno", { env: { get: vi.fn((key: string) => (key === "META_ACCESS_TOKEN" ? "token-de-prueba" : key === "META_PHONE_NUMBER_ID" ? "123456" : undefined)) } });
+    const { enviarListaProductos } = await import("./meta.ts");
+    await expect(enviarListaProductos("573001234567", { cuerpo: "x", secciones: [] })).rejects.toThrow(/META_CATALOG_ID/);
+  });
+});
+
+describe("enviarProductoUnico", () => {
+  beforeEach(() => {
+    vi.stubGlobal("Deno", {
+      env: { get: vi.fn((key: string) => ({
+        META_ACCESS_TOKEN: "token-de-prueba",
+        META_PHONE_NUMBER_ID: "123456",
+        META_CATALOG_ID: "1832369491097812",
+      } as Record<string, string>)[key]) },
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 200 })));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("manda un mensaje interactivo de UN solo producto del catalogo (para el link de 'Preguntar por WhatsApp')", async () => {
+    const { enviarProductoUnico } = await import("./meta.ts");
+
+    await enviarProductoUnico("573001234567", { cuerpo: "¡Qué linda elección!", retailerId: "SKU-CAMISETA-MARIPOSA" });
+
+    const [, opciones] = (fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls[0] as [string, RequestInit];
+    const cuerpo = JSON.parse(opciones.body as string);
+    expect(cuerpo).toMatchObject({
+      to: "573001234567",
+      type: "interactive",
+      interactive: {
+        type: "product",
+        body: { text: "¡Qué linda elección!" },
+        action: { catalog_id: "1832369491097812", product_retailer_id: "SKU-CAMISETA-MARIPOSA" },
       },
     });
   });

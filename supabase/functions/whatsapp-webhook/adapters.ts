@@ -1,7 +1,7 @@
 export type MensajeEntrante =
   | { kind: "texto"; messageId: string; from: string; texto: string }
   | { kind: "audio"; messageId: string; from: string; mediaId: string }
-  | { kind: "boton"; messageId: string; from: string; botonId: string };
+  | { kind: "pedido_catalogo"; messageId: string; from: string; items: { retailerId: string; cantidad: number }[] };
 
 export function parsearMensajeEntrante(payload: unknown): MensajeEntrante | null {
   const entry = (payload as Record<string, unknown> | null)?.entry as unknown[] | undefined;
@@ -28,12 +28,25 @@ export function parsearMensajeEntrante(payload: unknown): MensajeEntrante | null
     return { kind: "audio", messageId, from, mediaId };
   }
 
-  if (entrada.type === "interactive") {
-    const interactive = entrada.interactive as Record<string, unknown> | undefined;
-    if (interactive?.type !== "button_reply") return null;
-    const botonId = (interactive.button_reply as Record<string, unknown> | undefined)?.id;
-    if (typeof botonId !== "string") return null;
-    return { kind: "boton", messageId, from, botonId };
+  // Mensaje nativo del carrito del catalogo: el cliente toco productos en
+  // el carrusel (product_list), WhatsApp armo su propio carrito y lo envio
+  // al tocar "Enviar al vendedor". Nunca se usa item_price/currency de aqui
+  // -- se vuelve a resolver precio/stock reales por retailerId (sku) en
+  // catalog.obtenerProductoPorSku, igual que con cualquier otro dato que
+  // venga del cliente.
+  if (entrada.type === "order") {
+    const order = entrada.order as Record<string, unknown> | undefined;
+    const productItems = order?.product_items as Record<string, unknown>[] | undefined;
+    if (!Array.isArray(productItems) || productItems.length === 0) return null;
+
+    const items: { retailerId: string; cantidad: number }[] = [];
+    for (const item of productItems) {
+      const retailerId = item.product_retailer_id;
+      const cantidad = Number(item.quantity);
+      if (typeof retailerId !== "string" || !Number.isFinite(cantidad) || cantidad <= 0) return null;
+      items.push({ retailerId, cantidad });
+    }
+    return { kind: "pedido_catalogo", messageId, from, items };
   }
 
   return null;

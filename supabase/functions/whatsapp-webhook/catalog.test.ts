@@ -72,11 +72,25 @@ describe("buscarCatalogo", () => {
     expect((query.eq as ReturnType<typeof vi.fn>).mock.calls).toContainEqual(["slug", "camiseta-mariposa"]);
   });
 
+  it("cada resultado trae retailerId = sku (del producto si no tiene variantes, de la variante si la tiene) -- es lo que identifica el item en el catalogo de Meta", async () => {
+    const productos = [
+      { id: "p1", name: "Pijama Rosa", price: 89900, stock: 5, sku: "SKU-P1", categories: null, product_variants: [], product_images: [] },
+    ];
+    const { supabase } = mockCatalogo(productos);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { buscarCatalogo } = await import("./catalog.ts");
+    const resultado = await buscarCatalogo({ texto: "pijama" });
+
+    expect(resultado[0].retailerId).toBe("SKU-P1");
+  });
+
   it("con talla, usa product_variants!inner y filtra por talla", async () => {
     const productos = [
       {
-        id: "p1", name: "Pijama Rosa", price: 89900, stock: 5, categories: { name: "Pijamas" },
-        product_variants: [{ id: "v1", talla: "M", color: "Rosa", price_override: null, stock: 4 }],
+        id: "p1", name: "Pijama Rosa", price: 89900, stock: 5, sku: "SKU-P1", categories: { name: "Pijamas" },
+        product_variants: [{ id: "v1", talla: "M", color: "Rosa", price_override: null, stock: 4, sku: "SKU-V1" }],
         product_images: [],
       },
     ];
@@ -90,7 +104,7 @@ describe("buscarCatalogo", () => {
     expect(select).toHaveBeenCalledWith(expect.stringContaining("product_variants!inner"));
     expect(resultado).toEqual([{
       productId: "p1", variantId: "v1", nombre: "Pijama Rosa", talla: "M", color: "Rosa",
-      precio: 89900, stock: 4, imageId: null, fotoUrl: null, categoria: "Pijamas", descripcion: null,
+      precio: 89900, stock: 4, imageId: null, fotoUrl: null, categoria: "Pijamas", descripcion: null, retailerId: "SKU-V1",
     }]);
   });
 
@@ -424,6 +438,95 @@ describe("obtenerProductoParaCarrito", () => {
 
     const { obtenerProductoParaCarrito } = await import("./catalog.ts");
     expect(await obtenerProductoParaCarrito("p2", null)).toBeNull();
+  });
+});
+
+describe("obtenerProductoPorSku", () => {
+  function mockProductoPorSku(opts: { producto?: unknown; variante?: unknown }) {
+    return {
+      from: vi.fn((tabla: string) => {
+        if (tabla === "products") {
+          const eq2 = vi.fn(() => ({ maybeSingle: vi.fn(async () => ({ data: opts.producto ?? null, error: null })) }));
+          const eq1 = vi.fn(() => ({ eq: eq2 }));
+          return { select: vi.fn(() => ({ eq: eq1 })) };
+        }
+        if (tabla === "product_variants") {
+          const eq1 = vi.fn(() => ({ maybeSingle: vi.fn(async () => ({ data: opts.variante ?? null, error: null })) }));
+          return { select: vi.fn(() => ({ eq: eq1 })) };
+        }
+        throw new Error(`tabla inesperada en el mock: ${tabla}`);
+      }),
+    };
+  }
+
+  // El retailer_id que manda WhatsApp en un mensaje "order" es el sku --
+  // esta funcion lo resuelve de vuelta a un producto/variante real (nunca se
+  // confia en nombre/precio que venga del pedido nativo, igual que
+  // obtenerProductoParaCarrito).
+  it("encuentra un producto SIN variantes por su sku", async () => {
+    const supabase = mockProductoPorSku({
+      producto: { id: "p1", name: "Pijama Rosa", price: 89900, stock: 5, product_variants: [] },
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { obtenerProductoPorSku } = await import("./catalog.ts");
+    expect(await obtenerProductoPorSku("SKU-P1")).toEqual({
+      productId: "p1", variantId: null, nombre: "Pijama Rosa", precio: 89900, stock: 5, imageId: null,
+    });
+  });
+
+  it("si el sku coincide con un producto que SI tiene variantes, no lo vende suelto (devuelve null)", async () => {
+    const supabase = mockProductoPorSku({
+      producto: { id: "p1", name: "Camiseta Mariposa", price: 45000, stock: 5, product_variants: [{ id: "v1" }] },
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { obtenerProductoPorSku } = await import("./catalog.ts");
+    expect(await obtenerProductoPorSku("SKU-P1")).toBeNull();
+  });
+
+  it("si no hay producto base con ese sku, busca entre los skus de las variantes", async () => {
+    const supabase = mockProductoPorSku({
+      producto: null,
+      variante: {
+        id: "v1", name: "Talla M", price_override: 48000, stock: 3, product_id: "p1",
+        products: { id: "p1", name: "Camiseta Mariposa", price: 45000 },
+      },
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { obtenerProductoPorSku } = await import("./catalog.ts");
+    expect(await obtenerProductoPorSku("SKU-P1-M")).toEqual({
+      productId: "p1", variantId: "v1", nombre: "Camiseta Mariposa (Talla M)", precio: 48000, stock: 3, imageId: null,
+    });
+  });
+
+  it("usa el precio del producto base cuando la variante no tiene price_override", async () => {
+    const supabase = mockProductoPorSku({
+      producto: null,
+      variante: {
+        id: "v1", name: "Talla M", price_override: null, stock: 3, product_id: "p1",
+        products: { id: "p1", name: "Camiseta Mariposa", price: 45000 },
+      },
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { obtenerProductoPorSku } = await import("./catalog.ts");
+    const resultado = await obtenerProductoPorSku("SKU-P1-M");
+    expect(resultado?.precio).toBe(45000);
+  });
+
+  it("si el sku no existe ni como producto ni como variante, devuelve null", async () => {
+    const supabase = mockProductoPorSku({ producto: null, variante: null });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { obtenerProductoPorSku } = await import("./catalog.ts");
+    expect(await obtenerProductoPorSku("SKU-INEXISTENTE")).toBeNull();
   });
 });
 

@@ -90,7 +90,7 @@ describe("decidirAccion", () => {
     expect(prompt).toContain("generar_catalogo_pdf");
   });
 
-  it("la instruccion de agregar_al_carrito ya no promete ids de buscar_producto en el texto de la conversacion", async () => {
+  it("la instruccion de agregar_al_carrito ya no promete ids de buscar_producto en el texto de la conversacion, y ahora remite al carrusel nativo del catalogo", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({
       choices: [{ message: { content: JSON.stringify({ action: "chat", params: {}, response_message: "Hola" }) } }],
     }), { status: 200 }));
@@ -102,16 +102,17 @@ describe("decidirAccion", () => {
     const cuerpo = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
     const prompt = cuerpo.messages[0].content as string;
 
-    // buscar_producto ya no deja ids en texto (manda tarjetas con boton), asi
-    // que la vieja instruccion de "copialos TAL CUAL de un resultado previo
-    // de buscar_producto" ya no aplica -- debe haber sido retirada.
+    // buscar_producto ya no deja ids en texto (manda el carrusel nativo del
+    // catalogo), asi que la vieja instruccion de "copialos TAL CUAL de un
+    // resultado previo de buscar_producto" ya no aplica -- debe haber sido
+    // retirada.
     expect(prompt).not.toMatch(/TAL CUAL de un resultado previo de buscar_producto/);
-    // La nueva instruccion debe decirle al modelo que pida al cliente tocar
-    // el boton (o describir el producto de nuevo) cuando no haya un id real.
-    expect(prompt).toContain("boton");
-    expect(prompt).toContain("COMPRAR");
+    // Ya no hay boton "COMPRAR" (reemplazado por el carrito nativo de
+    // WhatsApp): la nueva instruccion debe remitir al carrusel, no a un boton.
+    expect(prompt).not.toContain("COMPRAR");
+    expect(prompt).toMatch(/carrusel/i);
     // La prohibicion de inventar/deducir los ids del nombre se mantiene.
-    expect(prompt).toMatch(/NUNCA los inventes ni los deduzcas del nombre/);
+    expect(prompt).toMatch(/NUNCA inventes ni deduzcas estos ids del nombre/);
   });
 
   it("documenta en el prompt del dueño los parametros exactos de cada accion", async () => {
