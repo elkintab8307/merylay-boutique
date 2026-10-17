@@ -292,7 +292,7 @@ interface RespuestaSaliente {
   documentos: { link: string; filename: string }[];
   carrusel:
     | { tipo: "unico"; retailerId: string }
-    | { tipo: "lista"; secciones: { titulo: string; retailerIds: string[] }[] }
+    | { tipo: "lista"; encabezado: string; secciones: { titulo: string; retailerIds: string[] }[] }
     | null;
 }
 
@@ -358,10 +358,15 @@ async function ejecutarAccionCliente(
       const truncado = productos.length > TOPE_CARRUSEL
         ? ` Encontré ${productos.length} en total — si quieres verlos todos, pídeme el catálogo en PDF.`
         : "";
+      const secciones = agruparParaCarrusel(productos);
+      // WhatsApp exige interactive.header en product_list -- si solo hay una
+      // categoria se usa su nombre, si hay varias un encabezado generico
+      // (nunca se manda vacio: la Graph API lo rechaza con 400 #131009).
+      const encabezado = secciones.length === 1 ? secciones[0].titulo : "Nuestras opciones para ti";
       return {
         texto: `${saludo}${truncado}`,
         documentos: [],
-        carrusel: { tipo: "lista", secciones: agruparParaCarrusel(productos) },
+        carrusel: { tipo: "lista", encabezado, secciones },
       };
     }
 
@@ -530,10 +535,23 @@ export async function procesarMensajeEntrante(payload: unknown): Promise<void> {
   // contexto antes que un bombardeo de fotos sin explicacion.
   try {
     await enviarTexto(telefono, resultado.texto);
-    if (resultado.carrusel?.tipo === "unico") {
-      await enviarProductoUnico(telefono, { cuerpo: CUERPO_CARRUSEL, retailerId: resultado.carrusel.retailerId });
-    } else if (resultado.carrusel?.tipo === "lista") {
-      await enviarListaProductos(telefono, { cuerpo: CUERPO_CARRUSEL, secciones: resultado.carrusel.secciones });
+    if (resultado.carrusel) {
+      // Envio propio con su propio try/catch: si la Graph API rechaza el
+      // carrusel (ej. un producto no sincronizado con el catalogo de Meta,
+      // o un campo invalido), la clienta ya recibio el saludo -- sin esto
+      // se quedaba sin ver nada mas, con el error solo en el log del
+      // servidor (bug real reportado: "me dijo que buscaba las camisetas
+      // y no mostro nada").
+      try {
+        if (resultado.carrusel.tipo === "unico") {
+          await enviarProductoUnico(telefono, { cuerpo: CUERPO_CARRUSEL, retailerId: resultado.carrusel.retailerId });
+        } else {
+          await enviarListaProductos(telefono, { cuerpo: CUERPO_CARRUSEL, encabezado: resultado.carrusel.encabezado, secciones: resultado.carrusel.secciones });
+        }
+      } catch (error) {
+        console.error(`[handler] No se pudo mandar el carrusel de producto a ${telefono}:`, error);
+        await enviarTexto(telefono, MENSAJE_CARRUSEL_FALLIDO);
+      }
     }
     for (const documento of resultado.documentos) {
       await enviarDocumentoPorLink(telefono, documento.link, documento.filename);
@@ -545,6 +563,7 @@ export async function procesarMensajeEntrante(payload: unknown): Promise<void> {
 }
 
 const CUERPO_CARRUSEL = "Toca el que más te guste para ver los detalles y agregarlo a tu carrito 💕";
+const MENSAJE_CARRUSEL_FALLIDO = "Tuve un problema para mostrarte las opciones, ¿puedes intentarlo de nuevo en un momento? 💕";
 
 const MENSAJE_ERROR_GENERICO = "Disculpa, tuve un problema procesando tu mensaje. Intenta de nuevo en un momento.";
 

@@ -79,14 +79,18 @@ function catalogoId(): string {
 // adapters.ts), no como el boton de respuesta que se usaba antes.
 export async function enviarListaProductos(
   to: string,
-  opts: { cuerpo: string; encabezado?: string; secciones: { titulo: string; retailerIds: string[] }[] },
+  opts: { cuerpo: string; encabezado: string; secciones: { titulo: string; retailerIds: string[] }[] },
 ): Promise<void> {
   await enviarMensaje({
     to,
     type: "interactive",
     interactive: {
       type: "product_list",
-      ...(opts.encabezado ? { header: { type: "text", text: opts.encabezado } } : {}),
+      // WhatsApp EXIGE este campo para product_list -- sin el, la Graph API
+      // responde 400 (#131009 "interactive['header'] is required") y el
+      // mensaje nunca llega (bug real: antes era opcional aqui, y el
+      // llamador no siempre lo mandaba).
+      header: { type: "text", text: opts.encabezado },
       body: { text: opts.cuerpo },
       action: {
         catalog_id: catalogoId(),

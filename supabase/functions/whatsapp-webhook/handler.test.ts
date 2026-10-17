@@ -732,7 +732,28 @@ describe("buscar_producto manda el carrusel nativo del catalogo de Meta", () => 
 
     expect(mocks.enviarListaProductos).toHaveBeenCalledWith("573001234567", expect.objectContaining({
       secciones: [{ titulo: "Pijamas", retailerIds: ["SKU-P1", "SKU-P2-M"] }],
+      // WhatsApp EXIGE interactive.header en los mensajes product_list (si
+      // falta, la Graph API responde 400 "#131009 interactive['header'] is
+      // required") -- bug real: el carrusel se mandaba sin encabezado y la
+      // clienta se quedaba sin ver nada, con el error solo en el log.
+      encabezado: expect.stringMatching(/\S/),
     }));
+  });
+
+  it("si el envio del carrusel falla (ej. Graph API lo rechaza), avisa a la clienta en vez de dejarla sin respuesta", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.6c", from: "573001234567", texto: "camisetas talla L" });
+    mocks.decidirAccion.mockResolvedValue({ action: "buscar_producto", params: { consulta: "camiseta", talla: "L" }, response_message: "Claro, mira:" });
+    clienteMocks.buscarCatalogo.mockResolvedValue([
+      { productId: "p-1", variantId: null, nombre: "Camiseta Blanca", talla: "L", color: null, precio: 45000, stock: 5, imageId: null, fotoUrl: "https://x/p1.jpg", categoria: "Camisetas", retailerId: "SKU-P1" },
+      { productId: "p-2", variantId: null, nombre: "Camiseta Negra", talla: "L", color: null, precio: 45000, stock: 5, imageId: null, fotoUrl: "https://x/p2.jpg", categoria: "Camisetas", retailerId: "SKU-P2" },
+    ]);
+    mocks.enviarListaProductos.mockRejectedValueOnce(new Error("Graph API respondio 400: interactive['header'] is required"));
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await expect(procesarMensajeEntrante({})).resolves.not.toThrow();
+
+    expect(mocks.enviarTexto).toHaveBeenCalledWith("573001234567", "Claro, mira:");
+    expect(mocks.enviarTexto).toHaveBeenCalledWith("573001234567", expect.stringContaining("problema para mostrarte"));
   });
 
   it("sin categoria, agrupa bajo el titulo 'Productos'", async () => {
@@ -748,6 +769,7 @@ describe("buscar_producto manda el carrusel nativo del catalogo de Meta", () => 
 
     expect(mocks.enviarListaProductos).toHaveBeenCalledWith("573001234567", expect.objectContaining({
       secciones: [{ titulo: "Productos", retailerIds: ["SKU-P1", "SKU-P2"] }],
+      encabezado: expect.stringMatching(/\S/),
     }));
   });
 

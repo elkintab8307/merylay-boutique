@@ -180,20 +180,24 @@ describe("enviarListaProductos", () => {
     });
   });
 
-  it("sin encabezado, no incluye header en el mensaje", async () => {
+  // WhatsApp exige interactive.header en los mensajes product_list -- sin
+  // el, la Graph API responde 400 (#131009 "the parameter interactive['header']
+  // is required"). Bug real: enviarListaProductos lo mandaba opcional, y la
+  // clienta se quedaba sin ver nada (el error quedaba solo en el log).
+  it("el header SIEMPRE se incluye en el mensaje (la Graph API lo exige para product_list)", async () => {
     const { enviarListaProductos } = await import("./meta.ts");
 
-    await enviarListaProductos("573001234567", { cuerpo: "Mira:", secciones: [{ titulo: "X", retailerIds: ["SKU-1"] }] });
+    await enviarListaProductos("573001234567", { cuerpo: "Mira:", encabezado: "Camisetas", secciones: [{ titulo: "X", retailerIds: ["SKU-1"] }] });
 
     const [, opciones] = (fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls[0] as [string, RequestInit];
     const cuerpo = JSON.parse(opciones.body as string);
-    expect(cuerpo.interactive.header).toBeUndefined();
+    expect(cuerpo.interactive.header).toEqual({ type: "text", text: "Camisetas" });
   });
 
   it("lanza un error claro si falta META_CATALOG_ID", async () => {
     vi.stubGlobal("Deno", { env: { get: vi.fn((key: string) => (key === "META_ACCESS_TOKEN" ? "token-de-prueba" : key === "META_PHONE_NUMBER_ID" ? "123456" : undefined)) } });
     const { enviarListaProductos } = await import("./meta.ts");
-    await expect(enviarListaProductos("573001234567", { cuerpo: "x", secciones: [] })).rejects.toThrow(/META_CATALOG_ID/);
+    await expect(enviarListaProductos("573001234567", { cuerpo: "x", encabezado: "x", secciones: [] })).rejects.toThrow(/META_CATALOG_ID/);
   });
 });
 
