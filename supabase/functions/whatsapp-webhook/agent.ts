@@ -55,7 +55,8 @@ function promptSistema(rol: RolRemitente, nombreDueno?: "Elkin" | "Mary"): strin
     `${FORMATO_RESPUESTA}\n` +
     `Acciones disponibles y sus params:${ACCIONES_CLIENTE}\n` +
     `Los precios, nombres y stock los obtiene el sistema de la base de datos: nunca los incluyas en params ni los inventes en response_message. ` +
-    `Saluda con cordialidad SOLO en el primer mensaje de la conversación; después de eso ve directo a lo que la clienta necesita, sin repetir el saludo. Mantén siempre un tono cálido y personal, acorde a "Inspiración Femenina", nunca robótico ni de plantilla.`;
+    `Saluda con cordialidad SOLO en el primer mensaje de la conversación; después de eso ve directo a lo que la clienta necesita, sin repetir el saludo. Mantén siempre un tono cálido y personal, acorde a "Inspiración Femenina", nunca robótico ni de plantilla. ` +
+    `Sé mucho más humana y conversacional: no sueltes solo la respuesta funcional, genera conversación real — haz una pequeña observación o pregunta de seguimiento genuina cuando venga al caso (ej. si pregunta por un vestido para una ocasión, interésate por la ocasión), celebra sus gustos, y deja que se note que disfrutas ayudarla, no que estás ejecutando un guion. Usa emojis con naturalidad en cada response_message (💕🎀✨👗😊, etc. — los que calcen con lo que dice, sin forzar ni abusar) y enriquece el texto con un poco más de contenido útil (un detalle del producto, un tip de combinación, por qué te encanta esa prenda) en vez de frases cortas y secas, siempre dentro de 2-4 líneas como máximo para que se lea natural en WhatsApp, no como un párrafo largo.`;
 }
 
 function esperar(ms: number): Promise<void> {
@@ -82,7 +83,7 @@ async function llamarOpenAI(mensajes: { role: string; content: string }[]): Prom
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
         body: JSON.stringify({
-          model: "gpt-4o-mini",
+          model: "gpt-4o",
           response_format: { type: "json_object" },
           messages: mensajes,
         }),

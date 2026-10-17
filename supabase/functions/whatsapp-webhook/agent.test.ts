@@ -42,6 +42,34 @@ describe("decidirAccion", () => {
     expect(consoleErrorSpy).toHaveBeenCalled();
   });
 
+  it("usa gpt-4o (no gpt-4o-mini) para decidir la accion", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({ action: "chat", params: {}, response_message: "Hola" }) } }],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { decidirAccion } = await import("./agent.ts");
+    await decidirAccion({ rol: "customer", historial: [], mensajeEntrante: "hola" });
+
+    const cuerpo = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(cuerpo.model).toBe("gpt-4o");
+  });
+
+  it("el prompt de cliente pide un tono mas humano, conversacional y con emoticones", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({ action: "chat", params: {}, response_message: "Hola" }) } }],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { decidirAccion } = await import("./agent.ts");
+    await decidirAccion({ rol: "customer", historial: [], mensajeEntrante: "hola" });
+
+    const cuerpo = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    const prompt = cuerpo.messages[0].content as string;
+    expect(prompt).toMatch(/emoji|emoticon/i);
+    expect(prompt).toMatch(/conversaci[oó]n/i);
+  });
+
   it("incluye el nombre del dueño en el prompt cuando el rol es owner", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({
       choices: [{ message: { content: JSON.stringify({ action: "chat", params: {}, response_message: "Hola Elkin" }) } }],
