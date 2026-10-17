@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   obtenerOCrearSesion: vi.fn(),
   guardarSesion: vi.fn(),
   cargarHistorial: vi.fn(),
+  cargarMemoria: vi.fn(),
+  guardarMemoria: vi.fn(),
   decidirAccion: vi.fn(),
   enviarTexto: vi.fn(),
   enviarImagenPorLink: vi.fn(),
@@ -47,6 +49,10 @@ vi.mock("./sessions.ts", () => ({
   obtenerOCrearSesion: mocks.obtenerOCrearSesion,
   guardarSesion: mocks.guardarSesion,
   cargarHistorial: mocks.cargarHistorial,
+}));
+vi.mock("./memory.ts", () => ({
+  cargarMemoria: mocks.cargarMemoria,
+  guardarMemoria: mocks.guardarMemoria,
 }));
 vi.mock("./agent.ts", () => ({ decidirAccion: mocks.decidirAccion }));
 vi.mock("../_shared/meta.ts", () => ({
@@ -100,6 +106,7 @@ beforeEach(() => {
   mocks.buscarOCrearCliente.mockResolvedValue({ profileId: "perfil-1", esNuevo: false });
   mocks.obtenerOCrearSesion.mockResolvedValue({ id: "sesion-1", sessionData: { cart: [], pendingConfirmation: null } });
   mocks.cargarHistorial.mockResolvedValue([]);
+  mocks.cargarMemoria.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -116,6 +123,101 @@ describe("procesarMensajeEntrante", () => {
     await procesarMensajeEntrante({});
 
     expect(mocks.decidirAccion).not.toHaveBeenCalled();
+  });
+
+  it("carga la memoria de la clienta y la pasa a decidirAccion (rol customer)", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.mem1", from: "573001234567", texto: "hola" });
+    mocks.cargarMemoria.mockResolvedValue([{ categoria: "preferencia", clave: "talla_preferida", valor: "M", origen: "bot" }]);
+    mocks.decidirAccion.mockResolvedValue({ action: "chat", params: {}, response_message: "Hola de nuevo" });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.decidirAccion).toHaveBeenCalledWith(expect.objectContaining({
+      memoriaCliente: [{ categoria: "preferencia", clave: "talla_preferida", valor: "M", origen: "bot" }],
+    }));
+  });
+
+  it("no carga memoria para el rol owner", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.mem2", from: "573215879805", texto: "ventas de hoy" });
+    mocks.decidirAccion.mockResolvedValue({ action: "chat", params: {}, response_message: "Hola Elkin" });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.cargarMemoria).not.toHaveBeenCalled();
+  });
+
+  it("si decidirAccion devuelve memoria nueva, la guarda", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.mem3", from: "573001234567", texto: "me llamo Camila" });
+    mocks.decidirAccion.mockResolvedValue({
+      action: "chat",
+      params: {},
+      response_message: "Mucho gusto, Camila",
+      memoria: [{ categoria: "contacto", clave: "nombre_completo", valor: "Camila" }],
+    });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.guardarMemoria).toHaveBeenCalledWith("perfil-1", [{ categoria: "contacto", clave: "nombre_completo", valor: "Camila" }]);
+  });
+
+  it("si decidirAccion no devuelve memoria, no llama a guardarMemoria", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.mem4", from: "573001234567", texto: "hola" });
+    mocks.decidirAccion.mockResolvedValue({ action: "chat", params: {}, response_message: "Hola" });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.guardarMemoria).not.toHaveBeenCalled();
+  });
+
+  it("confirmar_pedido exitoso guarda nombre/direccion/ciudad en memoria sin pasar por el modelo", async () => {
+    mocks.obtenerOCrearSesion.mockResolvedValue({
+      id: "sesion-1",
+      sessionData: { cart: [{ productId: PRODUCTO_ID, variantId: null, imageId: null, qty: 1, unitPrice: 50000, nameSnapshot: "Pijama Rosa" }], pendingConfirmation: null },
+    });
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.mem5", from: "573001234567", texto: "confirmo mi pedido" });
+    mocks.decidirAccion.mockResolvedValue({
+      action: "confirmar_pedido",
+      params: { fullName: "Camila Restrepo", phone: "573001234567", address: "Calle 10 #5-20", city: "Medellín" },
+      response_message: "Listo",
+    });
+    clienteMocks.crearPedidoWompiDesdeCarrito.mockResolvedValue({ linkPago: "https://pago.test/x", orderNumber: "ML-1" });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.guardarMemoria).toHaveBeenCalledWith("perfil-1", [
+      { categoria: "contacto", clave: "nombre_completo", valor: "Camila Restrepo" },
+      { categoria: "contacto", clave: "direccion_habitual", valor: "Calle 10 #5-20" },
+      { categoria: "contacto", clave: "ciudad_habitual", valor: "Medellín" },
+    ]);
+  });
+
+  it("un segundo confirmar_pedido con una ciudad distinta manda la ciudad NUEVA, no la vieja cacheada", async () => {
+    mocks.obtenerOCrearSesion.mockResolvedValue({
+      id: "sesion-1",
+      sessionData: { cart: [{ productId: PRODUCTO_ID, variantId: null, imageId: null, qty: 1, unitPrice: 50000, nameSnapshot: "Pijama Rosa" }], pendingConfirmation: null },
+    });
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.mem6", from: "573001234567", texto: "confirmo, ahora envien a Bogotá" });
+    mocks.decidirAccion.mockResolvedValue({
+      action: "confirmar_pedido",
+      params: { fullName: "Camila Restrepo", phone: "573001234567", address: "Carrera 7 #45-10", city: "Bogotá" },
+      response_message: "Listo",
+    });
+    clienteMocks.crearPedidoWompiDesdeCarrito.mockResolvedValue({ linkPago: "https://pago.test/y", orderNumber: "ML-2" });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.guardarMemoria).toHaveBeenCalledWith("perfil-1", expect.arrayContaining([
+      { categoria: "contacto", clave: "ciudad_habitual", valor: "Bogotá" },
+    ]));
+    expect(mocks.guardarMemoria).not.toHaveBeenCalledWith("perfil-1", expect.arrayContaining([
+      expect.objectContaining({ clave: "ciudad_habitual", valor: "Medellín" }),
+    ]));
   });
 
   it("reconoce a +573215879805 como Elkin aunque llegue con '+' y espacios", async () => {

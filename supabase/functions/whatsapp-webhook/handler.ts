@@ -3,6 +3,7 @@ import { enviarTexto, enviarImagenPorLink, enviarDocumentoPorLink, enviarListaPr
 import { parsearMensajeEntrante } from "./adapters.ts";
 import { buscarOCrearCliente, normalizarTelefono, generarAccesoWeb } from "./customers.ts";
 import { obtenerOCrearSesion, guardarSesion, cargarHistorial } from "./sessions.ts";
+import { cargarMemoria, guardarMemoria } from "./memory.ts";
 import { decidirAccion } from "./agent.ts";
 import * as ownerActions from "./owner-actions.ts";
 import { ACCIONES_ESCRITURA } from "./owner-actions.ts";
@@ -423,6 +424,14 @@ async function ejecutarAccionCliente(
       }
       const { linkPago, orderNumber } = await crearPedidoWompiDesdeCarrito(profileId, sessionData.cart, direccion.data);
       sessionData.cart = [];
+      // Determinista, no depende de que el modelo transcriba bien la
+      // direccion: si confirmar_pedido ya se ejecuto con exito, estos
+      // cuatro datos son reales y van directo a memoria.
+      await guardarMemoria(profileId, [
+        { categoria: "contacto", clave: "nombre_completo", valor: direccion.data.fullName },
+        { categoria: "contacto", clave: "direccion_habitual", valor: direccion.data.address },
+        { categoria: "contacto", clave: "ciudad_habitual", valor: direccion.data.city },
+      ]);
       return {
         texto: `Tu pedido ${orderNumber} quedó listo. Paga aquí para confirmarlo: ${linkPago}`,
         documentos: [],
@@ -597,12 +606,21 @@ async function generarRespuesta(
   }
 
   const historial = await cargarHistorial(telefono, entrante.messageId);
+  const memoria = rol === "customer" ? await cargarMemoria(profileId) : [];
   const decision = await decidirAccion({
     rol,
     nombreDueno: nombreDueno ?? undefined,
     historial,
     mensajeEntrante: entrante.texto,
+    memoriaCliente: memoria,
   });
+
+  // Mejor-esfuerzo: la memoria nunca debe impedir que la clienta reciba
+  // respuesta (guardarMemoria ya es fail-open internamente), asi que esto
+  // va ANTES del switch de acciones, no envuelto en su propio try/catch.
+  if (rol === "customer" && decision.memoria && decision.memoria.length > 0) {
+    await guardarMemoria(profileId, decision.memoria);
+  }
 
   // "chat" es una respuesta libre y "error" trae la disculpa que ya armo
   // decidirAccion: en ambos casos se usa response_message tal cual.
