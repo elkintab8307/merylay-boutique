@@ -1,6 +1,7 @@
 import { getSupabase } from "../_shared/db.ts";
 import { buscarCatalogo, generarDocumentosProductosPorCategoria, subirYFirmar, TOPE_BUSCAR_CATALOGO, type FiltrosCatalogo } from "./catalog.ts";
 import { generarPdfTabla } from "./pdf-render.ts";
+import { guardarNota } from "./memory.ts";
 
 export const formatoMoneda = (valor: number) => `$${valor.toLocaleString("es-CO")}`;
 
@@ -61,6 +62,33 @@ export async function buscarCliente(consulta: string): Promise<string> {
   const filas = (data ?? []) as { full_name: string | null; whatsapp: string | null; username: string }[];
   if (filas.length === 0) return `No encontre ningun cliente que coincida con "${consulta}".`;
   return filas.map((c) => `${c.full_name ?? c.username} — ${c.whatsapp ?? "sin telefono"}`).join("\n");
+}
+
+// La memoria se ata a customer_id -> profiles.id, asi que la resolucion
+// busca SOLO en profiles (a diferencia de historialCliente, que tambien
+// fusiona pos_customers): una clienta de POS sin perfil vinculado no tiene
+// profiles.id y por lo tanto no puede tener memoria.
+export async function agregarNotaCliente(nombreOTelefono: string, nota: string): Promise<string> {
+  const supabase = getSupabase();
+  const patron = escaparValorFiltro(`%${nombreOTelefono}%`);
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, full_name, username, whatsapp, phone")
+    .or(`full_name.ilike.${patron},username.ilike.${patron},whatsapp.ilike.${patron},phone.ilike.${patron}`)
+    .limit(5);
+
+  if (error) throw new Error(`No se pudo buscar el cliente: ${error.message}`);
+
+  const filas = (data ?? []) as { id: string; full_name: string | null; username: string }[];
+  if (filas.length === 0) return `No encontré ningún cliente que coincida con "${nombreOTelefono}".`;
+  if (filas.length > 1) {
+    const nombres = filas.map((p) => p.full_name ?? p.username);
+    return `Encontré varios clientes que coinciden: ${nombres.join(", ")}. ¿Puedes darme el nombre completo o el teléfono exacto?`;
+  }
+
+  const cliente = filas[0];
+  await guardarNota(cliente.id, nota);
+  return `Listo, voy a recordar eso de ${cliente.full_name ?? cliente.username}.`;
 }
 
 export async function consultarPedido(numeroOId: string): Promise<string> {

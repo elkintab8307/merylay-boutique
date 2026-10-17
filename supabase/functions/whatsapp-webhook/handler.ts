@@ -156,6 +156,8 @@ async function ejecutarAccionLectura(accion: string, params: Record<string, unkn
       return { texto: await ownerActions.consultarStockBajo((params.umbral as number) ?? 5), fotos: [], documentos: [] };
     case "buscar_cliente":
       return { texto: await ownerActions.buscarCliente(params.consulta as string), fotos: [], documentos: [] };
+    case "agregar_nota_cliente":
+      return { texto: await ownerActions.agregarNotaCliente(params.nombreOTelefono as string, params.nota as string), fotos: [], documentos: [] };
     case "consultar_pedido":
       return { texto: await ownerActions.consultarPedido(params.numeroOId as string), fotos: [], documentos: [] };
     case "consultar_productos": {

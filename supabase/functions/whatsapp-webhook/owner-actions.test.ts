@@ -166,6 +166,76 @@ describe("buscarCliente", () => {
   });
 });
 
+describe("agregarNotaCliente", () => {
+  function mockBusqueda(filas: unknown[], error: unknown = null) {
+    const limit = vi.fn(async () => ({ data: filas, error }));
+    const or = vi.fn(() => ({ limit }));
+    const select = vi.fn(() => ({ or }));
+    const supabase = { from: vi.fn(() => ({ select })) };
+    return { supabase, or, limit };
+  }
+
+  afterEach(() => {
+    vi.doUnmock("./memory.ts");
+    vi.resetModules();
+  });
+
+  it("si no encuentra ningun cliente, responde que no lo encontro", async () => {
+    const { supabase } = mockBusqueda([]);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { agregarNotaCliente } = await import("./owner-actions.ts");
+    const resultado = await agregarNotaCliente("Camila Noexiste", "es mayorista");
+
+    expect(resultado).toContain("No encontré ningún cliente");
+  });
+
+  it("si hay varios clientes que coinciden, pide un dato mas exacto en vez de adivinar", async () => {
+    const { supabase } = mockBusqueda([
+      { id: "p1", full_name: "Camila Restrepo", username: "camila1" },
+      { id: "p2", full_name: "Camila Gómez", username: "camila2" },
+    ]);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { agregarNotaCliente } = await import("./owner-actions.ts");
+    const resultado = await agregarNotaCliente("Camila", "es mayorista");
+
+    expect(resultado).toContain("Encontré varios clientes");
+    expect(resultado).toContain("Camila Restrepo");
+    expect(resultado).toContain("Camila Gómez");
+  });
+
+  it("escapa caracteres especiales del filtro igual que buscarCliente", async () => {
+    const { supabase, or } = mockBusqueda([]);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { agregarNotaCliente } = await import("./owner-actions.ts");
+    await agregarNotaCliente('a\\"b,x', "nota");
+
+    const literal = '"%a\\\\\\"b,x%"';
+    expect(or).toHaveBeenCalledWith(`full_name.ilike.${literal},username.ilike.${literal},whatsapp.ilike.${literal},phone.ilike.${literal}`);
+  });
+
+  it("con exactamente un cliente encontrado, guarda la nota y confirma con su nombre", async () => {
+    vi.resetModules();
+    const guardarNota = vi.fn(async () => undefined);
+    vi.doMock("./memory.ts", () => ({ guardarNota }));
+
+    const { supabase } = mockBusqueda([{ id: "p1", full_name: "Camila Restrepo", username: "camila1" }]);
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { agregarNotaCliente } = await import("./owner-actions.ts");
+    const resultado = await agregarNotaCliente("Camila Restrepo", "es mayorista, paga con transferencia");
+
+    expect(guardarNota).toHaveBeenCalledWith("p1", "es mayorista, paga con transferencia");
+    expect(resultado).toContain("Camila Restrepo");
+  });
+});
+
 describe("consultarProductos", () => {
   afterEach(() => {
     vi.doUnmock("./catalog.ts");
