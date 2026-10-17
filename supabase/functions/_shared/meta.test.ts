@@ -202,6 +202,73 @@ describe("enviarCarruselProductos", () => {
     const { enviarCarruselProductos } = await import("./meta.ts");
     await expect(enviarCarruselProductos("573001234567", { cuerpo: "x", retailerIds: ["SKU-1", "SKU-2"] })).rejects.toThrow(/META_CATALOG_ID/);
   });
+
+  // Bug real (2026-10-17): Meta a veces no ha terminado de procesar un SKU
+  // puntual (ej. todavia no le recupero la foto) aunque el resto del
+  // catalogo si este listo. El carrusel es todo-o-nada: una sola tarjeta
+  // invalida tumbaba las otras 9 validas y la clienta no veia nada.
+  it("si Meta rechaza un SKU puntual (131009 product not found), reintenta sin ese SKU", async () => {
+    const error131009 = JSON.stringify({
+      error: {
+        message: "(#131009) Parameter value is not valid",
+        code: 131009,
+        error_data: {
+          messaging_product: "whatsapp",
+          details: "product not found for product_retailer_id, CAM-000009-S-CAFE, in catalog_id, 1832369491097812",
+        },
+      },
+    });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(error131009, { status: 400 }))
+      .mockResolvedValueOnce(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { enviarCarruselProductos } = await import("./meta.ts");
+
+    await enviarCarruselProductos("573001234567", {
+      cuerpo: "Elige el que más te guste:",
+      retailerIds: ["CAM-000009-S-CAFE", "SKU-2", "SKU-3"],
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, opciones] = fetchMock.mock.calls[1] as [string, RequestInit];
+    const cuerpo = JSON.parse(opciones.body as string);
+    expect(cuerpo.interactive.action.cards).toEqual([
+      { card_index: 0, type: "product", action: { catalog_id: "1832369491097812", product_retailer_id: "SKU-2" } },
+      { card_index: 1, type: "product", action: { catalog_id: "1832369491097812", product_retailer_id: "SKU-3" } },
+    ]);
+  });
+
+  it("si tras quitar el SKU invalido quedaria menos de 2 tarjetas, no reintenta y lanza el error original", async () => {
+    const error131009 = JSON.stringify({
+      error: {
+        message: "(#131009) Parameter value is not valid",
+        code: 131009,
+        error_data: {
+          messaging_product: "whatsapp",
+          details: "product not found for product_retailer_id, CAM-000009-S-CAFE, in catalog_id, 1832369491097812",
+        },
+      },
+    });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(error131009, { status: 400 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { enviarCarruselProductos } = await import("./meta.ts");
+
+    await expect(
+      enviarCarruselProductos("573001234567", { cuerpo: "x", retailerIds: ["CAM-000009-S-CAFE", "SKU-2"] }),
+    ).rejects.toThrow(/131009/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("si el error de Graph API no es por un product_retailer_id invalido, no reintenta y lo relanza tal cual", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{\"error\":{\"message\":\"token invalido\"}}", { status: 401 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { enviarCarruselProductos } = await import("./meta.ts");
+
+    await expect(
+      enviarCarruselProductos("573001234567", { cuerpo: "x", retailerIds: ["SKU-1", "SKU-2"] }),
+    ).rejects.toThrow(/401/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("enviarProductoUnico", () => {

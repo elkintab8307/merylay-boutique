@@ -72,6 +72,19 @@ function catalogoId(): string {
   return id;
 }
 
+// Cuando Meta todavia no termino de procesar un SKU puntual (ej. no le ha
+// recuperado la foto aunque el resto del catalogo si este listo), rechaza
+// el producto con el error 131009 "product not found for
+// product_retailer_id, <SKU>, in catalog_id, <ID>". Si el mensaje trae ese
+// patron y el SKU senalado sigue en la lista actual, se devuelve para
+// reintentar sin el -- si no, null (no es este tipo de error, no reintentar).
+function productoInvalido(error: unknown, idsActuales: string[]): string | null {
+  const mensaje = error instanceof Error ? error.message : String(error);
+  const match = mensaje.match(/product not found for product_retailer_id,\s*([^,]+),\s*in catalog_id/);
+  const id = match?.[1]?.trim();
+  return id && idsActuales.includes(id) ? id : null;
+}
+
 // Carrusel nativo de WhatsApp (interactive carousel): entre 2 y 10 tarjetas
 // de producto deslizables, mostradas DIRECTO en el chat -- a diferencia de
 // product_list, no requiere que la clienta toque "Ver articulos" para verlas.
@@ -79,25 +92,43 @@ function catalogoId(): string {
 // lleva su propio card_index (0-9, unico) y el mismo catalog_id. El cliente
 // arma su propio carrito nativo tocando los productos y lo envia -- ese
 // envio llega como un mensaje tipo "order" (ver adapters.ts).
+//
+// El mensaje es todo-o-nada: si UN solo product_retailer_id no esta listo
+// en el catalogo de Meta, rechaza las demas tarjetas validas tambien (bug
+// real reportado: un SKU puntual sin sincronizar tumbaba un lote de 10
+// productos completo). Por eso reintenta quitando el SKU senalado por el
+// error, mientras sigan quedando al menos 2 tarjetas (minimo de Meta).
 export async function enviarCarruselProductos(
   to: string,
   opts: { cuerpo: string; retailerIds: string[] },
 ): Promise<void> {
-  await enviarMensaje({
-    to,
-    type: "interactive",
-    interactive: {
-      type: "carousel",
-      body: { text: opts.cuerpo },
-      action: {
-        cards: opts.retailerIds.map((id, indice) => ({
-          card_index: indice,
-          type: "product",
-          action: { catalog_id: catalogoId(), product_retailer_id: id },
-        })),
-      },
-    },
-  });
+  let idsActuales = opts.retailerIds;
+  for (;;) {
+    try {
+      await enviarMensaje({
+        to,
+        type: "interactive",
+        interactive: {
+          type: "carousel",
+          body: { text: opts.cuerpo },
+          action: {
+            cards: idsActuales.map((id, indice) => ({
+              card_index: indice,
+              type: "product",
+              action: { catalog_id: catalogoId(), product_retailer_id: id },
+            })),
+          },
+        },
+      });
+      return;
+    } catch (error) {
+      const idInvalido = productoInvalido(error, idsActuales);
+      if (!idInvalido) throw error;
+      const restantes = idsActuales.filter((id) => id !== idInvalido);
+      if (restantes.length < 2) throw error;
+      idsActuales = restantes;
+    }
+  }
 }
 
 // Mensaje interactivo de UN solo producto del catalogo -- usado cuando el
