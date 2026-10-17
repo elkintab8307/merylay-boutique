@@ -24,6 +24,7 @@ export interface AgentDecision {
   action: string;
   params: Record<string, unknown>;
   response_message: string;
+  memoria?: { categoria: string; clave: string; valor: string }[];
 }
 
 export type OutgoingMessage =

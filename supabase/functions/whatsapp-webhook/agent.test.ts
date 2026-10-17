@@ -70,6 +70,130 @@ describe("decidirAccion", () => {
     expect(prompt).toMatch(/conversaci[oó]n/i);
   });
 
+  it("devuelve la memoria que el modelo incluya en el JSON", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({
+        action: "chat",
+        params: {},
+        response_message: "Hola Camila",
+        memoria: [{ categoria: "contacto", clave: "nombre_completo", valor: "Camila" }],
+      }) } }],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { decidirAccion } = await import("./agent.ts");
+    const resultado = await decidirAccion({ rol: "customer", historial: [], mensajeEntrante: "me llamo Camila" });
+
+    expect(resultado.memoria).toEqual([{ categoria: "contacto", clave: "nombre_completo", valor: "Camila" }]);
+  });
+
+  it("memoria queda undefined si el modelo no la manda", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({ action: "chat", params: {}, response_message: "Hola" }) } }],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { decidirAccion } = await import("./agent.ts");
+    const resultado = await decidirAccion({ rol: "customer", historial: [], mensajeEntrante: "hola" });
+
+    expect(resultado.memoria).toBeUndefined();
+  });
+
+  it("el prompt de cliente incluye lo que ya sabe de la clienta", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({ action: "chat", params: {}, response_message: "Hola" }) } }],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { decidirAccion } = await import("./agent.ts");
+    await decidirAccion({
+      rol: "customer",
+      historial: [],
+      mensajeEntrante: "hola",
+      memoriaCliente: [
+        { categoria: "contacto", clave: "nombre_completo", valor: "Camila", origen: "bot" },
+        { categoria: "preferencia", clave: "talla_preferida", valor: "M", origen: "bot" },
+        { categoria: "nota", clave: "nota_1", valor: "es mayorista", origen: "dueño" },
+      ],
+    });
+
+    const cuerpo = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    const prompt = cuerpo.messages[0].content as string;
+    expect(prompt).toContain("nombre_completo: Camila");
+    expect(prompt).toContain("talla_preferida: M");
+    expect(prompt).toContain("(nota de la dueña) es mayorista");
+  });
+
+  it("si no hay nombre_completo en memoria, el prompt pide preguntarlo con naturalidad", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({ action: "chat", params: {}, response_message: "Hola" }) } }],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { decidirAccion } = await import("./agent.ts");
+    await decidirAccion({ rol: "customer", historial: [], mensajeEntrante: "hola", memoriaCliente: [] });
+
+    const cuerpo = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    const prompt = cuerpo.messages[0].content as string;
+    expect(prompt).toContain("No sabes el nombre de esta clienta todavía");
+  });
+
+  it("si ya hay nombre_completo en memoria, el prompt pide dirigirse a ella por su nombre y no volver a preguntarlo", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({ action: "chat", params: {}, response_message: "Hola" }) } }],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { decidirAccion } = await import("./agent.ts");
+    await decidirAccion({
+      rol: "customer",
+      historial: [],
+      mensajeEntrante: "hola",
+      memoriaCliente: [{ categoria: "contacto", clave: "nombre_completo", valor: "Camila", origen: "bot" }],
+    });
+
+    const cuerpo = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    const prompt = cuerpo.messages[0].content as string;
+    expect(prompt).toContain("Dirígete a ella por su nombre, Camila");
+    expect(prompt).toContain("Nunca vuelvas a preguntarle el nombre ni la ciudad");
+  });
+
+  it("el prompt de cliente documenta el campo memoria y su vocabulario cerrado de claves", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({ action: "chat", params: {}, response_message: "Hola" }) } }],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { decidirAccion } = await import("./agent.ts");
+    await decidirAccion({ rol: "customer", historial: [], mensajeEntrante: "hola", memoriaCliente: [] });
+
+    const cuerpo = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    const prompt = cuerpo.messages[0].content as string;
+    for (const clave of ["talla_preferida", "color_favorito", "ciudad_habitual", "resumen_conversacion"]) {
+      expect(prompt).toContain(clave);
+    }
+    expect(prompt).toContain("memoria");
+  });
+
+  it("el bloque de memoria se recorta a los 20 hechos mas recientes", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({ action: "chat", params: {}, response_message: "Hola" }) } }],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const memoriaCliente = Array.from({ length: 25 }, (_, i) => ({
+      categoria: "nota", clave: `nota_${i}`, valor: `nota numero ${i}`, origen: "dueño",
+    }));
+
+    const { decidirAccion } = await import("./agent.ts");
+    await decidirAccion({ rol: "customer", historial: [], mensajeEntrante: "hola", memoriaCliente });
+
+    const cuerpo = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    const prompt = cuerpo.messages[0].content as string;
+    expect(prompt).toContain("nota numero 0");
+    expect(prompt).not.toContain("nota numero 20");
+  });
+
   it("incluye el nombre del dueño en el prompt cuando el rol es owner", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({
       choices: [{ message: { content: JSON.stringify({ action: "chat", params: {}, response_message: "Hola Elkin" }) } }],

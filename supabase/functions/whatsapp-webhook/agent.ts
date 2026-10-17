@@ -1,4 +1,5 @@
 import type { AgentDecision, RolRemitente } from "../_shared/types.ts";
+import { CLAVES_VALIDAS, type RecuerdoCliente } from "./memory.ts";
 
 // Cada accion con las claves EXACTAS de "params" que lee handler.ts
 // (ejecutarAccionCliente / ejecutarAccionLectura / ejecutarAccionEscritura).
@@ -40,7 +41,29 @@ const FORMATO_RESPUESTA =
   `"params" debe usar EXACTAMENTE las claves documentadas para esa accion (mismos nombres, mismos tipos). ` +
   `Usa "chat" solo si ninguna otra accion aplica o si te falta un dato obligatorio para otra accion.`;
 
-function promptSistema(rol: RolRemitente, nombreDueno?: "Elkin" | "Mary"): string {
+const TOPE_MEMORIA = 20;
+
+function bloqueMemoria(memoria: RecuerdoCliente[]): string {
+  if (memoria.length === 0) return "";
+  const lineas = memoria.slice(0, TOPE_MEMORIA).map((m) =>
+    m.categoria === "nota" ? `(nota de la dueña) ${m.valor}` : `- ${m.clave}: ${m.valor}`
+  );
+  return `Lo que ya sabes de esta clienta:\n${lineas.join("\n")}\n`;
+}
+
+function reglaNombre(memoria: RecuerdoCliente[]): string {
+  const nombre = memoria.find((m) => m.clave === "nombre_completo")?.valor;
+  return nombre
+    ? `Dirígete a ella por su nombre, ${nombre}, de forma natural (no en cada frase, pero que se note que la reconoces). Nunca vuelvas a preguntarle el nombre ni la ciudad. `
+    : `No sabes el nombre de esta clienta todavía — pregúntaselo con naturalidad, junto con desde dónde escribe (ciudad), antes de seguir. No la interrogues: si ya te pidió algo puntual, respóndele primero y pregunta de forma natural en el mismo mensaje, no antes. `;
+}
+
+const VOCABULARIO_MEMORIA_TEXTO = CLAVES_VALIDAS.filter((c) => c !== "resumen_conversacion").join(", ");
+
+const INSTRUCCION_MEMORIA =
+  `Si la clienta menciona su nombre, de dónde escribe, su talla, un color que le encanta, una ocasión para la que compra, o cualquier dato que valga la pena recordar para la próxima vez, inclúyelo además en "memoria": un arreglo de {"categoria": "contacto"|"preferencia"|"resumen", "clave": string, "valor": string}. Usa EXACTAMENTE una de estas claves — nunca inventes otras — para "contacto"/"preferencia": ${VOCABULARIO_MEMORIA_TEXTO}. Si quieres dejar actualizado un resumen de en qué va la conversación, usa categoria "resumen" y clave fija "resumen_conversacion". Si no hay nada nuevo que recordar, omite "memoria" o mándala vacía.`;
+
+function promptSistema(rol: RolRemitente, nombreDueno?: "Elkin" | "Mary", memoriaCliente: RecuerdoCliente[] = []): string {
   if (rol === "owner") {
     return `Eres el asistente interno de MeryLay Boutique, hablando con ${nombreDueno}, dueño del negocio. ` +
       `Tiene acceso total de lectura y escritura sobre el negocio. ` +
@@ -48,12 +71,15 @@ function promptSistema(rol: RolRemitente, nombreDueno?: "Elkin" | "Mary"): strin
       `${FORMATO_RESPUESTA}\n` +
       `Acciones disponibles y sus params:${ACCIONES_DUENO}`;
   }
-  return `Eres Mery, la asesora de ventas de MeryLay Boutique ("Inspiración Femenina"), atendiendo a una clienta por WhatsApp. ` +
+  return bloqueMemoria(memoriaCliente) +
+    reglaNombre(memoriaCliente) +
+    `Eres Mery, la asesora de ventas de MeryLay Boutique ("Inspiración Femenina"), atendiendo a una clienta por WhatsApp. ` +
     `Trabaja con la actitud de una buena "appointment setter": cercana, atenta y resolutiva — nunca como un catálogo automático que solo dispara fotos sin contexto. ` +
     `Antes de decidir una acción, LEE con atención qué te escribió o qué producto le interesó, y arma un response_message que lo reconozca específicamente (nombra el producto o lo que pidió) en vez de un saludo genérico. ` +
     `Si el mensaje ya trae información suficiente para actuar (un producto puntual, una talla, "quiero ver pijamas"), ejecuta la acción correspondiente de una vez — no le hagas perder tiempo con preguntas que no necesitas, eso también aleja a la clienta. Si en cambio el pedido es muy abierto y una sola pregunta corta te ayudaría a dar una mejor recomendación (ej. "busco algo para regalar" sin más detalle), usa "chat" para preguntar ANTES de buscar — nunca más de una pregunta a la vez. ` +
     `${FORMATO_RESPUESTA}\n` +
     `Acciones disponibles y sus params:${ACCIONES_CLIENTE}\n` +
+    `${INSTRUCCION_MEMORIA}\n` +
     `Los precios, nombres y stock los obtiene el sistema de la base de datos: nunca los incluyas en params ni los inventes en response_message. ` +
     `Saluda con cordialidad SOLO en el primer mensaje de la conversación; después de eso ve directo a lo que la clienta necesita, sin repetir el saludo. Mantén siempre un tono cálido y personal, acorde a "Inspiración Femenina", nunca robótico ni de plantilla. ` +
     `Sé mucho más humana y conversacional: no sueltes solo la respuesta funcional, genera conversación real — haz una pequeña observación o pregunta de seguimiento genuina cuando venga al caso (ej. si pregunta por un vestido para una ocasión, interésate por la ocasión), celebra sus gustos, y deja que se note que disfrutas ayudarla, no que estás ejecutando un guion. Usa emojis con naturalidad en cada response_message (💕🎀✨👗😊, etc. — los que calcen con lo que dice, sin forzar ni abusar) y enriquece el texto con un poco más de contenido útil (un detalle del producto, un tip de combinación, por qué te encanta esa prenda) en vez de frases cortas y secas, siempre dentro de 2-4 líneas como máximo para que se lea natural en WhatsApp, no como un párrafo largo.`;
@@ -119,9 +145,10 @@ export async function decidirAccion(opts: {
   nombreDueno?: "Elkin" | "Mary";
   historial: { direction: "inbound" | "outbound"; message_body: string }[];
   mensajeEntrante: string;
+  memoriaCliente?: RecuerdoCliente[];
 }): Promise<AgentDecision> {
   const mensajes = [
-    { role: "system", content: promptSistema(opts.rol, opts.nombreDueno) },
+    { role: "system", content: promptSistema(opts.rol, opts.nombreDueno, opts.memoriaCliente ?? []) },
     ...opts.historial.map((m) => ({
       role: m.direction === "inbound" ? "user" : "assistant",
       content: m.message_body,
@@ -135,7 +162,12 @@ export async function decidirAccion(opts: {
     if (typeof decision.action !== "string" || typeof decision.response_message !== "string") {
       throw new Error("Respuesta de OpenAI sin el formato esperado.");
     }
-    return { action: decision.action, params: decision.params ?? {}, response_message: decision.response_message };
+    return {
+      action: decision.action,
+      params: decision.params ?? {},
+      response_message: decision.response_message,
+      memoria: Array.isArray(decision.memoria) ? decision.memoria : undefined,
+    };
   } catch (error) {
     console.error("[agent] Error llamando a OpenAI o parseando su respuesta:", error);
     return {
