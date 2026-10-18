@@ -61,6 +61,58 @@ describe("buscarOCrearCliente", () => {
       user_metadata: { whatsapp: "573001234567" },
     });
   });
+
+  // Bug real (2026-10-18): dos mensajes casi simultaneos del mismo numero
+  // NUEVO (ej. la clienta manda dos mensajes seguidos antes de que el primero
+  // termine de crear su perfil) hacian que ambos vieran "no existe ningun
+  // perfil" y los dos intentaran crear el mismo usuario sintetico -- el
+  // primero ganaba, el segundo chocaba con "duplicate key value violates
+  // unique constraint users_email_partial_key" (createUser devuelve el
+  // generico "Database error creating new user") y la clienta se quedaba sin
+  // ninguna respuesta.
+  it("si crear el usuario falla porque otro mensaje casi simultaneo ya lo creo, reusa ese perfil en vez de fallar", async () => {
+    const rpc = vi.fn()
+      .mockResolvedValueOnce({ data: null, error: null })
+      .mockResolvedValueOnce({ data: "perfil-creado-por-la-otra-solicitud", error: null });
+    const supabase = mockSupabase({
+      rpc,
+      auth: {
+        admin: {
+          createUser: vi.fn(async () => ({ data: { user: null }, error: { message: "Database error creating new user" } })),
+          updateUserById: vi.fn(),
+          getUserById: vi.fn(),
+        },
+      },
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { buscarOCrearCliente } = await import("./customers.ts");
+    const resultado = await buscarOCrearCliente("573001234567");
+
+    expect(resultado).toEqual({ profileId: "perfil-creado-por-la-otra-solicitud", esNuevo: false });
+    expect(rpc).toHaveBeenCalledTimes(2);
+  });
+
+  it("si crear el usuario falla y el perfil sigue sin existir (fallo real, no carrera), lanza el error", async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: null, error: null });
+    const supabase = mockSupabase({
+      rpc,
+      auth: {
+        admin: {
+          createUser: vi.fn(async () => ({ data: { user: null }, error: { message: "Database error creating new user" } })),
+          updateUserById: vi.fn(),
+          getUserById: vi.fn(),
+        },
+      },
+    });
+    const { getSupabase } = await import("../_shared/db.ts");
+    (getSupabase as unknown as ReturnType<typeof vi.fn>).mockReturnValue(supabase);
+
+    const { buscarOCrearCliente } = await import("./customers.ts");
+    await expect(buscarOCrearCliente("573001234567")).rejects.toThrow(/Database error creating new user/);
+    expect(rpc).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("generarAccesoWeb", () => {

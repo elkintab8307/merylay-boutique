@@ -4,18 +4,23 @@ export function normalizarTelefono(telefono: string): string {
   return telefono.replace(/\D/g, "");
 }
 
+async function buscarProfileIdPorTelefono(
+  supabase: ReturnType<typeof getSupabase>,
+  digitos: string,
+): Promise<string | null> {
+  const { data } = await supabase.rpc("buscar_profile_por_telefono", { p_telefono: digitos });
+  return (data as string | null) ?? null;
+}
+
 export async function buscarOCrearCliente(
   telefono: string,
 ): Promise<{ profileId: string; esNuevo: boolean }> {
   const digitos = normalizarTelefono(telefono);
   const supabase = getSupabase();
 
-  const { data: profileId } = await supabase.rpc("buscar_profile_por_telefono", {
-    p_telefono: digitos,
-  });
-
+  const profileId = await buscarProfileIdPorTelefono(supabase, digitos);
   if (profileId) {
-    return { profileId: profileId as string, esNuevo: false };
+    return { profileId, esNuevo: false };
   }
 
   const { data, error } = await supabase.auth.admin.createUser({
@@ -25,6 +30,15 @@ export async function buscarOCrearCliente(
   });
 
   if (error || !data.user) {
+    // Carrera: dos mensajes casi simultaneos del mismo numero nuevo pueden
+    // ver los dos "no existe ningun perfil" y los dos intentar crearlo -- el
+    // primero gana, el segundo choca con el email sintetico que el primero
+    // ya creo. Si para cuando llegamos aqui el perfil ya existe (lo creo la
+    // otra solicitud), se reusa en vez de fallarle la respuesta a la clienta.
+    const profileIdTrasCarrera = await buscarProfileIdPorTelefono(supabase, digitos);
+    if (profileIdTrasCarrera) {
+      return { profileId: profileIdTrasCarrera, esNuevo: false };
+    }
     throw new Error(`No se pudo crear el cliente de WhatsApp ${digitos}: ${error?.message}`);
   }
 
