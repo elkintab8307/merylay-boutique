@@ -387,6 +387,23 @@ describe("ejecutarAccionCliente via procesarMensajeEntrante", () => {
     }));
   });
 
+  it("tras agregar un producto al carrito, siempre ofrece generar el link de pago (sin depender de que el modelo lo sugiera)", async () => {
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.10e", from: "573009998888", texto: "agrega la pijama rosa" });
+    mocks.decidirAccion.mockResolvedValue({
+      action: "agregar_al_carrito",
+      params: { productId: PRODUCTO_ID, variantId: VARIANTE_ID, qty: 1 },
+      response_message: "",
+    });
+    clienteMocks.obtenerProductoParaCarrito.mockResolvedValue({
+      productId: PRODUCTO_ID, variantId: VARIANTE_ID, nombre: "Pijama Rosa (Talla M)", precio: 89900, stock: 5, imageId: null,
+    });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.enviarTexto).toHaveBeenCalledWith("573009998888", expect.stringContaining("¿Quieres que te genere ya el link de pago"));
+  });
+
   it("rechaza con un mensaje amable un agregar_al_carrito con params invalidos (sin consultar la base de datos)", async () => {
     mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.10b", from: "573009998888", texto: "agrega la rosa" });
     mocks.decidirAccion.mockResolvedValue({
@@ -1038,6 +1055,9 @@ describe("pedido armado en el carrito nativo del catalogo (mensaje 'order')", ()
     const [, respuesta] = mocks.enviarTexto.mock.calls[0];
     expect(respuesta).toContain("Pijama Rosa x2");
     expect(respuesta).toContain("Bata Dorada");
+    // La oferta de pago fija debe salir UNA sola vez por mensaje, nunca una
+    // vez por cada item del pedido.
+    expect(respuesta.match(/¿Quieres que te genere ya el link de pago/g)).toHaveLength(1);
   });
 
   it("producto agotado responde 'agotado' sin agregarlo al carrito", async () => {
