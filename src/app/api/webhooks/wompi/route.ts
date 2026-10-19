@@ -5,6 +5,7 @@ import { verificarFirmaEvento } from "@/lib/wompi/signature";
 import { eventoWompiSchema } from "@/lib/wompi/webhook-payload";
 import { enviarCorreo } from "@/lib/email/resend";
 import { ConfirmacionPedidoEmail } from "@/lib/email/templates/confirmacion-pedido-email";
+import { enviarConfirmacionPagoWhatsapp } from "@/lib/whatsapp/confirmar-pago";
 
 const ESTADOS_CANCELADOS = new Set(["DECLINED", "VOIDED", "ERROR"]);
 
@@ -214,11 +215,19 @@ export async function POST(request: NextRequest) {
       try {
         const { data: pedidoCompleto } = await admin
           .from("orders")
-          .select("id, order_number, total, payment_method, user_id, shipping_address")
+          .select("id, order_number, total, payment_method, user_id, shipping_address, channel")
           .eq("id", pedido.id)
           .single();
 
-        if (pedidoCompleto) {
+        if (pedidoCompleto && pedidoCompleto.channel === "whatsapp") {
+          // La clienta pago desde WhatsApp: su perfil tiene un correo
+          // sintetico (<telefono>@merylay.local, ver
+          // supabase/functions/whatsapp-webhook/customers.ts) que nunca lee,
+          // asi que el correo de abajo no le llegaria. Se le confirma por el
+          // mismo canal donde compro; `enviarConfirmacionPagoWhatsapp` es
+          // fail-open (nunca lanza) igual que `enviarCorreo`.
+          await enviarConfirmacionPagoWhatsapp({ orderId: pedidoCompleto.id });
+        } else if (pedidoCompleto) {
           const { data: usuario } = await admin.auth.admin.getUserById(
             pedidoCompleto.user_id,
           );
