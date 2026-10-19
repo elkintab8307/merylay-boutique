@@ -9,6 +9,7 @@ import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { enviarCorreo } from "@/lib/email/resend";
+import { enviarConfirmacionPagoWhatsapp } from "@/lib/whatsapp/confirmar-pago";
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: vi.fn(),
@@ -20,6 +21,12 @@ vi.mock("@/lib/supabase/admin", () => ({
 // el correo de confirmacion.
 vi.mock("@/lib/email/resend", () => ({
   enviarCorreo: vi.fn(),
+}));
+
+// Mockeado por la misma razon que `enviarCorreo`: sin esto, un pedido de
+// canal "whatsapp" dispararia un `fetch` real a la Edge Function.
+vi.mock("@/lib/whatsapp/confirmar-pago", () => ({
+  enviarConfirmacionPagoWhatsapp: vi.fn(),
 }));
 
 const SECRET = "test_events_secret";
@@ -178,6 +185,8 @@ describe("POST /api/webhooks/wompi", () => {
     vi.mocked(createAdminClient).mockReset();
     vi.mocked(enviarCorreo).mockReset();
     vi.mocked(enviarCorreo).mockResolvedValue({ id: "email-test-id" });
+    vi.mocked(enviarConfirmacionPagoWhatsapp).mockReset();
+    vi.mocked(enviarConfirmacionPagoWhatsapp).mockResolvedValue({ ok: true });
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
@@ -525,6 +534,66 @@ describe("POST /api/webhooks/wompi", () => {
     expect(argumentos.subject).toMatch(/confirmaci/i);
     expect(argumentos.react.props).toEqual(
       expect.objectContaining({ variante: "pagado" }),
+    );
+  });
+
+  it("APPROVED de un pedido del canal whatsapp: confirma por WhatsApp y NO intenta enviar correo (su email es sintetico, nunca llegaria)", async () => {
+    const admin = crearAdminMock({
+      selectResultado: { data: { id: "order-uuid-1", total: 44900, status: "pendiente" }, error: null },
+      rpcResultado: { data: { id: "order-uuid-1", status: "pagado" }, error: null },
+      pedidoCompletoResultado: {
+        data: {
+          id: "order-uuid-1",
+          order_number: "ML-20260807-abc123",
+          total: 44900,
+          payment_method: "wompi",
+          user_id: "user-uuid-1",
+          shipping_address: null,
+          channel: "whatsapp",
+        },
+        error: null,
+      },
+    });
+    vi.mocked(createAdminClient).mockReturnValue(admin as never);
+
+    const { POST } = await import("../route");
+    const evento = construirEvento({ transaccion: { amount_in_cents: 4490000 } });
+    const response = await POST(crearRequest(evento));
+
+    expect(response.status).toBe(200);
+    expect(enviarConfirmacionPagoWhatsapp).toHaveBeenCalledWith({ orderId: "order-uuid-1" });
+    expect(admin.auth.admin.getUserById).not.toHaveBeenCalled();
+    expect(enviarCorreo).not.toHaveBeenCalled();
+  });
+
+  it("APPROVED de un pedido del canal whatsapp cuyo envio de confirmacion falla inesperadamente: registra el error y aun asi responde 200", async () => {
+    const admin = crearAdminMock({
+      selectResultado: { data: { id: "order-uuid-1", total: 44900, status: "pendiente" }, error: null },
+      rpcResultado: { data: { id: "order-uuid-1", status: "pagado" }, error: null },
+      pedidoCompletoResultado: {
+        data: {
+          id: "order-uuid-1",
+          order_number: "ML-20260807-abc123",
+          total: 44900,
+          payment_method: "wompi",
+          user_id: "user-uuid-1",
+          shipping_address: null,
+          channel: "whatsapp",
+        },
+        error: null,
+      },
+    });
+    vi.mocked(enviarConfirmacionPagoWhatsapp).mockRejectedValue(new Error("fallo inesperado"));
+    vi.mocked(createAdminClient).mockReturnValue(admin as never);
+
+    const { POST } = await import("../route");
+    const evento = construirEvento({ transaccion: { amount_in_cents: 4490000 } });
+    const response = await POST(crearRequest(evento));
+
+    expect(response.status).toBe(200);
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("[email]"),
+      expect.any(Error),
     );
   });
 

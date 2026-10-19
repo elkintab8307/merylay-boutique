@@ -252,6 +252,16 @@ function aplicarAlCarrito(sessionData: SessionData, producto: catalog.ProductoPa
   return `Agregado: ${producto.nombre} x${qtyTotal}. Tu carrito tiene ${sessionData.cart.length} producto(s), total $${total.toLocaleString("es-CO")}.`;
 }
 
+// Oferta fija de pago (no depende de que el modelo se acuerde de sugerirla):
+// se agrega UNA sola vez por mensaje de la clienta, nunca por item -- un
+// pedido de varios items del carrusel nativo (manejarPedidoCatalogo) no debe
+// repetirla una vez por cada producto agregado.
+function ofertaDePago(sessionData: SessionData): string {
+  return sessionData.cart.length > 0
+    ? "\n\n¿Quieres que te genere ya el link de pago, o prefieres seguir mirando? 💕"
+    : "";
+}
+
 async function agregarAlCarrito(
   sessionData: SessionData,
   productId: string,
@@ -265,7 +275,7 @@ async function agregarAlCarrito(
   if (!producto) {
     return "No encontré ese producto (o esa talla/color) en el catálogo. ¿Me dices de nuevo cuál quieres?";
   }
-  return aplicarAlCarrito(sessionData, producto, qty);
+  return aplicarAlCarrito(sessionData, producto, qty) + ofertaDePago(sessionData);
 }
 
 // El cliente arma su propio carrito tocando productos en el carrusel nativo
@@ -287,7 +297,7 @@ async function manejarPedidoCatalogo(
     }
     mensajes.push(aplicarAlCarrito(sessionData, producto, item.cantidad));
   }
-  return mensajes.join("\n\n");
+  return mensajes.join("\n\n") + ofertaDePago(sessionData);
 }
 
 interface RespuestaSaliente {
