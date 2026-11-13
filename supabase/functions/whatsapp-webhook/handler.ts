@@ -487,6 +487,14 @@ export async function procesarMensajeEntrante(payload: unknown): Promise<void> {
 
   const telefono = normalizarTelefono(entrante.from);
 
+  // Por ahora el bot solo atiende a los dueños: las clientas escriben a un
+  // numero que atiende una persona. Fail-closed: si BOT_CLIENTES_ACTIVO no
+  // es exactamente "true", cualquier numero que no sea dueño se ignora (sin
+  // leido, sin indicador de escribiendo, sin respuesta). Para reactivar el
+  // bot con clientas basta con poner BOT_CLIENTES_ACTIVO=true en la Edge
+  // Function.
+  if (!esDueno(telefono) && Deno.env.get("BOT_CLIENTES_ACTIVO") !== "true") return;
+
   // Marca el mensaje como leido y activa el indicador de "escribiendo..." lo
   // antes posible -- antes de transcribir audio o de llamar a OpenAI, que es
   // justo la espera que el indicador debe cubrir. Es un efecto secundario de
