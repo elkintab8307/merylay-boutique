@@ -101,7 +101,7 @@ const VARIANTE_ID = "22222222-2222-4222-8222-222222222222";
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.stubGlobal("Deno", { env: { get: vi.fn((k: string) => (k === "WHATSAPP_OWNER_NUMBERS" ? "573215879805,573102862373" : undefined)) } });
+  vi.stubGlobal("Deno", { env: { get: vi.fn((k: string) => (k === "WHATSAPP_OWNER_NUMBERS" ? "573215879805,573102862373" : k === "BOT_CLIENTES_ACTIVO" ? "true" : undefined)) } });
   dbMocks.insertarMensaje.mockResolvedValue({ error: null });
   mocks.buscarOCrearCliente.mockResolvedValue({ profileId: "perfil-1", esNuevo: false });
   mocks.obtenerOCrearSesion.mockResolvedValue({ id: "sesion-1", sessionData: { cart: [], pendingConfirmation: null } });
@@ -123,6 +123,17 @@ describe("procesarMensajeEntrante", () => {
     await procesarMensajeEntrante({});
 
     expect(mocks.decidirAccion).not.toHaveBeenCalled();
+  });
+
+  it("el bot no responde a clientas: un mensaje de un numero que no es dueño no genera respuesta ni llama al agente", async () => {
+    vi.stubGlobal("Deno", { env: { get: vi.fn((k: string) => (k === "WHATSAPP_OWNER_NUMBERS" ? "573215879805,573102862373" : undefined)) } });
+    mocks.parsearMensajeEntrante.mockReturnValue({ kind: "texto", messageId: "wamid.cli1", from: "573001234567", texto: "hola" });
+
+    const { procesarMensajeEntrante } = await import("./handler.ts");
+    await procesarMensajeEntrante({});
+
+    expect(mocks.decidirAccion).not.toHaveBeenCalled();
+    expect(mocks.enviarTexto).not.toHaveBeenCalled();
   });
 
   it("carga la memoria de la clienta y la pasa a decidirAccion (rol customer)", async () => {
