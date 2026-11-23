@@ -396,6 +396,41 @@ export type Database = {
           },
         ]
       }
+      order_attribution: {
+        Row: {
+          client_ip: string | null
+          created_at: string
+          order_id: string
+          ttclid: string | null
+          ttp: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          client_ip?: string | null
+          created_at?: string
+          order_id: string
+          ttclid?: string | null
+          ttp?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          client_ip?: string | null
+          created_at?: string
+          order_id?: string
+          ttclid?: string | null
+          ttp?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_attribution_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: true
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       orders: {
         Row: {
           channel: string
@@ -407,6 +442,8 @@ export type Database = {
           shipping_address: Json | null
           status: Database["public"]["Enums"]["order_status"]
           subtotal: number
+          tiktok_reported_at: string | null
+          tiktok_tracked_at: string | null
           total: number
           user_id: string
           wompi_transaction_id: string | null
@@ -435,6 +472,8 @@ export type Database = {
           shipping_address?: Json | null
           status?: Database["public"]["Enums"]["order_status"]
           subtotal?: number
+          tiktok_reported_at?: string | null
+          tiktok_tracked_at?: string | null
           total?: number
           user_id?: string
           wompi_transaction_id?: string | null

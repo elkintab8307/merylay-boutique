@@ -9,6 +9,7 @@ import { iniciarPagoWompi } from "./wompi-actions";
 import { WompiCheckoutButton } from "./wompi-checkout-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { identificarClienta, trackInitiateCheckout } from "@/lib/tracking/tiktok-browser";
 
 type DatosWompi = {
   orderId: string;
@@ -17,7 +18,14 @@ type DatosWompi = {
   currency: string;
   publicKey: string;
   signature: string;
+  productos?: { id: string; name: string; price: number; quantity: number }[];
 };
+
+// Celular colombiano de 10 digitos a E.164 para el pixel. Si no encaja, no se envia.
+function telefonoE164(telefono: string): string | undefined {
+  const digitos = telefono.replace(/\D/g, "");
+  return digitos.length === 10 ? `+57${digitos}` : undefined;
+}
 
 export function CheckoutForm({
   defaultValues,
@@ -48,6 +56,11 @@ export function CheckoutForm({
       if ("error" in result) {
         setServerError(result.error);
         return;
+      }
+      // Antes de abrir el widget de Wompi: identifica a la clienta y registra el inicio de pago.
+      identificarClienta({ telefonoE164: telefonoE164(data.phone) });
+      if (result.productos && result.productos.length > 0) {
+        trackInitiateCheckout(result.productos);
       }
       setDatosWompi(result);
       return;

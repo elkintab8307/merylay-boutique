@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Truck, ShieldCheck, RefreshCw } from "lucide-react";
+import { trackViewContent } from "@/lib/tracking/tiktok-browser";
 import { formatPrice } from "@/lib/format";
 import { calcularDescuento, precioEfectivo } from "@/lib/store/discount";
 import { ProductGallery } from "./product-gallery";
@@ -60,6 +61,10 @@ export function ProductDetailInteractive({
     : [];
   const descuento = calcularDescuento(price, promoPrice);
   const precioMostrado = precioEfectivo(price, promoPrice);
+
+  useEffect(() => {
+    trackViewContent({ id: productId, name: productName, price: precioMostrado });
+  }, [productId, productName, precioMostrado]);
 
   const handleSelectVariant = (variantId: string | null) => {
     if (!variantId) return;

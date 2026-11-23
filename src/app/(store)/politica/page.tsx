@@ -172,6 +172,10 @@ export default function PoliticaPrivacidadPage() {
               transaccionales (confirmación de pedido, cambios de estado).
             </li>
             <li>
+              <strong>TikTok</strong> — para medir las compras de nuestras campañas
+              publicitarias (ver sección 6).
+            </li>
+            <li>
               Autoridades competentes, cuando la ley así lo exija.
             </li>
           </ul>
@@ -188,6 +192,16 @@ export default function PoliticaPrivacidadPage() {
             recogen datos de navegación de forma anónima o seudonimizada, conforme
             a las políticas de privacidad de Meta y TikTok. Estos píxeles solo se
             cargan en la tienda pública, nunca en los paneles administrativos.
+          </p>
+          <p>
+            Cuando completas una compra en línea, enviamos a TikTok un registro de
+            esa compra desde nuestro servidor (Events API). Ese registro incluye el
+            valor y los productos del pedido. El correo, el teléfono y el identificador
+            de cliente van cifrados con SHA-256. También enviamos la dirección IP, el tipo
+            de navegador y, si llegaste desde un anuncio de TikTok, el identificador del
+            clic (ttclid). Desde el navegador, al iniciar el pago, el píxel de TikTok
+            recibe tu teléfono para asociar la visita con la compra. Estos datos sirven
+            para medir y optimizar nuestros anuncios.
           </p>
           <p>
             La tienda usa cookies y almacenamiento local del navegador para recordar
