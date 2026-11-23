@@ -189,6 +189,13 @@ export default function PoliticaPrivacidadPage() {
             a las políticas de privacidad de Meta y TikTok. Estos píxeles solo se
             cargan en la tienda pública, nunca en los paneles administrativos.
           </p>
+          <p>
+            La tienda usa cookies y almacenamiento local del navegador para recordar
+            que viste el aviso de cookies y para el funcionamiento de la tienda. Puedes
+            bloquear o eliminar cookies desde la configuración de tu navegador en
+            cualquier momento; algunas funciones, como el carrito, podrían dejar de
+            funcionar correctamente.
+          </p>
         </section>
 
         <section className="flex flex-col gap-2">

@@ -5,6 +5,7 @@ import { PromoBar } from "@/components/layout/promo-bar";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { TrackingPixels } from "@/components/analytics/tracking-pixels";
 import { WhatsappFloatingButton } from "@/components/store/whatsapp-floating-button";
+import { CookieBanner } from "@/components/layout/cookie-banner";
 
 export function PublicLayoutShell({ children }: { children: ReactNode }) {
   return (
@@ -18,6 +19,7 @@ export function PublicLayoutShell({ children }: { children: ReactNode }) {
       <SiteFooter />
       <WhatsappFloatingButton />
       <MobileBottomNav />
+      <CookieBanner />
     </>
   );
 }
