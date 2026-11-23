@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { TikTokPurchaseTracker } from "./tiktok-purchase-tracker";
 
 const MENSAJES_ESTADO: Record<string, string> = {
   APPROVED:
@@ -40,6 +41,7 @@ export default async function WompiRetornoPage({
           Estado actual del pedido: <strong>{pedido.status}</strong>
         </p>
       )}
+      {pedido?.status === "pagado" && <TikTokPurchaseTracker orderId={pedido.id} />}
       <Link href="/cuenta/pedidos" className="text-brand-rosa hover:underline">
         Ver mis pedidos
       </Link>

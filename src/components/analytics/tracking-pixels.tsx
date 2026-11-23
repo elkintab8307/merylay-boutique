@@ -1,9 +1,38 @@
 "use client";
 
+import { Suspense, useEffect, useRef } from "react";
 import Script from "next/script";
+import { usePathname, useSearchParams } from "next/navigation";
+import { registrarVistaPagina } from "@/lib/tracking/tiktok-browser";
 
 const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID;
 const TIKTOK_PIXEL_ID = process.env.NEXT_PUBLIC_TIKTOK_PIXEL_ID;
+
+// Dias que se conserva el ttclid (id de clic del anuncio de TikTok) para
+// atribuir la compra si la clienta compra mas tarde.
+const DIAS_TTCLID = 90;
+
+// Next.js no recarga la pagina al navegar: TikTok necesita un page() por cada
+// cambio de ruta. La primera vista ya la registra el script base.
+function TikTokPageTracker() {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const primera = useRef(true);
+
+  useEffect(() => {
+    const ttclid = searchParams.get("ttclid");
+    if (ttclid) {
+      document.cookie = `ttclid=${encodeURIComponent(ttclid)}; max-age=${DIAS_TTCLID * 86400}; path=/; SameSite=Lax`;
+    }
+    if (primera.current) {
+      primera.current = false;
+      return;
+    }
+    registrarVistaPagina();
+  }, [pathname, searchParams]);
+
+  return null;
+}
 
 export function TrackingPixels() {
   return (
@@ -34,6 +63,11 @@ export function TrackingPixels() {
             }(window, document, 'ttq');
           `}
         </Script>
+      )}
+      {TIKTOK_PIXEL_ID && (
+        <Suspense fallback={null}>
+          <TikTokPageTracker />
+        </Suspense>
       )}
     </>
   );

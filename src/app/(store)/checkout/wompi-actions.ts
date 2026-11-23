@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { checkoutSchema, type CheckoutInput } from "@/lib/validation/checkout";
 import { calcularFirmaIntegridad } from "@/lib/wompi/signature";
+import { guardarAtribucionPedido } from "@/lib/tracking/atribucion";
 
 type PagoWompiIniciado = {
   orderId: string;
@@ -11,6 +12,8 @@ type PagoWompiIniciado = {
   currency: string;
   publicKey: string;
   signature: string;
+  // Productos del pedido para el evento InitiateCheckout del pixel.
+  productos?: { id: string; name: string; price: number; quantity: number }[];
 };
 
 const MONEDA = "COP";
@@ -65,6 +68,14 @@ export async function iniciarPagoWompi(
     return { error: error?.message ?? "No se pudo iniciar el pago." };
   }
 
+  // Atribucion de TikTok (fail-open: nunca bloquea el pago).
+  await guardarAtribucionPedido(pedido.id);
+
+  const { data: lineas } = await supabase
+    .from("order_items")
+    .select("product_id, name_snapshot, unit_price, qty")
+    .eq("order_id", pedido.id);
+
   const amountInCents = Math.round(pedido.total * 100);
   const signature = calcularFirmaIntegridad(
     pedido.order_number,
@@ -80,6 +91,12 @@ export async function iniciarPagoWompi(
     currency: MONEDA,
     publicKey: credenciales.publicKey,
     signature,
+    productos: (lineas ?? []).map((linea) => ({
+      id: linea.product_id ?? linea.name_snapshot,
+      name: linea.name_snapshot,
+      price: linea.unit_price,
+      quantity: linea.qty,
+    })),
   };
 }
 

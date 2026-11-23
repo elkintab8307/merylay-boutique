@@ -6,6 +6,7 @@ import { eventoWompiSchema } from "@/lib/wompi/webhook-payload";
 import { enviarCorreo } from "@/lib/email/resend";
 import { ConfirmacionPedidoEmail } from "@/lib/email/templates/confirmacion-pedido-email";
 import { enviarConfirmacionPagoWhatsapp } from "@/lib/whatsapp/confirmar-pago";
+import { reportarCompraPedido } from "@/lib/tracking/reportar-compra-pedido";
 
 const ESTADOS_CANCELADOS = new Set(["DECLINED", "VOIDED", "ERROR"]);
 
@@ -270,6 +271,10 @@ export async function POST(request: NextRequest) {
           emailError,
         );
       }
+
+      // Purchase a TikTok (Events API). Mismo criterio que el correo: solo en la
+      // transicion real a pagado, y nunca puede romper el webhook.
+      await reportarCompraPedido(admin, pedido.id);
     }
   } else if (ESTADOS_CANCELADOS.has(transaccion.status)) {
     const { error: errorUpdate } = await admin

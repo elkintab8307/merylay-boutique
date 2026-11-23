@@ -9,6 +9,7 @@ import {
 } from "@/lib/store/variants";
 import { getLocalCart, saveLocalCart, mergeCartItem, type LocalCartItem } from "@/lib/cart/local-cart";
 import { addToCart } from "@/app/(store)/carrito/actions";
+import { trackAddToCart } from "@/lib/tracking/tiktok-browser";
 import { EstampadoPickerModal, type EstampadoOption } from "@/components/store/estampado-picker-modal";
 
 export function ProductVariantSelector({
@@ -83,6 +84,10 @@ export function ProductVariantSelector({
         stock: stockDisponible,
       };
     });
+
+    for (const item of items) {
+      trackAddToCart({ id: item.productId, name: item.name, price: item.unitPrice, quantity: item.qty });
+    }
 
     if (currentUserId) {
       startTransition(async () => {

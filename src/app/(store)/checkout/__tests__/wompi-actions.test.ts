@@ -96,6 +96,7 @@ describe("iniciarPagoWompi", () => {
       amountInCents: 4490000,
       currency: "COP",
       publicKey: LLAVE_PUBLICA,
+      productos: [],
       signature: calcularFirmaIntegridad(
         "ML-20260807-abc123",
         4490000,

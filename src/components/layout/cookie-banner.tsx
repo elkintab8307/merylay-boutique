@@ -1,34 +1,46 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import Link from "next/link";
 
 // Clave de localStorage: solo recuerda que la clienta ya vio el aviso.
 // Es una preferencia de conveniencia por navegador, no un registro de consentimiento.
 const CLAVE = "merylay-aviso-cookies-visto";
 
-export function CookieBanner() {
-  const [visible, setVisible] = useState(false);
+// Si localStorage esta bloqueado, el aviso se oculta solo en esta sesion de pagina.
+let cerradoEnSesion = false;
+const suscriptores = new Set<() => void>();
 
-  useEffect(() => {
-    try {
-      if (localStorage.getItem(CLAVE) !== "1") setVisible(true);
-    } catch {
-      // Si el navegador bloquea localStorage, mostramos el aviso en cada visita.
-      setVisible(true);
-    }
-  }, []);
-
-  if (!visible) return null;
-
-  function cerrar() {
-    try {
-      localStorage.setItem(CLAVE, "1");
-    } catch {
-      // Sin almacenamiento disponible, el aviso solo se oculta en esta visita.
-    }
-    setVisible(false);
+function leerVisto(): boolean {
+  if (cerradoEnSesion) return true;
+  try {
+    return localStorage.getItem(CLAVE) === "1";
+  } catch {
+    return false;
   }
+}
+
+function suscribir(callback: () => void): () => void {
+  suscriptores.add(callback);
+  return () => {
+    suscriptores.delete(callback);
+  };
+}
+
+function marcarVisto() {
+  cerradoEnSesion = true;
+  try {
+    localStorage.setItem(CLAVE, "1");
+  } catch {
+    // Sin almacenamiento disponible, el aviso solo se oculta en esta visita.
+  }
+  suscriptores.forEach((callback) => callback());
+}
+
+export function CookieBanner() {
+  // En el servidor se asume "visto" para no mostrar el aviso sin hidratar.
+  const visto = useSyncExternalStore(suscribir, leerVisto, () => true);
+  if (visto) return null;
 
   return (
     <div
@@ -47,7 +59,7 @@ export function CookieBanner() {
       </p>
       <button
         type="button"
-        onClick={cerrar}
+        onClick={marcarVisto}
         className="shrink-0 rounded-full bg-brand-rosa px-4 py-2 font-medium text-white hover:opacity-90"
       >
         Entendido
